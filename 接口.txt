@@ -73,8 +73,7 @@
 - **Content-Type**：`multipart/form-data`（如果包含图片上传）或 `application/json`
 - **Body 参数**（可选）：
   - `title` (string): 歌名
-  - `artist_name` (string): 主歌手名
-  - `all_artists_names` (array[string]): 所有歌手名数组，用于多歌手合唱歌曲
+  - `artist_name` (string): 歌手名（支持多歌手自动拆分）
   - `album_title` (string): 专辑名
   - `lyrics` (string): 文本歌词
   - `cover_upload` (File): 单曲专属封面图片文件。后端接收后会自动压缩为 300x300，并同步写入该首物理音频文件。
@@ -82,10 +81,10 @@
   ```json
   {
     "title": "黄梅戏（氛围版）",
-    "artist_name": "泽国同学",
-    "all_artists_names": ["泽国同学", "Unknown Artist"]
+    "artist_name": "泽国同学/Unknown Artist"
   }
   ```
+  - **说明**：传入 `artist_name` 时，后端会自动使用 `parse_artists()` 解析该字符串，支持的分隔符包括：`/`、`,`、`&`、`feat.`、`ft.`、`-`（中西文均支持）
 
 ---
 
@@ -300,15 +299,16 @@
 - `,`（如：`Artist1, Artist2`）
 - `&`（如：`Artist1 & Artist2`）
 - `feat.` / `ft.`（如：`Artist1 feat. Artist2`）
+- `-`（中西文均支持，包括全角/半角）
 
 ### API 更新时
 
-- **只传 `artist_name`**：更新主歌手，M2M 列表自动同步添加该歌手
-- **传 `all_artists_names`**：完全替换 M2M 列表，主歌手自动保含在列表中
+- **只传 `artist_name`**：后端自动解析歌手字符串，智能拆分为多歌手并同步更新 M2M 列表
+- **`all_artists_names` 字段**：已废弃，后端在更新时会忽略此字段
 
 ### 歌手字段说明
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `artist_name` | string | 主歌手名称（来自 ForeignKey） |
-| `all_artists` | array[string] | 所有歌手名称列表（来自 ManyToMany） |
+| `artist_name` | string | 主歌手名称（来自 ForeignKey），支持多歌手自动拆分 |
+| `all_artists` | array[string] | 所有歌手名称列表（来自 ManyToMany，自动从 artist_name 解析） |
