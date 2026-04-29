@@ -212,13 +212,19 @@
       @loadedmetadata="onMetadataLoaded"
       @ended="isPlaying = false"
     ></audio>
+
+    <AppleToast
+      v-model="toastVisible"
+      :message="toastMessage"
+      :type="toastType"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import AppleToast from '../components/AppleToast.vue'
 import { Back, Check, VideoPlay, VideoPause, RefreshLeft, Document, Plus, Minus, Delete, Refresh } from '@element-plus/icons-vue'
 import request from '../api'
 
@@ -241,6 +247,18 @@ const playbackRate = ref(0.5) // 播放倍速
 const deletedLines = ref([]) // 被删除的行（用于撤销）
 const timeOffsetMs = ref(250) // 时间偏移量（毫秒），用于补偿延迟
 const autoScroll = ref(true) // 预览开关，自动滚动到当前播放行
+const toastVisible = ref(false)
+const toastMessage = ref('')
+const toastType = ref('success')
+
+const showToast = (message, type = 'success') => {
+  toastVisible.value = false
+  toastMessage.value = message
+  toastType.value = type
+  setTimeout(() => {
+    toastVisible.value = true
+  }, 50)
+}
 
 const lrcListRef = ref(null)
 const lineRefs = ref([])
@@ -252,7 +270,7 @@ const audioStreamUrl = computed(() => {
 const loadTrackData = async () => {
   const trackId = route.query.id
   if (!trackId) {
-    ElMessage.error('缺少歌曲 ID 参数')
+    showToast('缺少歌曲 ID 参数', 'error')
     return
   }
   try {
@@ -263,7 +281,7 @@ const loadTrackData = async () => {
       parseRawText()
     }
   } catch (error) {
-    ElMessage.error('获取歌曲信息失败')
+    showToast('获取歌曲信息失败', 'error')
   }
 }
 
@@ -281,7 +299,7 @@ const parseRawText = () => {
   
   // 解析完成后，光标默认停留在第一行
   editIndex.value = 0
-  ElMessage.success('解析完成，已为您定位到第一行，请开始播放并打点！')
+  showToast('解析完成，已为您定位到第一行，请开始播放并打点！', 'success')
 }
 
 // 时间转换工具
@@ -409,7 +427,7 @@ const deleteLine = (index) => {
   if (line && !line.deleted) {
     line.deleted = true
     deletedLines.value.push(index)
-    ElMessage.success('已删除，可撤销')
+    showToast('已删除，可撤销', 'success')
   }
 }
 
@@ -418,7 +436,7 @@ const undoDelete = () => {
   const lastIndex = deletedLines.value.pop()
   if (lyrics.value[lastIndex]) {
     lyrics.value[lastIndex].deleted = false
-    ElMessage.success('已撤销')
+    showToast('已撤销', 'success')
   }
 }
 
@@ -428,7 +446,7 @@ const resetTimes = () => {
     l.timeStr = '00:00.00'
   })
   editIndex.value = 0
-  ElMessage.success('所有时间已归零，请重新开始打点')
+  showToast('所有时间已归零，请重新开始打点', 'success')
 }
 
 // 保存逻辑
@@ -449,11 +467,11 @@ const saveLyrics = async () => {
     await request.patch(`/tracks/${track.value.id}/`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
-    ElMessage.success('歌词已成功保存并同步至音频文件！')
+    showToast('歌词已成功保存并同步至音频文件！', 'success')
     rawText.value = lrcContent
     deletedLines.value = []
   } catch (error) {
-    ElMessage.error('保存失败，请检查网络')
+    showToast('保存失败，请检查网络', 'error')
   } finally {
     saving.value = false
   }
