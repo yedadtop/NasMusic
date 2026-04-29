@@ -122,6 +122,12 @@
         <div class="px-8 py-4 border-b border-gray-200 bg-white/70 backdrop-blur flex justify-between items-center shadow-sm z-10 sticky top-0">
           <span class="text-sm font-bold text-gray-700">LRC 制作轨道 (共 {{ lyrics.filter(l => !l.deleted).length }} 行)</span>
           <div class="flex items-center space-x-3">
+            <el-switch
+              v-model="autoScroll"
+              size="small"
+              active-text="预览"
+              class="shrink-0"
+            />
             <el-button size="default" :icon="RefreshLeft" @click="resetTimes" type="danger" plain>重置时间</el-button>
           </div>
         </div>
@@ -233,7 +239,8 @@ const editIndex = ref(-1)    // 当前等待被打点的行（高亮带边框）
 const playingIndex = ref(-1) // 当前正在播放的行（仅文字变蓝）
 const playbackRate = ref(0.5) // 播放倍速
 const deletedLines = ref([]) // 被删除的行（用于撤销）
-const timeOffsetMs = ref(260) // 时间偏移量（毫秒），用于补偿延迟
+const timeOffsetMs = ref(200) // 时间偏移量（毫秒），用于补偿延迟
+const autoScroll = ref(true) // 预览开关，自动滚动到当前播放行
 
 const lrcListRef = ref(null)
 const lineRefs = ref([])
@@ -342,14 +349,17 @@ const setEditIndex = (index) => {
 const onTimeUpdate = () => {
   if (!audioRef.value) return
   currentTime.value = audioRef.value.currentTime
-  
+
   const index = lyrics.value.findIndex((l, i) => {
     const next = lyrics.value[i + 1]
     return currentTime.value >= l.time && (!next || currentTime.value < next.time)
   })
-  
+
   if (index !== -1 && playingIndex.value !== index) {
     playingIndex.value = index
+    if (autoScroll.value) {
+      scrollToLine(playingIndex.value)
+    }
   }
 }
 
