@@ -5,8 +5,8 @@
         <header class="h-14 sm:h-16 flex items-center justify-between px-4 sm:px-6 md:px-8 shrink-0">
           <div class="flex items-center space-x-3 sm:space-x-4 md:space-x-6 text-base md:text-lg font-medium text-gray-500 shrink-0">
             <router-link to="/" class="tab-link whitespace-nowrap" active-class="tab-active">本地歌曲</router-link>
+            <router-link to="/artists" class="tab-link whitespace-nowrap" active-class="tab-active">艺人</router-link>
             <router-link to="/albums" class="hidden sm:block tab-link whitespace-nowrap" active-class="tab-active">专辑</router-link>
-            <router-link to="/artists" class="hidden sm:block tab-link whitespace-nowrap" active-class="tab-active">艺人</router-link>
           </div>
           <div class="flex items-center space-x-2 sm:space-x-4">
             <button 
@@ -68,7 +68,7 @@
       <div class="flex items-center justify-end md:absolute md:left-1/2 md:top-1/2 md:transform md:-translate-x-1/2 md:-translate-y-1/2 space-x-4 sm:space-x-6 shrink-0 pr-2">
         
         <button 
-          class="hidden md:block text-gray-500 hover:text-gray-900 active:scale-90 transition-all p-2"
+          class="text-gray-500 hover:text-gray-900 active:scale-90 transition-all p-2"
           :class="{ 'opacity-30 cursor-not-allowed': !player.hasPrev }"
           @click.stop="prevTrack"
         >
