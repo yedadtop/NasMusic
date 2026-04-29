@@ -57,17 +57,25 @@
           />
         </div>
 
-        <div class="grid grid-cols-3 gap-0 py-5 bg-[#f5f5f7] rounded-[14px]">
+        <div class="grid grid-cols-5 gap-0 py-5 bg-[#f5f5f7] rounded-[14px]">
           <div class="text-center">
             <div class="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider mb-1">已处理</div>
             <div class="text-[22px] font-bold text-[#1d1d1f]">{{ scanTask.processed }}</div>
           </div>
           <div class="text-center border-x border-gray-200/60">
-            <div class="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider mb-1">新增歌曲</div>
+            <div class="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider mb-1">新增</div>
             <div class="text-[22px] font-bold text-[#34c759]">{{ scanTask.added }}</div>
           </div>
+          <div class="text-center border-x border-gray-200/60">
+            <div class="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider mb-1">更新</div>
+            <div class="text-[22px] font-bold text-[#0071e3]">{{ scanTask.updated }}</div>
+          </div>
+          <div class="text-center border-x border-gray-200/60">
+            <div class="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider mb-1">删除</div>
+            <div class="text-[22px] font-bold text-[#ff3b30]">{{ scanTask.deleted }}</div>
+          </div>
           <div class="text-center">
-            <div class="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider mb-1">总计文件</div>
+            <div class="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider mb-1">总计</div>
             <div class="text-[22px] font-bold text-[#1d1d1f]">{{ scanTask.total }}</div>
           </div>
         </div>
@@ -147,6 +155,8 @@ const scanTask = ref({
   processed: 0,
   total: 0,
   added: 0,
+  updated: 0,
+  deleted: 0,
   current_file: ''
 })
 
@@ -192,6 +202,8 @@ const fetchStatus = async () => {
     scanTask.value.processed = data.processed_files
     scanTask.value.total = data.total_files
     scanTask.value.added = data.added_count
+    scanTask.value.updated = data.updated_count || 0
+    scanTask.value.deleted = data.deleted_count || 0
     scanTask.value.current_file = data.current_file
 
     if (data.status === 'completed' || data.status === 'error') {
