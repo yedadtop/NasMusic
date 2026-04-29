@@ -50,16 +50,18 @@ class TrackViewSet(viewsets.ModelViewSet):
             audio = mutagen.File(track_instance.file_path)
             if audio is not None:
                 audio['title'] = track_instance.title
-                artist_list = [a.name for a in track_instance.artists.all()]
-                if not artist_list and track_instance.artist:
-                    artist_list = [track_instance.artist.name]
-                elif not artist_list:
-                    artist_list = ["Unknown Artist"]
-                audio['artist'] = " / ".join(artist_list)
-                audio['album'] = track_instance.album.title
+
+                if track_instance.artist:
+                    audio['artist'] = track_instance.artist.name
+                else:
+                    audio['artist'] = "Unknown Artist"
+                    audio['album'] = track_instance.album.title
 
                 if track_instance.lyrics is not None:
                     ext = track_instance.format.lower()
+
+
+
                     lyrics_text = track_instance.lyrics
                     if ext == 'mp3':
                         from mutagen.id3 import USLT
@@ -76,7 +78,12 @@ class TrackViewSet(viewsets.ModelViewSet):
 
 
 class ArtistViewSet(viewsets.ModelViewSet):
-    queryset = Artist.objects.prefetch_related('tracks__artists', 'tracks__album').all().order_by('id')
+    # 🚨 核心修改：增加 .filter(collaborated_tracks__isnull=False).distinct()
+    # 作用：只查询那些在“所有歌手”列表中出现过的真实独立歌手，过滤掉仅用于展示的组合名字
+    queryset = Artist.objects.filter(
+        collaborated_tracks__isnull=False
+    ).distinct().prefetch_related('tracks__artists', 'tracks__album').order_by('id')
+    
     serializer_class = ArtistSerializer
     pagination_class = StandardResultsSetPagination
     filter_backends = [SearchFilter]

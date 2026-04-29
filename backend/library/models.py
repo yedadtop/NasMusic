@@ -11,9 +11,7 @@ class Artist(models.Model):
 class Album(models.Model):
     title = models.CharField(max_length=255, verbose_name="专辑名")
     artist = models.ForeignKey(Artist, on_delete=models.CASCADE, related_name='albums', verbose_name="所属歌手")
-
-    # 去掉 unique_together，允许业务上存在同名但 ID 不同的合法专辑
-    def __str__(self): return f"{self.title} - {self.artist.name}"
+    def __str__(self): return self.title
 
 class Track(models.Model):
     title = models.CharField(max_length=255, verbose_name="歌曲名")
@@ -32,11 +30,7 @@ class Track(models.Model):
         # 确保外键对象已持久化，防止 M2M 写入失败
         if self.artist and not self.artist.pk: self.artist.save()
         if self.album and not self.album.pk: self.album.save()
-        
-        is_new = self.pk is None
         super().save(*args, **kwargs)
-        if is_new and self.artist and self.artist.pk:
-            self.artists.add(self.artist)
 
 # --- 安全的清理信号逻辑 ---
 @receiver(pre_delete, sender=Track)

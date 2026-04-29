@@ -12,36 +12,30 @@ SUPPORTED_FORMATS = {'.mp3', '.flac', '.ogg', '.m4a'}
 
 def parse_artists(artist_string):
     """
-    拆分多歌手字符串，支持以下分隔符：
-    - / (斜杠): 歌手1/歌手2
-    - , (逗号): 歌手1,歌手2
-    - & (and): 歌手1 & 歌手2
-    - - (横杠): 歌手1 - 歌手2
-    - feat. / ft.: 歌手1 feat. 歌手2
-    - 空格: 中文多歌手时，歌手1 歌手2
+    拆分多歌手字符串，增强版
     """
     if not artist_string:
         return ["Unknown Artist"]
 
-    has_chinese = bool(re.search(r'[\u4e00-\u9fff]', artist_string))
+    # 扩大亚洲字符检测范围：涵盖中文、日文平假/片假名、韩文
+    has_asian = bool(re.search(r'[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]', artist_string))
 
-    if has_chinese:
-        parts = re.split(
-            r'[\s/,&\-　\xA0]+'                               # 空格、全角空格、不间断空格
-            r'|\s+(?:feat\.|ft\.)+\s*'                        # feat. 或 ft.
-            r'|(?<=\S)\s*-\s+(?=\S)',                         # 单词间横杠
-            artist_string,
-            flags=re.IGNORECASE
+    if has_asian:
+        # 新增涵盖了：顿号(、)、间隔号(·)、全角/半角分号(; ；)、竖线(|)、加号(+)、下划线(_)
+        pattern = (
+            r'[\s/,&\-　\xA0、·・;；|+_]+'
+            r'|\s+(?:feat\.|ft\.)+\s*'                   
+            r'|(?<=\S)\s*-\s+(?=\S)'
         )
     else:
-        parts = re.split(
-            r'[/,&\-]'                                          # 基本分隔符
-            r'|\s+(?:feat\.|ft\.)+\s*'                        # feat. 或 ft.
-            r'|(?<=\S)\s*-\s+(?=\S)',                         # 单词间横杠
-            artist_string,
-            flags=re.IGNORECASE
+        pattern = (
+            r'[/,&\-、·・;；|+_]+'
+            r'|\s+(?:feat\.|ft\.)+\s*'
+            r'|(?<=\S)\s*-\s+(?=\S)'
         )
 
+    parts = re.split(pattern, artist_string, flags=re.IGNORECASE)
+    
     artists = []
     for part in parts:
         cleaned = part.strip()
@@ -53,7 +47,11 @@ def parse_artists(artist_string):
 def _get_tag_value(tags, key, default="Unknown"):
     if not tags or key not in tags: return default
     value = tags[key]
-    return value[0] if isinstance(value, list) else value
+    # 【核心修复】：如果 mutagen 解析出的是列表 (常见于 FLAC/APE)，
+    # 先用 '/' 拼接成字符串，再交由 parse_artists 统一且彻底地进行拆分
+    if isinstance(value, list):
+        return " / ".join(str(v) for v in value)
+    return value
 
 def _get_lyrics(audio):
     try:
@@ -170,12 +168,19 @@ def scan_local_directory(directory_path, task_id=None):
             if audio_easy is None: continue
 
             title = _get_tag_value(audio_easy, 'title', default=Path(file_path).stem)
-            artist_names = parse_artists(_get_tag_value(audio_easy, 'artist', default="Unknown Artist"))
+            
+            # 🚨 修改 1：先获取完整未拆分的原始字符串（例如 "徐良 小凌"）
+            raw_artist_string = _get_tag_value(audio_easy, 'artist', default="Unknown Artist")
+            # 提取拆分后的列表（例如 ["徐良", "小凌"]）
+            artist_names = parse_artists(raw_artist_string)  
+
             album_title = _get_tag_value(audio_easy, 'album', default="Unknown Album")
             duration = getattr(audio_easy.info, 'length', 0.0)
 
-            primary_artist_obj, _ = Artist.objects.get_or_create(name=artist_names[0])
+            # 🚨 修改 2：主歌手直接使用未拆分的原始字符串，保留原貌
+            primary_artist_obj, _ = Artist.objects.get_or_create(name=raw_artist_string)
 
+            # 专辑也绑定到这个原始名字的艺人
             if album_title == "Unknown Album":
                 unknown_artist, _ = Artist.objects.get_or_create(name="Unknown Artist")
                 album_obj, _ = Album.objects.get_or_create(title=album_title, artist=unknown_artist)
@@ -193,7 +198,9 @@ def scan_local_directory(directory_path, task_id=None):
                 }
             )
 
+            # 🚨 修改 3：把拆分后的独立歌手写入“所有歌手”(多对多) 字段
             all_artist_objs = [Artist.objects.get_or_create(name=n)[0] for n in artist_names]
+            # .set() 会直接覆盖原有的关系，保证只剩下拆分后的独立艺人
             track_obj.artists.set(all_artist_objs)
             track_obj.save()
 
