@@ -10,13 +10,23 @@
       <div class="flex items-center space-x-6">
         <div class="hidden md:flex items-center space-x-3 text-sm text-gray-500 bg-gray-100/80 px-4 py-1.5 rounded-lg border border-gray-200 shadow-inner">
           <span class="flex items-center">
-            <kbd class="bg-white border border-gray-300 shadow-sm px-2 py-0.5 rounded text-xs text-gray-700 mr-2 font-mono font-bold">Space</kbd> 
+            <kbd class="bg-white border border-gray-300 shadow-sm px-2 py-0.5 rounded text-xs text-gray-700 mr-2 font-mono font-bold">Space</kbd>
             播放 / 暂停
           </span>
           <span class="w-px h-4 bg-gray-300"></span>
           <span class="flex items-center">
             <kbd class="bg-white border border-gray-300 shadow-sm px-2 py-0.5 rounded text-xs text-blue-600 mr-2 font-mono font-bold">Enter</kbd>
             打点并跳至下行
+          </span>
+          <span class="w-px h-4 bg-gray-300"></span>
+          <span class="flex items-center">
+            <kbd class="bg-white border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-700 mr-1 font-mono font-bold">1~4</kbd>
+            ±5s/±1s
+          </span>
+          <span class="w-px h-4 bg-gray-300"></span>
+          <span class="flex items-center">
+            <kbd class="bg-white border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-700 mr-1 font-mono font-bold">QWER</kbd>
+            0.5/1/1.5/2x
           </span>
         </div>
         <div class="flex items-center space-x-2 text-sm text-gray-500">
@@ -143,7 +153,7 @@
             v-for="(item, index) in lyrics" 
             :key="index"
             :ref="el => { if (el) lineRefs[index] = el }"
-            @click="setEditIndex(index)"
+            @click="handleRowClick($event, index)"
             :class="[
               'group flex items-center p-3 mb-3 rounded-xl transition-all duration-300 border-2 cursor-pointer',
               editIndex === index 
@@ -160,7 +170,8 @@
                 class="w-24 font-mono text-center"
                 :disabled="item.deleted"
                 @change="syncTimeFromStr(index)"
-                @focus="setEditIndex(index)"
+                @focus="setEditIndex(index, false)"
+                @click.stop
                 :class="{'text-blue-600 font-bold': editIndex === index}"
               />
             </div>
@@ -172,7 +183,8 @@
                 class="w-full lrc-input text-lg"
                 :disabled="item.deleted"
                 :class="{'font-bold text-blue-600': playingIndex === index}"
-                @focus="setEditIndex(index)"
+                @focus="setEditIndex(index, false)"
+                @click.stop
               />
             </div>
 
@@ -361,7 +373,24 @@ const onMetadataLoaded = () => {
   duration.value = audioRef.value.duration
 }
 
-const setEditIndex = (index) => {
+const setEditIndex = (index, blurInputs = true) => {
+  if (blurInputs) {
+    const active = document.activeElement
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+      active.blur()
+    }
+  }
+  editIndex.value = index
+}
+
+const handleRowClick = (e, index) => {
+  const isInputClick = e.target.closest('INPUT') || e.target.closest('TEXTAREA')
+  if (!isInputClick) {
+    const active = document.activeElement
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+      active.blur()
+    }
+  }
   editIndex.value = index
 }
 
@@ -487,18 +516,56 @@ const handleKeyDown = (e) => {
   // 空格键：在输入框内打字时不允许暂停
   if (e.code === 'Space') {
     if (!isInput) {
-      e.preventDefault() // 阻止页面向下滚动
-      e.stopImmediatePropagation() // 【新增】：彻底阻止事件冒泡！防止外层的全局播放器捕捉到空格键而同时播放
+      e.preventDefault()
+      e.stopImmediatePropagation()
       togglePlay()
     }
   }
-  
+
   // 回车键：即使在输入框内（比如修改歌词错别字），敲回车也会直接打点并跳下一行
   if (e.code === 'Enter' || e.code === 'NumpadEnter') {
-    if (document.activeElement.type === 'textarea') return 
-    
-    e.preventDefault() 
+    if (document.activeElement.type === 'textarea') return
+
+    e.preventDefault()
     stampTime()
+  }
+
+  // 数字键1-4：快退/快进
+  if (!isInput) {
+    if (e.code === 'Digit1' || e.code === 'Numpad1') {
+      e.preventDefault()
+      seekRelative(-5)
+    }
+    if (e.code === 'Digit2' || e.code === 'Numpad2') {
+      e.preventDefault()
+      seekRelative(-1)
+    }
+    if (e.code === 'Digit3' || e.code === 'Numpad3') {
+      e.preventDefault()
+      seekRelative(1)
+    }
+    if (e.code === 'Digit4' || e.code === 'Numpad4') {
+      e.preventDefault()
+      seekRelative(5)
+    }
+
+    // Q/W/E/R：设置播放倍速
+    if (e.code === 'KeyQ') {
+      e.preventDefault()
+      setPlaybackRate(0.5)
+    }
+    if (e.code === 'KeyW') {
+      e.preventDefault()
+      setPlaybackRate(1.0)
+    }
+    if (e.code === 'KeyE') {
+      e.preventDefault()
+      setPlaybackRate(1.5)
+    }
+    if (e.code === 'KeyR') {
+      e.preventDefault()
+      setPlaybackRate(2.0)
+    }
   }
 }
 
