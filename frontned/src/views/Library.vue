@@ -13,7 +13,7 @@
         </div>
         <div class="flex flex-col truncate min-w-0">
           <span class="font-medium text-sm sm:text-base truncate">{{ track.title }}</span>
-          <span class="text-xs text-gray-500 truncate hidden sm:block">{{ track.artist_name }}</span>
+          <span class="text-xs text-gray-500 truncate">{{ track.artist_name }}</span>
         </div>
       </div>
       <div class="hidden sm:block w-24 md:w-1/4 text-sm text-gray-500 truncate mx-2">{{ track.album_title || '未知专辑' }}</div>
