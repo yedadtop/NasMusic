@@ -250,6 +250,7 @@
     "current_file": "C:\\1D\\Mass\\my_music\\赵雷 - 我记得.mp3",
     "added_count": 10,
     "updated_count": 80,
+    "deleted_count": 5,
     "error_message": ""
   }
   ```
