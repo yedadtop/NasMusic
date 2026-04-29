@@ -3,7 +3,7 @@
     <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0 z-10 shadow-sm">
       <div class="flex items-center space-x-4">
         <span v-if="track" class="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full border border-gray-200">
-          当前编辑: {{ track.title }} - {{ track.artist_name }}
+          当前编辑: {{ track.title }} - {{ (track.all_artists || []).join('/') || track.artist_name || '未知歌手' }}
         </span>
       </div>
       
