@@ -40,7 +40,7 @@
 
     <main class="flex-1 flex overflow-hidden">
       
-      <aside class="w-1/3 min-w-[380px] max-w-[480px] bg-white border-r border-gray-200 flex flex-col z-0 shadow-[4px_0_15px_rgba(0,0,0,0.02)]">
+      <aside class="shrink-0 bg-white border-r border-gray-200 flex flex-col z-0 shadow-[4px_0_15px_rgba(0,0,0,0.02)]">
         <div class="p-8 border-b border-gray-100 flex flex-col items-center bg-gray-50/50">
           <div class="w-full px-4 mb-4">
             <el-slider 
@@ -57,20 +57,25 @@
           </div>
 
           <div class="flex items-center justify-center space-x-3">
-            <el-button size="default" circle @click="seekRelative(-5)" title="快退5秒" class="hover:border-blue-300 hover:text-blue-500 font-bold">-5s</el-button>
-            <el-button size="default" circle @click="seekRelative(-1)" title="快退1秒" class="hover:border-blue-300 hover:text-blue-500">-1s</el-button>
+            <el-button size="small" @click="seekRelative(-5)" title="快退5秒" class="rounded-lg hover:border-blue-300 hover:text-blue-500 font-bold px-3">-5s</el-button>
+            <el-button size="small" @click="seekRelative(-1)" title="快退1秒" class="rounded-lg hover:border-blue-300 hover:text-blue-500 px-3">-1s</el-button>
 
-            <el-button circle type="primary" @click="togglePlay" class="w-16 h-16 shadow-lg transform transition hover:scale-110 active:scale-95">
-              <el-icon class="text-3xl"><component :is="isPlaying ? VideoPause : VideoPlay" /></el-icon>
-            </el-button>
+            <button @click="togglePlay" class="w-12 h-12 flex items-center justify-center hover:opacity-80 transition">
+              <svg v-if="!isPlaying" class="w-8 h-8 text-gray-700 ml-1" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z"/>
+              </svg>
+              <svg v-else class="w-8 h-8 text-gray-700" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+              </svg>
+            </button>
 
-            <el-button size="default" circle @click="seekRelative(1)" title="快进1秒" class="hover:border-blue-300 hover:text-blue-500">+1s</el-button>
-            <el-button size="default" circle @click="seekRelative(5)" title="快进5秒" class="hover:border-blue-300 hover:text-blue-500 font-bold">+5s</el-button>
+            <el-button size="small" @click="seekRelative(1)" title="快进1秒" class="rounded-lg hover:border-blue-300 hover:text-blue-500 px-3">+1s</el-button>
+            <el-button size="small" @click="seekRelative(5)" title="快进5秒" class="rounded-lg hover:border-blue-300 hover:text-blue-500 font-bold px-3">+5s</el-button>
           </div>
 
           <div class="flex items-center justify-center space-x-2 mt-4 pt-3 border-t border-gray-200">
             <span class="text-xs text-gray-400 font-bold shrink-0">倍速</span>
-            <el-button size="small" circle @click="adjustPlaybackRate(-0.1)" :icon="Minus" class="shadow-sm w-7 h-7" />
+            <el-button size="small" @click="adjustPlaybackRate(-0.1)" :icon="Minus" class="rounded shadow-sm w-8 h-8" />
             <el-input
               v-model.number="playbackRate"
               type="number"
@@ -85,7 +90,7 @@
                 <span class="text-xs text-gray-400 mr-1">x</span>
               </template>
             </el-input>
-            <el-button size="small" circle @click="adjustPlaybackRate(0.1)" :icon="Plus" class="shadow-sm w-7 h-7" />
+            <el-button size="small" @click="adjustPlaybackRate(0.1)" :icon="Plus" class="rounded shadow-sm w-8 h-8" />
             <div class="flex items-center space-x-1 ml-2 border-l border-gray-200 pl-2">
               <el-button size="small" type="info" plain @click="setPlaybackRate(0.5)" class="text-xs px-2 py-1" :class="{'bg-blue-100 border-blue-400': playbackRate === 0.5}">0.5x</el-button>
               <el-button size="small" type="info" plain @click="setPlaybackRate(1.0)" class="text-xs px-2 py-1" :class="{'bg-blue-100 border-blue-400': playbackRate === 1.0}">1x</el-button>
@@ -171,26 +176,16 @@
               />
             </div>
 
-            <div class="w-20 shrink-0 flex justify-end gap-2 opacity-30 group-hover:opacity-100 transition-opacity" :class="{'opacity-100': editIndex === index}">
-              <el-button 
-                v-if="!item.deleted"
-                size="large" 
-                circle 
-                type="primary"
-                plain
-                @click.stop="previewLine(item.time)"
-                :icon="VideoPlay"
-                title="试听此行"
-              />
-              <el-button 
-                size="large" 
-                circle 
-                :type="item.deleted ? 'warning' : 'danger'"
-                plain
-                @click.stop="item.deleted ? (lineRefs[index] && (lyrics[index].deleted = false)) : deleteLine(index)"
-                :icon="item.deleted ? Refresh : Delete"
-                :title="item.deleted ? '撤销删除' : '删除此行'"
-              />
+            <div class="w-20 shrink-0 flex justify-end gap-3 opacity-30 group-hover:opacity-100 transition-opacity" :class="{'opacity-100': editIndex === index}">
+              <svg v-if="!item.deleted" @click.stop="previewLine(item.time)" class="w-5 h-5 text-gray-400 hover:text-blue-500 cursor-pointer transition" fill="currentColor" viewBox="0 0 24 24" title="试听此行">
+                <path d="M8 5v14l11-7z"/>
+              </svg>
+              <svg v-if="item.deleted" @click.stop="lineRefs[index] && (lyrics[index].deleted = false)" class="w-5 h-5 text-gray-400 hover:text-orange-500 cursor-pointer transition" fill="currentColor" viewBox="0 0 24 24" title="撤销删除">
+                <path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/>
+              </svg>
+              <svg v-else @click.stop="deleteLine(index)" class="w-5 h-5 text-gray-400 hover:text-red-500 cursor-pointer transition" fill="currentColor" viewBox="0 0 24 24" title="删除此行">
+                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+              </svg>
             </div>
           </div>
           
@@ -243,7 +238,7 @@ const editIndex = ref(-1)    // 当前等待被打点的行（高亮带边框）
 const playingIndex = ref(-1) // 当前正在播放的行（仅文字变蓝）
 const playbackRate = ref(1.0) // 播放倍速
 const deletedLines = ref([]) // 被删除的行（用于撤销）
-const timeOffsetMs = ref(250) // 时间偏移量（毫秒），用于补偿延迟
+const timeOffsetMs = ref(251) // 时间偏移量（毫秒），用于补偿延迟
 const autoScroll = ref(true) // 预览开关，自动滚动到当前播放行
 const toastVisible = ref(false)
 const toastMessage = ref('')
@@ -535,10 +530,22 @@ onUnmounted(() => {
   background-color: #f9fafb;
   border: 1px solid #f3f4f6;
   font-size: 14px;
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
 }
 .custom-textarea :deep(.el-textarea__inner:focus) {
   background-color: #fff;
   border-color: #bfdbfe;
+}
+.custom-textarea :deep(.el-textarea__inner::-webkit-scrollbar) {
+  width: 6px;
+}
+.custom-textarea :deep(.el-textarea__inner::-webkit-scrollbar-track) {
+  background: transparent;
+}
+.custom-textarea :deep(.el-textarea__inner::-webkit-scrollbar-thumb) {
+  background-color: #d1d5db;
+  border-radius: 3px;
 }
 
 /* 滚动条美化 */
