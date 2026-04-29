@@ -239,7 +239,7 @@ const editIndex = ref(-1)    // 当前等待被打点的行（高亮带边框）
 const playingIndex = ref(-1) // 当前正在播放的行（仅文字变蓝）
 const playbackRate = ref(0.5) // 播放倍速
 const deletedLines = ref([]) // 被删除的行（用于撤销）
-const timeOffsetMs = ref(200) // 时间偏移量（毫秒），用于补偿延迟
+const timeOffsetMs = ref(250) // 时间偏移量（毫秒），用于补偿延迟
 const autoScroll = ref(true) // 预览开关，自动滚动到当前播放行
 
 const lrcListRef = ref(null)
