@@ -77,7 +77,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue' // 新增 onUnmounted
 import request from '../api'
 import EditTrackModal from '../components/EditTrackModal.vue'
 import AppleConfirmModal from '../components/AppleConfirmModal.vue'
@@ -104,9 +104,17 @@ const toastMessage = ref('')
 const toastType = ref('success')
 let observer = null
 
+// 新增：用于存放重试的定时器
+let retryTimer = null
+
 const totalPages = computed(() => Math.ceil(totalCount.value / size.value))
 
 const fetchTracks = async () => {
+  if (retryTimer) {
+    clearTimeout(retryTimer)
+    retryTimer = null
+  }
+
   if (loading.value) return
   
   if (page.value === 1) {
@@ -124,11 +132,13 @@ const fetchTracks = async () => {
     }
     const res = await request.get('/tracks/', { params })
     const results = res.data.results || []
+    
     if (page.value > 1) {
       tracks.value = [...tracks.value, ...results]
     } else {
       tracks.value = results
     }
+    
     totalCount.value = res.data.count || 0
     if (results.length < size.value || !res.data.next) {
       allLoaded.value = true
@@ -138,6 +148,17 @@ const fetchTracks = async () => {
     if (page.value === 1) {
       tracks.value = []
       totalCount.value = 0
+      
+      // page为1时，后端不通则每1秒重试一次
+      retryTimer = setTimeout(() => {
+        fetchTracks()
+      }, 2000)
+    } else {
+      // 核心修复：如果是加载更多时（page > 1）遇到 502，必须把页码退回去
+      page.value--
+      // 为了防止无限循环报错，临时设为 allLoaded，阻止继续触发滚动请求
+      allLoaded.value = true 
+      showToast('网络连接异常，请稍后再试', 'error')
     }
   } finally {
     loading.value = false
@@ -150,7 +171,9 @@ const changePage = (newPage) => {
 }
 
 const loadMore = () => {
-  if (!allLoaded.value && !loading.value) {
+  // 核心修复：增加 tracks.value.length > 0 判断
+  // 只有在已经成功拿到第一页数据的情况下，滚动到底部才允许加载下一页
+  if (!allLoaded.value && !loading.value && tracks.value.length > 0) {
     page.value++
     fetchTracks()
   }
@@ -197,6 +220,13 @@ onMounted(() => {
   document.addEventListener('click', () => {
     showingMoreMenu.value = null
   })
+})
+
+// 新增：组件卸载时清理定时器，防止内存泄漏和无效请求
+onUnmounted(() => {
+  if (retryTimer) {
+    clearTimeout(retryTimer)
+  }
 })
 
 const showMoreMenu = (track, event) => {
