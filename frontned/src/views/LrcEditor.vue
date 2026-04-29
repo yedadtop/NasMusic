@@ -2,11 +2,6 @@
   <div class="h-screen w-full flex flex-col bg-gray-50 overflow-hidden font-sans">
     <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0 z-10 shadow-sm">
       <div class="flex items-center space-x-4">
-        <el-button @click="goBack" circle size="large" :icon="Back" />
-        <h1 class="text-lg font-bold text-gray-800 flex items-center">
-          <el-icon class="mr-2 text-blue-500"><Microphone /></el-icon>
-          歌词时间轴编辑器
-        </h1>
         <span v-if="track" class="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full border border-gray-200">
           当前编辑: {{ track.title }} - {{ track.artist_name }}
         </span>
@@ -20,12 +15,25 @@
           </span>
           <span class="w-px h-4 bg-gray-300"></span>
           <span class="flex items-center">
-            <kbd class="bg-white border border-gray-300 shadow-sm px-2 py-0.5 rounded text-xs text-blue-600 mr-2 font-mono font-bold">Enter</kbd> 
+            <kbd class="bg-white border border-gray-300 shadow-sm px-2 py-0.5 rounded text-xs text-blue-600 mr-2 font-mono font-bold">Enter</kbd>
             打点并跳至下行
           </span>
         </div>
+        <div class="flex items-center space-x-2 text-sm text-gray-500">
+          <span class="shrink-0">偏移量</span>
+          <el-input-number
+            v-model="timeOffsetMs"
+            :min="0"
+            :max="5000"
+            :step="10"
+            size="small"
+            controls-position="right"
+            class="w-28"
+          />
+          <span class="text-gray-400">ms</span>
+        </div>
         <el-button type="primary" size="large" :icon="Check" :loading="saving" @click="saveLyrics" round class="px-6 font-bold shadow-md">
-          保存并同步至物理文件
+          保存并同步
         </el-button>
       </div>
     </header>
@@ -51,13 +59,43 @@
           <div class="flex items-center justify-center space-x-4 mt-2">
             <el-button size="large" circle @click="seekRelative(-5)" title="快退5秒" class="hover:border-blue-300 hover:text-blue-500 font-bold">-5s</el-button>
             <el-button size="large" circle @click="seekRelative(-1)" title="微调后退1秒" class="hover:border-blue-300 hover:text-blue-500">-1s</el-button>
+            <el-button size="small" circle @click="seekRelative(-0.1)" title="微调后退0.1秒" class="hover:border-blue-300 hover:text-blue-500">-0.1s</el-button>
             
             <el-button circle type="primary" @click="togglePlay" class="w-16 h-16 shadow-lg transform transition hover:scale-110 active:scale-95">
               <el-icon class="text-3xl"><component :is="isPlaying ? VideoPause : VideoPlay" /></el-icon>
             </el-button>
-            
+
+            <el-button size="small" circle @click="seekRelative(0.1)" title="微调前进0.1秒" class="hover:border-blue-300 hover:text-blue-500">+0.1s</el-button>
             <el-button size="large" circle @click="seekRelative(1)" title="微调前进1秒" class="hover:border-blue-300 hover:text-blue-500">+1s</el-button>
             <el-button size="large" circle @click="seekRelative(5)" title="快进5秒" class="hover:border-blue-300 hover:text-blue-500 font-bold">+5s</el-button>
+          </div>
+
+          <div class="flex items-center justify-center space-x-3 mt-4 pt-4 border-t border-gray-200">
+            <span class="text-xs text-gray-400 font-bold shrink-0">倍速</span>
+            <el-button size="small" circle @click="adjustPlaybackRate(-0.1)" :icon="Minus" class="shadow-sm" />
+            <div class="w-20 text-center">
+              <el-input
+                v-model.number="playbackRate"
+                type="number"
+                :min="0.1"
+                :max="2.0"
+                :step="0.1"
+                size="small"
+                @change="setPlaybackRate(playbackRate)"
+                class="text-center font-mono font-bold"
+              >
+                <template #suffix>
+                  <span class="text-xs text-gray-400">x</span>
+                </template>
+              </el-input>
+            </div>
+            <el-button size="small" circle @click="adjustPlaybackRate(0.1)" :icon="Plus" class="shadow-sm" />
+          </div>
+          <div class="flex items-center justify-center space-x-2 mt-3">
+            <el-button size="small" type="info" plain @click="setPlaybackRate(0.5)" class="text-xs px-3" :class="{'bg-blue-100 border-blue-400': playbackRate === 0.5}">0.5x</el-button>
+            <el-button size="small" type="info" plain @click="setPlaybackRate(1.0)" class="text-xs px-3" :class="{'bg-blue-100 border-blue-400': playbackRate === 1.0}">1x</el-button>
+            <el-button size="small" type="info" plain @click="setPlaybackRate(1.5)" class="text-xs px-3" :class="{'bg-blue-100 border-blue-400': playbackRate === 1.5}">1.5x</el-button>
+            <el-button size="small" type="info" plain @click="setPlaybackRate(2.0)" class="text-xs px-3" :class="{'bg-blue-100 border-blue-400': playbackRate === 2.0}">2x</el-button>
           </div>
         </div>
 
@@ -82,8 +120,10 @@
 
       <section class="flex-1 bg-gray-50 flex flex-col relative">
         <div class="px-8 py-4 border-b border-gray-200 bg-white/70 backdrop-blur flex justify-between items-center shadow-sm z-10 sticky top-0">
-          <span class="text-sm font-bold text-gray-700">LRC 制作轨道 (共 {{ lyrics.length }} 行)</span>
-          <el-button size="default" :icon="RefreshLeft" @click="resetTimes" type="danger" plain>重置所有时间</el-button>
+          <span class="text-sm font-bold text-gray-700">LRC 制作轨道 (共 {{ lyrics.filter(l => !l.deleted).length }} 行)</span>
+          <div class="flex items-center space-x-3">
+            <el-button size="default" :icon="RefreshLeft" @click="resetTimes" type="danger" plain>重置时间</el-button>
+          </div>
         </div>
 
         <div class="flex-1 overflow-y-auto p-8 custom-scrollbar" ref="lrcListRef">
@@ -101,6 +141,8 @@
               'group flex items-center p-3 mb-3 rounded-xl transition-all duration-300 border-2 cursor-pointer',
               editIndex === index 
                 ? 'bg-blue-50 border-blue-400 shadow-md transform scale-[1.01]' 
+                : item.deleted
+                ? 'bg-gray-100 border-transparent opacity-40'
                 : 'bg-white border-transparent hover:border-blue-200 hover:shadow-sm'
             ]"
           >
@@ -109,6 +151,7 @@
                 v-model="item.timeStr" 
                 size="default" 
                 class="w-24 font-mono text-center"
+                :disabled="item.deleted"
                 @change="syncTimeFromStr(index)"
                 @focus="setEditIndex(index)"
                 :class="{'text-blue-600 font-bold': editIndex === index}"
@@ -120,13 +163,15 @@
                 v-model="item.text" 
                 size="default"
                 class="w-full lrc-input text-lg"
+                :disabled="item.deleted"
                 :class="{'font-bold text-blue-600': playingIndex === index}"
                 @focus="setEditIndex(index)"
               />
             </div>
 
-            <div class="w-16 shrink-0 flex justify-end opacity-30 group-hover:opacity-100 transition-opacity" :class="{'opacity-100': editIndex === index}">
+            <div class="w-20 shrink-0 flex justify-end gap-2 opacity-30 group-hover:opacity-100 transition-opacity" :class="{'opacity-100': editIndex === index}">
               <el-button 
+                v-if="!item.deleted"
                 size="large" 
                 circle 
                 type="primary"
@@ -134,6 +179,15 @@
                 @click.stop="previewLine(item.time)"
                 :icon="VideoPlay"
                 title="试听此行"
+              />
+              <el-button 
+                size="large" 
+                circle 
+                :type="item.deleted ? 'warning' : 'danger'"
+                plain
+                @click.stop="item.deleted ? (lineRefs[index] && (lyrics[index].deleted = false)) : deleteLine(index)"
+                :icon="item.deleted ? Refresh : Delete"
+                :title="item.deleted ? '撤销删除' : '删除此行'"
               />
             </div>
           </div>
@@ -159,7 +213,7 @@
 import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Back, Check, VideoPlay, VideoPause, RefreshLeft, Microphone, Document } from '@element-plus/icons-vue'
+import { Back, Check, VideoPlay, VideoPause, RefreshLeft, Document, Plus, Minus, Delete, Refresh } from '@element-plus/icons-vue'
 import request from '../api'
 
 const route = useRoute()
@@ -177,6 +231,9 @@ const saving = ref(false)
 // 🚨 核心分离：编辑光标与播放光标
 const editIndex = ref(-1)    // 当前等待被打点的行（高亮带边框）
 const playingIndex = ref(-1) // 当前正在播放的行（仅文字变蓝）
+const playbackRate = ref(0.5) // 播放倍速
+const deletedLines = ref([]) // 被删除的行（用于撤销）
+const timeOffsetMs = ref(260) // 时间偏移量（毫秒），用于补偿延迟
 
 const lrcListRef = ref(null)
 const lineRefs = ref([])
@@ -210,9 +267,9 @@ const parseRawText = () => {
   lyrics.value = lines.map(line => {
     const match = line.match(/^\[(\d{2}:?\d{2}\.\d{2,3})\](.*)/)
     if (match) {
-      return { time: strToSeconds(match[1]), timeStr: match[1], text: match[2].trim() }
+      return { time: strToSeconds(match[1]), timeStr: match[1], text: match[2].trim(), deleted: false }
     }
-    return { time: 0, timeStr: '00:00.00', text: line.trim() }
+    return { time: 0, timeStr: '00:00.00', text: line.trim(), deleted: false }
   })
   
   // 解析完成后，光标默认停留在第一行
@@ -258,6 +315,21 @@ const seekRelative = (delta) => {
   currentTime.value = newTime
 }
 
+const adjustPlaybackRate = (delta) => {
+  const newRate = Math.max(0.1, Math.min(2.0, playbackRate.value + delta))
+  playbackRate.value = parseFloat(newRate.toFixed(1))
+  if (audioRef.value) {
+    audioRef.value.playbackRate = playbackRate.value
+  }
+}
+
+const setPlaybackRate = (rate) => {
+  playbackRate.value = rate
+  if (audioRef.value) {
+    audioRef.value.playbackRate = rate
+  }
+}
+
 const onMetadataLoaded = () => {
   duration.value = audioRef.value.duration
 }
@@ -289,18 +361,26 @@ const scrollToLine = async (index) => {
   }
 }
 
-// ⭐ 核心逻辑：记录当前行，永远跳转下一行
+// ⭐ 核心逻辑：记录当前行，永远跳转下一行（跳过已删除的行）
 const stampTime = () => {
   if (!audioRef.value || editIndex.value === -1 || editIndex.value >= lyrics.value.length) return
-  
-  const time = audioRef.value.currentTime
+
+  const rawTime = audioRef.value.currentTime
+  const offsetSeconds = timeOffsetMs.value / 1000
+  const time = Math.max(0, rawTime - offsetSeconds)
   lyrics.value[editIndex.value].time = time
   lyrics.value[editIndex.value].timeStr = formatTime(time)
-  
-  // 打点后自动焦点移到下一行
+
+  // 打点后自动焦点移到下一行（跳过已删除的行）
   if (editIndex.value < lyrics.value.length - 1) {
-    editIndex.value++
-    scrollToLine(editIndex.value)
+    let nextIndex = editIndex.value + 1
+    while (nextIndex < lyrics.value.length && lyrics.value[nextIndex].deleted) {
+      nextIndex++
+    }
+    if (nextIndex < lyrics.value.length) {
+      editIndex.value = nextIndex
+      scrollToLine(editIndex.value)
+    }
   }
 }
 
@@ -311,6 +391,24 @@ const previewLine = (time) => {
       audioRef.value.play()
       isPlaying.value = true
     }
+  }
+}
+
+const deleteLine = (index) => {
+  const line = lyrics.value[index]
+  if (line && !line.deleted) {
+    line.deleted = true
+    deletedLines.value.push(index)
+    ElMessage.success('已删除，可撤销')
+  }
+}
+
+const undoDelete = () => {
+  if (deletedLines.value.length === 0) return
+  const lastIndex = deletedLines.value.pop()
+  if (lyrics.value[lastIndex]) {
+    lyrics.value[lastIndex].deleted = false
+    ElMessage.success('已撤销')
   }
 }
 
@@ -328,7 +426,7 @@ const saveLyrics = async () => {
   if (!track.value) return
   
   const lrcContent = lyrics.value
-    .filter(l => l.text) // 忽略空行
+    .filter(l => l.text && !l.deleted) // 忽略空行和已删除的行
     .map(l => `[${l.timeStr}]${l.text}`)
     .join('\n')
   
@@ -343,15 +441,12 @@ const saveLyrics = async () => {
     })
     ElMessage.success('歌词已成功保存并同步至音频文件！')
     rawText.value = lrcContent
+    deletedLines.value = []
   } catch (error) {
     ElMessage.error('保存失败，请检查网络')
   } finally {
     saving.value = false
   }
-}
-
-const goBack = () => {
-  router.back()
 }
 
 // 键盘事件劫持
