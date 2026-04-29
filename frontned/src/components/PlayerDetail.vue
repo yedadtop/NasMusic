@@ -200,12 +200,6 @@ const handleKeydown = (e) => {
       e.stopPropagation()
       nextTrack()
       break
-    case 'ArrowUp':
-    case 'ArrowDown':
-      e.preventDefault()
-      e.stopPropagation()
-      emit('close')
-      break
   }
 }
 

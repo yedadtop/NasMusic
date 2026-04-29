@@ -126,6 +126,8 @@
       <PlayerDetail v-if="showPlayerDetail" @close="showPlayerDetail = false" @track-updated="handleTrackUpdated" />
     </Transition>
 
+    <VolumeTooltip :visible="showVolumeTooltip" />
+
     <audio 
       ref="audioRef" 
       @timeupdate="handleTimeUpdate"
@@ -140,12 +142,14 @@ import { ref, watch, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import PlayerDetail from './components/PlayerDetail.vue'
+import VolumeTooltip from './components/VolumeTooltip.vue'
 import { usePlayerStore } from './stores/player'
 import { Headset, Position, Setting, Search, Star, DArrowLeft, CaretRight, DArrowRight, Document, Operation, Refresh, Switch, Collection, VideoPause } from '@element-plus/icons-vue'
 
 const showPlayerDetail = ref(false)
 const searchKeyword = ref('')
 const showSearch = ref(false)
+const showVolumeTooltip = ref(false)
 const searchInput = ref(null)
 const libraryRef = ref(null)
 const route = useRoute()
@@ -154,6 +158,7 @@ const audioRef = ref(null)
 const windowWidth = ref(window.innerWidth)
 const isMobile = computed(() => windowWidth.value < 768)
 const searchContainer = ref(null)
+let volumeTimer = null
 
 const handleResize = () => {
   windowWidth.value = window.innerWidth
@@ -249,9 +254,12 @@ const handleKeydown = (e) => {
       }
       break
     case 'ArrowUp':
+      e.preventDefault()
+      adjustVolume(0.1)
+      break
     case 'ArrowDown':
       e.preventDefault()
-      showPlayerDetail.value = !showPlayerDetail.value
+      adjustVolume(-0.1)
       break
   }
 }
@@ -367,6 +375,19 @@ const handleTrackUpdated = () => {
   if (libraryRef.value && route.path === '/') {
     libraryRef.value.fetchTracks()
   }
+}
+
+const adjustVolume = (delta) => {
+  const newVolume = Math.max(0, Math.min(1, player.volume + delta))
+  player.setVolume(newVolume)
+  if (audioRef.value) {
+    audioRef.value.volume = newVolume
+  }
+  showVolumeTooltip.value = true
+  if (volumeTimer) clearTimeout(volumeTimer)
+  volumeTimer = setTimeout(() => {
+    showVolumeTooltip.value = false
+  }, 1500)
 }
 </script>
 

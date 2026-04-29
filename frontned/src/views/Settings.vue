@@ -121,11 +121,17 @@
             </div>
           </div>
           <div class="flex justify-between items-center p-4 sm:px-6">
+            <span class="text-[15px] font-medium">音量增加 / 减少</span>
+            <div class="flex gap-2">
+              <kbd class="apple-kbd">↑</kbd>
+              <span class="text-gray-400">/</span>
+              <kbd class="apple-kbd">↓</kbd>
+            </div>
+          </div>
+          <div class="flex justify-between items-center p-4 sm:px-6">
             <span class="text-[15px] font-medium">打开 / 关闭播放详情</span>
             <div class="flex gap-2">
               <kbd class="apple-kbd">Z</kbd>
-              <span class="text-gray-400">/</span>
-              <kbd class="apple-kbd">↑ / ↓</kbd>
             </div>
           </div>
         </div>
