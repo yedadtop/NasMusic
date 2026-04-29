@@ -1,0 +1,949 @@
+
+------------------------------------------------------------
+library models.py:
+------------------------------------------------------------
+# library/models.py
+import os
+from django.db import models, transaction
+from django.db.models.signals import pre_delete, post_delete
+from django.dispatch import receiver
+
+class Artist(models.Model):
+    name = models.CharField(max_length=255, unique=True, verbose_name="歌手名")
+    def __str__(self): return self.name
+
+class Album(models.Model):
+    title = models.CharField(max_length=255, verbose_name="专辑名")
+    artist = models.ForeignKey(Artist, on_delete=models.CASCADE, related_name='albums', verbose_name="所属歌手")
+
+    # 去掉 unique_together，允许业务上存在同名但 ID 不同的合法专辑
+    def __str__(self): return f"{self.title} - {self.artist.name}"
+
+class Track(models.Model):
+    title = models.CharField(max_length=255, verbose_name="歌曲名")
+    artist = models.ForeignKey(Artist, on_delete=models.CASCADE, related_name='tracks', verbose_name="主歌手")
+    # 支持多人演唱的多对多关系
+    artists = models.ManyToManyField(Artist, related_name='collaborated_tracks', blank=True, verbose_name="所有歌手")
+    album = models.ForeignKey(Album, on_delete=models.CASCADE, related_name='tracks', verbose_name="专辑")
+    file_path = models.CharField(max_length=1024, unique=True, verbose_name="文件绝对路径")
+    lyrics = models.TextField(blank=True, null=True, verbose_name="内嵌歌词")
+    cover_thumbnail = models.ImageField(upload_to='covers/tracks/', null=True, blank=True, verbose_name="单曲封面")
+    duration = models.FloatField(default=0.0, verbose_name="时长(秒)")
+    format = models.CharField(max_length=10, verbose_name="格式")
+    added_at = models.DateTimeField(auto_now_add=True, verbose_name="添加时间")
+
+    def save(self, *args, **kwargs):
+        # 确保外键对象已持久化，防止 M2M 写入失败
+        if self.artist and not self.artist.pk: self.artist.save()
+        if self.album and not self.album.pk: self.album.save()
+        
+        is_new = self.pk is None
+        super().save(*args, **kwargs)
+        if is_new and self.artist and self.artist.pk:
+            self.artists.add(self.artist)
+
+# --- 安全的清理信号逻辑 ---
+@receiver(pre_delete, sender=Track)
+def store_ids_before_delete(sender, instance, **kwargs):
+    """保存 ID 而非对象引用，彻底规避级联删除导致的 RelatedObjectDoesNotExist 错误"""
+    instance._saved_artist_id = instance.artist_id
+    instance._saved_album_id = instance.album_id
+    instance._saved_collab_ids = list(instance.artists.values_list('id', flat=True))
+    instance._file_to_del = instance.file_path
+    instance._thumb_to_del = instance.cover_thumbnail.path if instance.cover_thumbnail else None
+
+@receiver(post_delete, sender=Track)
+def cleanup_after_track_delete(sender, instance, **kwargs):
+    # 1. 物理清理
+    for p in [getattr(instance, '_file_to_del', None), getattr(instance, '_thumb_to_del', None)]:
+        if p and os.path.isfile(p):
+            try: os.remove(p)
+            except: pass
+
+    # 2. 数据库清理 (在事务提交后执行，使用 filter 防止报错)
+    def do_cleanup():
+        # 清理专辑
+        a_id = getattr(instance, '_saved_album_id', None)
+        if a_id:
+            album = Album.objects.filter(id=a_id).first()
+            if album and not album.tracks.exists(): album.delete()
+        
+        # 清理歌手组
+        art_ids = {getattr(instance, '_saved_artist_id', None)} | set(getattr(instance, '_saved_collab_ids', []))
+        for aid in art_ids:
+            if not aid: continue
+            artist = Artist.objects.filter(id=aid).first()
+            if artist and not artist.tracks.exists() and not artist.collaborated_tracks.exists():
+                artist.delete()
+
+    transaction.on_commit(do_cleanup)
+
+
+------------------------------------------------------------
+library views.py:
+------------------------------------------------------------
+import io
+from PIL import Image
+from django.core.files.base import ContentFile
+from rest_framework import viewsets
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.filters import SearchFilter
+from .models import Artist, Album, Track
+from .serializers import TrackListSerializer, TrackDetailSerializer, ArtistSerializer, AlbumSerializer
+from .utils import sync_cover_to_audio_file
+import mutagen
+
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = 'size'
+    max_page_size = 1000
+
+
+class TrackViewSet(viewsets.ModelViewSet):
+    queryset = Track.objects.prefetch_related('artists').select_related('artist', 'album').order_by('-added_at')
+    serializer_class = TrackListSerializer
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [SearchFilter]
+    search_fields = ['title', 'artists__name', 'album__title']
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return TrackListSerializer
+        return TrackDetailSerializer
+
+    def perform_update(self, serializer):
+        cover_upload = serializer.validated_data.pop('cover_upload', None)
+        track_instance = serializer.save()
+
+        if cover_upload:
+            try:
+                image = Image.open(cover_upload)
+                if image.mode != 'RGB': image = image.convert('RGB')
+                image.thumbnail((300, 300))
+                thumb_io = io.BytesIO()
+                image.save(thumb_io, format='JPEG', quality=85)
+                image_bytes = thumb_io.getvalue()
+                filename = f"track_{track_instance.id}_thumb.jpg"
+                track_instance.cover_thumbnail.save(filename, ContentFile(image_bytes), save=True)
+                sync_cover_to_audio_file(track_instance.file_path, track_instance.format, image_bytes)
+            except Exception as e:
+                print(f"API图片上传处理失败: {e}")
+
+        try:
+            audio = mutagen.File(track_instance.file_path)
+            if audio is not None:
+                audio['title'] = track_instance.title
+                artist_list = [a.name for a in track_instance.artists.all()]
+                if not artist_list and track_instance.artist:
+                    artist_list = [track_instance.artist.name]
+                elif not artist_list:
+                    artist_list = ["Unknown Artist"]
+                audio['artist'] = " / ".join(artist_list)
+                audio['album'] = track_instance.album.title
+
+                if track_instance.lyrics is not None:
+                    ext = track_instance.format.lower()
+                    lyrics_text = track_instance.lyrics
+                    if ext == 'mp3':
+                        from mutagen.id3 import USLT
+                        if not audio.tags: audio.add_tags()
+                        audio.tags.setall("USLT", [USLT(encoding=3, lang='eng', desc='', text=lyrics_text)])
+                    elif ext in ['flac', 'ogg']:
+                        audio["lyrics"] = lyrics_text
+                    elif ext == 'm4a':
+                        audio['\xa9lyr'] = lyrics_text
+
+                audio.save()
+        except Exception as e:
+            print(f"物理文件标签写入失败: {e}")
+
+
+class ArtistViewSet(viewsets.ModelViewSet):
+    queryset = Artist.objects.prefetch_related('tracks__artists', 'tracks__album').all().order_by('id')
+    serializer_class = ArtistSerializer
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [SearchFilter]
+    search_fields = ['name']
+
+
+class AlbumViewSet(viewsets.ModelViewSet):
+    queryset = Album.objects.prefetch_related('tracks__artists', 'artist').all().order_by('id')
+    serializer_class = AlbumSerializer
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [SearchFilter]
+    search_fields = ['title', 'artist__name']
+
+
+
+------------------------------------------------------------
+library serializers.py:
+------------------------------------------------------------
+# library/serializers.py
+from rest_framework import serializers
+from .models import Artist, Album, Track
+
+
+class TrackMinimalSerializer(serializers.ModelSerializer):
+    artist_name = serializers.CharField(source='artist.name', read_only=True)
+    all_artists = serializers.SerializerMethodField(read_only=True)
+    album_title = serializers.CharField(source='album.title', read_only=True)
+    track_cover = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Track
+        fields = ['id', 'title', 'artist_name', 'all_artists', 'album_title', 'track_cover', 'duration', 'format', 'added_at']
+
+    def get_all_artists(self, obj):
+        return [a.name for a in obj.artists.all()]
+
+    def get_track_cover(self, obj):
+        if obj.cover_thumbnail:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.cover_thumbnail.url)
+            return obj.cover_thumbnail.url
+        return None
+
+
+class ArtistSerializer(serializers.ModelSerializer):
+    track_count = serializers.IntegerField(source='collaborated_tracks.count', read_only=True)
+    album_count = serializers.IntegerField(source='albums.count', read_only=True)
+    tracks = TrackMinimalSerializer(source='collaborated_tracks', many=True, read_only=True)
+
+    class Meta:
+        model = Artist
+        fields = ['id', 'name', 'track_count', 'album_count', 'tracks']
+
+
+class AlbumSerializer(serializers.ModelSerializer):
+    artist_name = serializers.CharField(source='artist.name', read_only=True)
+    track_count = serializers.IntegerField(source='tracks.count', read_only=True)
+    tracks = TrackMinimalSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Album
+        fields = ['id', 'title', 'artist_name', 'track_count', 'tracks']
+
+# --- 核心修复：定义 TrackListSerializer ---
+class TrackListSerializer(serializers.ModelSerializer):
+    artist_name = serializers.CharField(source='artist.name', read_only=True)
+    all_artists = serializers.SerializerMethodField(read_only=True)
+    album_title = serializers.CharField(source='album.title', read_only=True)
+    track_cover = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Track
+        fields = ['id', 'title', 'artist_name', 'all_artists', 'album_title', 'track_cover', 'duration', 'format', 'added_at']
+
+    def get_all_artists(self, obj):
+        return [a.name for a in obj.artists.all()]
+
+    def get_track_cover(self, obj):
+        if obj.cover_thumbnail:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.cover_thumbnail.url)
+            return obj.cover_thumbnail.url
+        return None
+
+# --- 定义 TrackDetailSerializer ---
+class TrackDetailSerializer(TrackListSerializer):
+    artist_name = serializers.CharField(write_only=True, required=False)
+    album_title = serializers.CharField(write_only=True, required=False)
+    all_artists_names = serializers.ListField(child=serializers.CharField(), write_only=True, required=False)
+
+    class Meta(TrackListSerializer.Meta):
+        fields = TrackListSerializer.Meta.fields + ['lyrics', 'all_artists_names']
+
+    def update(self, instance, validated_data):
+        artist_name = validated_data.pop('artist_name', None)
+        album_title = validated_data.pop('album_title', None)
+        all_artists_names = validated_data.pop('all_artists_names', None)
+
+        if artist_name:
+            artist, _ = Artist.objects.get_or_create(name=artist_name)
+            instance.artist = artist
+            if all_artists_names is None:
+                current_artists = set(instance.artists.values_list('name', flat=True))
+                if artist_name not in current_artists:
+                    instance.artists.add(artist)
+
+        if album_title and instance.artist:
+            album, _ = Album.objects.get_or_create(title=album_title, artist=instance.artist)
+            instance.album = album
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        instance.save()
+
+        if all_artists_names is not None:
+            artist_names_set = set(all_artists_names)
+            existing_artists = Artist.objects.filter(name__in=artist_names_set)
+            existing_names = set(existing_artists.values_list('name', flat=True))
+            missing_names = artist_names_set - existing_names
+            for name in missing_names:
+                Artist.objects.get_or_create(name=name)
+            new_arts = list(Artist.objects.filter(name__in=artist_names_set))
+            instance.artists.set(new_arts)
+            if instance.artist and instance.artist not in new_arts:
+                instance.artists.add(instance.artist)
+
+        return instance
+
+
+------------------------------------------------------------
+library admin.py:
+------------------------------------------------------------
+import io
+import re
+from PIL import Image
+from django.contrib import admin
+from django.utils.html import mark_safe
+from .models import Artist, Album, Track
+from .utils import sync_cover_to_audio_file
+import mutagen
+
+
+def parse_artists(artist_string):
+    """拆分多歌手字符串"""
+    if not artist_string:
+        return ["Unknown Artist"]
+    has_chinese = bool(re.search(r'[\u4e00-\u9fff]', artist_string))
+    if has_chinese:
+        pattern = r'[\s/,&\-　\xA0]+|\s+(?:feat\.|ft\.)+\s*|(?<=\S)\s*-\s+(?=\S)'
+    else:
+        pattern = r'[/,&\-]|\s+(?:feat\.|ft\.)+\s*|(?<=\S)\s*-\s+(?=\S)'
+    parts = re.split(pattern, artist_string, flags=re.IGNORECASE)
+    artists = [p.strip() for p in parts if p.strip()]
+    return artists if artists else ["Unknown Artist"]
+
+
+@admin.register(Artist)
+class ArtistAdmin(admin.ModelAdmin):
+    list_display = ('name',)
+    search_fields = ('name',)
+
+
+@admin.register(Album)
+class AlbumAdmin(admin.ModelAdmin):
+    list_display = ('title', 'artist')
+    search_fields = ('title', 'artist__name')
+    autocomplete_fields = ('artist',)
+
+
+@admin.register(Track)
+class TrackAdmin(admin.ModelAdmin):
+    list_display = ('id', 'title', 'display_all_artists', 'artist', 'album', 'format')
+    list_filter = ('format', 'artist')
+    search_fields = ('title', 'artist__name', 'album__title', 'artists__name')
+
+    fields = ('title', 'artist', 'artists', 'album', 'cover_preview', 'cover_thumbnail', 'lyrics', 'file_path', 'duration',
+              'format')
+
+    readonly_fields = ('cover_preview', 'file_path', 'duration', 'format')
+    autocomplete_fields = ('artist', 'album', 'artists')
+
+    def display_all_artists(self, obj):
+        return ', '.join([a.name for a in obj.artists.all()])
+    display_all_artists.short_description = "所有歌手"
+
+    def cover_preview(self, obj):
+        """
+        自定义方法：在后台渲染图片预览
+        """
+        if obj.cover_thumbnail:
+            # 使用 mark_safe 告诉 Django 信任这段 HTML 并在页面上渲染
+            return mark_safe(
+                f'<img src="{obj.cover_thumbnail.url}" '
+                f'style="max-width: 200px; max-height: 200px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); object-fit: cover;" />'
+            )
+        return "暂无封面"
+
+    # 设置这个字段在后台显示的名称
+    cover_preview.short_description = "封面预览"
+
+    def save_model(self, request, obj, form, change):
+        raw_artist_name = obj.artist.name if obj.artist else "Unknown Artist"
+        parsed = parse_artists(raw_artist_name)
+
+        if len(parsed) > 1:
+            primary_name = parsed[0]
+            primary_artist, _ = Artist.objects.get_or_create(name=primary_name)
+            obj.artist = primary_artist
+
+        super().save_model(request, obj, form, change)
+
+        if len(parsed) > 1:
+            artist_objs = [Artist.objects.get_or_create(name=n)[0] for n in parsed]
+            obj.artists.clear()
+            obj.artists.add(*artist_objs)
+
+        # 1. 处理单曲封面图片的上传与同步
+        if 'cover_thumbnail' in form.changed_data and obj.cover_thumbnail:
+            try:
+                # 压缩图片为 300x300
+                image = Image.open(obj.cover_thumbnail.path)
+                if image.mode != 'RGB': image = image.convert('RGB')
+                image.thumbnail((300, 300))
+                thumb_io = io.BytesIO()
+                image.save(thumb_io, format='JPEG', quality=85)
+                image_bytes = thumb_io.getvalue()
+
+                # 覆盖保存缩略图回硬盘
+                with open(obj.cover_thumbnail.path, 'wb') as f:
+                    f.write(image_bytes)
+
+                # 将图片写入物理音频文件
+                sync_cover_to_audio_file(obj.file_path, obj.format, image_bytes)
+                self.message_user(request, "✅ 单曲专属封面已成功写入音频文件！", level='SUCCESS')
+            except Exception as e:
+                self.message_user(request, f"❌ 封面写入物理文件失败: {e}", level='ERROR')
+
+        # 2. 同步写入文本标签 (歌名、歌手、专辑、歌词)
+        try:
+            audio_easy = mutagen.File(obj.file_path, easy=True)
+            if audio_easy is not None:
+                audio_easy['title'] = obj.title
+                audio_easy['artist'] = obj.artist.name
+                audio_easy['album'] = obj.album.title
+                audio_easy.save()
+
+            audio_raw = mutagen.File(obj.file_path)
+            if audio_raw is not None:
+                lyrics_text = obj.lyrics or ""
+                ext = obj.format.lower()
+
+                if ext == 'mp3':
+                    from mutagen.id3 import USLT
+                    if not audio_raw.tags: audio_raw.add_tags()
+                    audio_raw.tags.setall("USLT", [USLT(encoding=3, lang='eng', desc='', text=lyrics_text)])
+                    audio_raw.save()
+                elif ext in ['flac', 'ogg']:
+                    audio_raw["lyrics"] = lyrics_text
+                    audio_raw.save()
+                elif ext == 'm4a':
+                    audio_raw['\xa9lyr'] = lyrics_text
+                    audio_raw.save()
+        except Exception as e:
+            self.message_user(request, f"物理文件标签写入失败: {e}", level='ERROR')
+
+
+------------------------------------------------------------
+library utils.py:
+------------------------------------------------------------
+# library/utils.py
+import mutagen
+
+
+def sync_cover_to_audio_file(file_path, format_str, image_bytes):
+    """
+    将图片二进制数据写入物理音频文件 (支持 MP3, FLAC, M4A)
+    """
+    try:
+        audio = mutagen.File(file_path)
+        if audio is None:
+            return
+
+        ext = format_str.lower()
+
+        if ext == 'mp3':
+            from mutagen.id3 import APIC
+            if not getattr(audio, 'tags', None):
+                audio.add_tags()
+            # 使用 setall 替换原有的 APIC 封面
+            audio.tags.setall("APIC", [APIC(encoding=3, mime='image/jpeg', type=3, desc='Cover', data=image_bytes)])
+            audio.save()
+
+        elif ext in ['flac', 'ogg']:
+            from mutagen.flac import Picture
+            pic = Picture()
+            pic.type = 3
+            pic.mime = "image/jpeg"
+            pic.desc = "Cover"
+            pic.data = image_bytes
+            if hasattr(audio, 'clear_pictures'):
+                audio.clear_pictures()
+            audio.add_picture(pic)
+            audio.save()
+
+        elif ext == 'm4a':
+            from mutagen.mp4 import MP4Cover
+            audio['covr'] = [MP4Cover(image_bytes, imageformat=MP4Cover.FORMAT_JPEG)]
+            audio.save()
+
+    except Exception as e:
+        print(f"写入封面失败 {file_path}: {e}")
+
+
+------------------------------------------------------------
+scanner models.py:
+------------------------------------------------------------
+# scanner/models.py
+from django.db import models
+
+
+class ScanTask(models.Model):
+    STATUS_CHOICES = (
+        ('pending', '等待中'),
+        ('running', '正在扫描'),
+        ('completed', '扫描完成'),
+        ('error', '扫描出错'),
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    target_path = models.CharField(max_length=1024, verbose_name="目标路径")
+
+    total_files = models.IntegerField(default=0, verbose_name="总文件数")
+    processed_files = models.IntegerField(default=0, verbose_name="已处理数")
+
+    added_count = models.IntegerField(default=0, verbose_name="新增数量")
+    updated_count = models.IntegerField(default=0, verbose_name="更新数量")
+
+    current_file = models.CharField(max_length=1024, blank=True, null=True, verbose_name="当前正在处理的文件")
+    error_message = models.TextField(blank=True, null=True, verbose_name="错误信息")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"扫描任务 #{self.id} - {self.status}"
+
+
+------------------------------------------------------------
+scanner views.py:
+------------------------------------------------------------
+# scanner/views.py
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import ScanTask
+from .tasks import run_scan_async
+
+
+class ScanLibraryView(APIView):
+    """
+    触发本地音乐目录扫描 (异步)
+    """
+
+    def post(self, request):
+        # ==========================================
+        # 🚨 核心拦截逻辑：防止同时启动多个扫描线程
+        # ==========================================
+        active_task = ScanTask.objects.filter(status__in=['pending', 'running']).first()
+        if active_task:
+            return Response({
+                "message": "当前已有扫描任务正在进行中，请勿重复点击！",
+                "task_id": active_task.id
+            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            # 返回 429 Too Many Requests，告诉前端不要再发了
+
+        # 如果没有正在运行的任务，再继续正常启动
+        directory_path = request.data.get('path', r"C:\1D\Mass\my_music")
+
+        # 1. 在数据库中创建一条扫描任务记录
+        task = ScanTask.objects.create(target_path=directory_path)
+
+        # 2. 将任务丢给后台线程去跑
+        run_scan_async(directory_path, task.id)
+
+        # 3. 立刻返回给前端
+        return Response({
+            "message": "扫描任务已在后台启动",
+            "task_id": task.id
+        }, status=status.HTTP_202_ACCEPTED)
+
+
+class ScanStatusView(APIView):
+    """
+    查询扫描任务状态进度
+    """
+
+    def get(self, request):
+        # 允许前端通过 ?task_id=1 查询指定任务，如果不传，默认查询最新的一条记录
+        task_id = request.query_params.get('task_id')
+        if task_id:
+            task = ScanTask.objects.filter(id=task_id).first()
+        else:
+            task = ScanTask.objects.order_by('-created_at').first()
+
+        if not task:
+            return Response({"message": "暂无扫描任务记录"}, status=status.HTTP_404_NOT_FOUND)
+
+        # 计算百分比进度
+        progress = 0
+        if task.total_files > 0:
+            progress = int((task.processed_files / task.total_files) * 100)
+
+        return Response({
+            "task_id": task.id,
+            "status": task.status,  # 'running', 'completed', 'error'
+            "progress": progress,  # 例如: 45 (代表 45%)
+            "total_files": task.total_files,
+            "processed_files": task.processed_files,
+            "current_file": task.current_file,
+            "added_count": task.added_count,
+            "updated_count": task.updated_count,
+            "error_message": task.error_message
+        }, status=status.HTTP_200_OK)
+
+
+------------------------------------------------------------
+scanner admin.py:
+------------------------------------------------------------
+from django.contrib import admin
+
+# Register your models here.
+
+
+
+------------------------------------------------------------
+scanner utils.py:
+------------------------------------------------------------
+# scanner/utils.py
+import os
+import io
+import re
+import mutagen
+from pathlib import Path
+from PIL import Image
+from django.core.files.base import ContentFile
+from library.models import Artist, Album, Track
+
+SUPPORTED_FORMATS = {'.mp3', '.flac', '.ogg', '.m4a'}
+
+def parse_artists(artist_string):
+    """
+    拆分多歌手字符串，支持以下分隔符：
+    - / (斜杠): 歌手1/歌手2
+    - , (逗号): 歌手1,歌手2
+    - & (and): 歌手1 & 歌手2
+    - - (横杠): 歌手1 - 歌手2
+    - feat. / ft.: 歌手1 feat. 歌手2
+    - 空格: 中文多歌手时，歌手1 歌手2
+    """
+    if not artist_string:
+        return ["Unknown Artist"]
+
+    has_chinese = bool(re.search(r'[\u4e00-\u9fff]', artist_string))
+
+    if has_chinese:
+        parts = re.split(
+            r'[\s/,&\-　\xA0]+'                               # 空格、全角空格、不间断空格
+            r'|\s+(?:feat\.|ft\.)+\s*'                        # feat. 或 ft.
+            r'|(?<=\S)\s*-\s+(?=\S)',                         # 单词间横杠
+            artist_string,
+            flags=re.IGNORECASE
+        )
+    else:
+        parts = re.split(
+            r'[/,&\-]'                                          # 基本分隔符
+            r'|\s+(?:feat\.|ft\.)+\s*'                        # feat. 或 ft.
+            r'|(?<=\S)\s*-\s+(?=\S)',                         # 单词间横杠
+            artist_string,
+            flags=re.IGNORECASE
+        )
+
+    artists = []
+    for part in parts:
+        cleaned = part.strip()
+        if cleaned:
+            artists.append(cleaned)
+
+    return artists if artists else ["Unknown Artist"]
+
+def _get_tag_value(tags, key, default="Unknown"):
+    if not tags or key not in tags: return default
+    value = tags[key]
+    return value[0] if isinstance(value, list) else value
+
+def _get_lyrics(audio):
+    try:
+        if audio is None: return ""
+        if hasattr(audio, 'tags') and audio.tags:
+            for key in audio.tags.keys():
+                if key.startswith('USLT'): return audio.tags[key].text
+        if 'lyrics' in audio: return audio['lyrics'][0]
+        if '\xa9lyr' in audio: return audio['\xa9lyr'][0]
+    except Exception: pass
+    return ""
+
+
+def extract_and_save_thumbnail(file_path, track_obj):
+    """从音频文件提取封面并保存到 Track 模型 (带防丢图机制)"""
+
+    # 1. 防御性检查：不仅查数据库，还要查物理文件是否真的存在
+    if track_obj.cover_thumbnail:
+        try:
+            if os.path.isfile(track_obj.cover_thumbnail.path):
+                return  # 只有当物理图片真的在硬盘上时，才跳过提取
+        except ValueError:
+            pass  # 如果触发异常，说明路径无效，继续往下执行提取逻辑
+
+    try:
+        audio = mutagen.File(file_path)
+        if audio is None: return
+        picture_data = None
+
+        # 寻找内嵌封面数据
+        if hasattr(audio, 'tags') and audio.tags:
+            for tag_key in audio.tags.keys():
+                if tag_key.startswith('APIC'):
+                    picture_data = audio.tags[tag_key].data
+                    break
+        elif hasattr(audio, 'pictures') and audio.pictures:
+            picture_data = audio.pictures[0].data
+        elif 'covr' in audio:
+            picture_data = bytes(audio['covr'][0])
+
+        # 如果找到了图片，压缩并保存
+        if picture_data:
+            image = Image.open(io.BytesIO(picture_data))
+            if image.mode != 'RGB': image = image.convert('RGB')
+            image.thumbnail((300, 300))
+            thumb_io = io.BytesIO()
+            image.save(thumb_io, format='JPEG', quality=85)
+
+            filename = f"track_{track_obj.id}_thumb.jpg"
+            track_obj.cover_thumbnail.save(filename, ContentFile(thumb_io.getvalue()), save=True)
+            print(f"  📸 成功提取并保存封面: {filename}")
+        else:
+            print(f"  ⚪ 文件本身无内嵌图片: {file_path}")
+
+    except Exception as e:
+        # 暴露出真实的错误信息，不要再用 pass 掩盖了！
+        print(f"  ⚠️ 提取封面失败 {file_path}: {str(e)}")
+
+
+# --- 核心修改：支持接收 task_id 并更新进度 ---
+def scan_local_directory(directory_path, task_id=None):
+    task = None
+    if task_id:
+        from .models import ScanTask  # 延迟导入，防止循环引用
+        task = ScanTask.objects.filter(id=task_id).first()
+
+    if not os.path.exists(directory_path):
+        if task:
+            task.status = 'error'
+            task.error_message = f"目录 {directory_path} 不存在"
+            task.save()
+        return
+
+    if task:
+        task.status = 'running'
+        task.save()
+
+    # 1. 预扫描：统计总共有多少个支持的音频文件 (分母)
+    valid_files = []
+    for root, _, files in os.walk(directory_path):
+        for file in files:
+            if Path(file).suffix.lower() in SUPPORTED_FORMATS:
+                valid_files.append(os.path.join(root, file))
+
+    if task:
+        task.total_files = len(valid_files)
+        task.save()
+
+    added_count = 0
+    updated_count = 0
+
+    # 2. 正式开始逐个扫描 (分子)
+    for index, file_path in enumerate(valid_files):
+        # 每处理 1 个文件，更新一次数据库里的进度
+        if task:
+            task.processed_files = index + 1
+            task.current_file = file_path
+            # 为了防止 SQLite 被频繁写入锁死，每处理 5 首歌或者最后一首歌时才 save 一次数据库
+            if index % 5 == 0 or index == len(valid_files) - 1:
+                task.save()
+
+        try:
+            audio_easy = mutagen.File(file_path, easy=True)
+            if audio_easy is None: continue
+
+            title = _get_tag_value(audio_easy, 'title', default=Path(file_path).stem)
+            artist_names = parse_artists(_get_tag_value(audio_easy, 'artist', default="Unknown Artist"))
+            album_title = _get_tag_value(audio_easy, 'album', default="Unknown Album")
+            duration = getattr(audio_easy.info, 'length', 0.0)
+
+            primary_artist_obj, _ = Artist.objects.get_or_create(name=artist_names[0])
+
+            if album_title == "Unknown Album":
+                unknown_artist, _ = Artist.objects.get_or_create(name="Unknown Artist")
+                album_obj, _ = Album.objects.get_or_create(title=album_title, artist=unknown_artist)
+            else:
+                album_obj, _ = Album.objects.get_or_create(title=album_title, artist=primary_artist_obj)
+
+            audio_raw = mutagen.File(file_path)
+            lyrics_text = _get_lyrics(audio_raw)
+
+            track_obj, created = Track.objects.update_or_create(
+                file_path=file_path,
+                defaults={
+                    'title': title, 'artist': primary_artist_obj, 'album': album_obj,
+                    'lyrics': lyrics_text, 'duration': duration, 'format': Path(file_path).suffix.lower().lstrip('.'),
+                }
+            )
+
+            all_artist_objs = [Artist.objects.get_or_create(name=n)[0] for n in artist_names]
+            track_obj.artists.set(all_artist_objs)
+            track_obj.save()
+
+            extract_and_save_thumbnail(file_path, track_obj)
+
+            if created: added_count += 1
+            else: updated_count += 1
+
+        except Exception as e:
+            print(f"解析失败 {file_path}: {str(e)}")
+
+    # 3. 扫描结束，标记任务完成
+    if task:
+        task.status = 'completed'
+        task.added_count = added_count
+        task.updated_count = updated_count
+        task.current_file = '扫描完成'
+        task.save()
+
+
+------------------------------------------------------------
+stream models.py:
+------------------------------------------------------------
+from django.db import models
+
+# Create your models here.
+
+
+
+------------------------------------------------------------
+stream views.py:
+------------------------------------------------------------
+# stream/views.py
+import os
+import re
+import mimetypes
+from django.http import StreamingHttpResponse, Http404
+from django.shortcuts import get_object_or_404
+from library.models import Track
+
+# --- 新增这三行，手动注册容易丢失的音频 MIME 类型 ---
+mimetypes.add_type('audio/flac', '.flac')
+mimetypes.add_type('audio/mp4', '.m4a')
+mimetypes.add_type('audio/ogg', '.ogg')
+
+# 正则表达式，用于解析前端传来的 Range 头，例如 "bytes=32768-65535"
+RANGE_RE = re.compile(r'bytes\s*=\s*(\d+)\s*-\s*(\d*)', re.I)
+
+
+def file_iterator(file_path, chunk_size=8192, offset=0, length=None):
+    """
+    文件生成器：将大文件切分成小块 (chunk) 返回，避免一次性吃满服务器内存。
+    """
+    with open(file_path, 'rb') as f:
+        # 游标移动到前端请求的起始字节
+        f.seek(offset, os.SEEK_SET)
+        remaining = length
+        while remaining > 0:
+            # 每次最多只读 chunk_size 大小的数据
+            bytes_to_read = min(chunk_size, remaining)
+            data = f.read(bytes_to_read)
+            if not data:
+                break
+            remaining -= len(data)
+            yield data
+
+
+def stream_audio(request, track_id):
+    """
+    处理 HTTP 206 范围请求的音频流视图
+    """
+    # 1. 从数据库获取歌曲路径
+    track = get_object_or_404(Track, id=track_id)
+    file_path = track.file_path
+
+    if not os.path.exists(file_path):
+        raise Http404("Audio file not found on disk")
+
+    # 2. 获取文件总大小和 MIME 类型 (audio/mpeg, audio/flac 等)
+    file_size = os.path.getsize(file_path)
+    content_type, _ = mimetypes.guess_type(file_path)
+    content_type = content_type or 'application/octet-stream'
+
+    # 3. 解析前端发来的 HTTP_RANGE 请求头
+    range_header = request.META.get('HTTP_RANGE', '').strip()
+    range_match = RANGE_RE.match(range_header)
+
+    if range_match:
+        # --- 前端拖拽了进度条，请求 HTTP 206 部分数据 ---
+        first_byte, last_byte = range_match.groups()
+        first_byte = int(first_byte) if first_byte else 0
+        last_byte = int(last_byte) if last_byte else file_size - 1
+
+        # 防止越界
+        if last_byte >= file_size:
+            last_byte = file_size - 1
+
+        # 计算本次需要返回的字节长度
+        length = last_byte - first_byte + 1
+
+        # 使用 StreamingHttpResponse 和生成器返回数据
+        response = StreamingHttpResponse(
+            file_iterator(file_path, offset=first_byte, length=length),
+            status=206,  # 核心：HTTP 206 状态码
+            content_type=content_type
+        )
+        # 必须告诉浏览器我们实际返回了哪一段数据
+        response['Content-Length'] = str(length)
+        response['Content-Range'] = f'bytes {first_byte}-{last_byte}/{file_size}'
+    else:
+        # --- 前端第一次请求（无 Range 头），默认返回 HTTP 200 全量数据 ---
+        response = StreamingHttpResponse(
+            file_iterator(file_path, length=file_size),
+            status=200,
+            content_type=content_type
+        )
+        response['Content-Length'] = str(file_size)
+
+    # 核心：告诉浏览器，这个接口支持按字节 (bytes) 拖拽和切片
+    response['Accept-Ranges'] = 'bytes'
+
+    # 允许跨域请求（如果你前端 Vue 是运行在另外的端口上，这句很重要）
+    response['Access-Control-Allow-Origin'] = '*'
+
+    return response
+
+
+------------------------------------------------------------
+stream admin.py:
+------------------------------------------------------------
+from django.contrib import admin
+
+# Register your models here.
+
+
+
+------------------------------------------------------------
+scraper models.py:
+------------------------------------------------------------
+from django.db import models
+
+# Create your models here.
+
+
+
+------------------------------------------------------------
+scraper views.py:
+------------------------------------------------------------
+from django.shortcuts import render
+
+# Create your views here.
+
+
+
+------------------------------------------------------------
+scraper admin.py:
+------------------------------------------------------------
+from django.contrib import admin
+
+# Register your models here.
+
