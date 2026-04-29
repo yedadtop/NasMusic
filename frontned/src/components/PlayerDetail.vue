@@ -52,8 +52,6 @@
               </div>
             </div>
             <div class="flex items-center space-x-3 md:space-x-4 text-white/70 shrink-0">
-              <button class="hover:text-white transition"><Icon icon="mdi:heart-outline" class="w-4 h-4 md:w-5 md:h-5" /></button>
-              <button class="hover:text-white transition"><Icon icon="mdi:add" class="w-5 h-5 md:w-6 md:h-6" /></button>
               <button class="hover:text-white transition" @click="showEditModal = true"><Icon icon="mdi:dots-vertical" class="w-4 h-4 md:w-5 md:h-5" /></button>
             </div>
           </div>
