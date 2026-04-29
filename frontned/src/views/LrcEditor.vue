@@ -320,13 +320,17 @@ const syncTimeFromStr = (index) => {
   lyrics.value.sort((a, b) => a.time - b.time)
 }
 
-// 交互逻辑
 const togglePlay = () => {
   if (!audioRef.value) return
   isPlaying.value ? audioRef.value.pause() : audioRef.value.play()
   isPlaying.value = !isPlaying.value
+  
+  // 【新增】：强制移除按钮的焦点
+  // 防止鼠标点击播放按钮后，按钮处于 focus 状态，导致按空格键时触发系统默认的按钮点击
+  if (document.activeElement && document.activeElement.tagName === 'BUTTON') {
+    document.activeElement.blur()
+  }
 }
-
 const seekAudio = (val) => {
   if (audioRef.value) audioRef.value.currentTime = val
 }
@@ -483,17 +487,17 @@ const handleKeyDown = (e) => {
   // 空格键：在输入框内打字时不允许暂停
   if (e.code === 'Space') {
     if (!isInput) {
-      e.preventDefault()
+      e.preventDefault() // 阻止页面向下滚动
+      e.stopImmediatePropagation() // 【新增】：彻底阻止事件冒泡！防止外层的全局播放器捕捉到空格键而同时播放
       togglePlay()
     }
   }
   
   // 回车键：即使在输入框内（比如修改歌词错别字），敲回车也会直接打点并跳下一行
   if (e.code === 'Enter' || e.code === 'NumpadEnter') {
-    // 如果焦点在左侧多行文本解析框里，不拦截回车换行
     if (document.activeElement.type === 'textarea') return 
     
-    e.preventDefault() // 阻止原本的表单提交行为
+    e.preventDefault() 
     stampTime()
   }
 }
