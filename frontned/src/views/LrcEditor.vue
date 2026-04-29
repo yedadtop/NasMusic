@@ -213,7 +213,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppleToast from '../components/AppleToast.vue'
 import { Back, Check, VideoPlay, VideoPause, RefreshLeft, Document, Plus, Minus, Delete, Refresh } from '@element-plus/icons-vue'
@@ -239,10 +239,15 @@ const playingIndex = ref(-1) // 当前正在播放的行（仅文字变蓝）
 const playbackRate = ref(1.0) // 播放倍速
 const deletedLines = ref([]) // 被删除的行（用于撤销）
 const timeOffsetMs = ref(251) // 时间偏移量（毫秒），用于补偿延迟
-const autoScroll = ref(true) // 预览开关，自动滚动到当前播放行
+const autoScroll = ref(false) // 预览开关，自动滚动到当前播放行
 const toastVisible = ref(false)
 const toastMessage = ref('')
 const toastType = ref('success')
+
+watch(rawText, (newVal) => {
+  const lines = newVal.split('\n').filter(line => line.trim() !== '')
+  rawText.value = lines.join('\n')
+})
 
 const showToast = (message, type = 'success') => {
   toastVisible.value = false
