@@ -115,6 +115,12 @@
             </div>
           </div>
           <div class="flex justify-between items-center p-4 sm:px-6">
+            <span class="text-[15px] font-medium">切换播放模式</span>
+            <div class="flex gap-2">
+              <kbd class="apple-kbd">M</kbd>
+            </div>
+          </div>
+          <div class="flex justify-between items-center p-4 sm:px-6">
             <span class="text-[15px] font-medium">打开 / 关闭播放详情</span>
             <div class="flex gap-2">
               <kbd class="apple-kbd">Z</kbd>

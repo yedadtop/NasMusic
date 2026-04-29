@@ -14,7 +14,7 @@
               @click.stop="showSearch = true"
               class="p-2 hover:bg-gray-100 rounded-lg transition shrink-0"
             >
-              <Search class="w-5 h-5 text-gray-500" />
+              <Icon icon="mdi:magnify" class="w-5 h-5 text-gray-500" />
             </button>
             <div v-else class="absolute right-16 sm:right-24 md:right-32 top-2 sm:top-3 z-50" ref="searchContainer">
               <div class="bg-gray-100 rounded-full px-4 py-2 flex items-center shadow-lg">
@@ -29,14 +29,12 @@
                   class="bg-transparent outline-none w-40 sm:w-64 text-sm text-gray-800"
                 >
                 <button @click.stop="closeSearch" class="ml-2 text-gray-400 hover:text-gray-600">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-                  </svg>
+                  <Icon icon="mdi:close" class="w-4 h-4" />
                 </button>
               </div>
             </div>
             <router-link to="/settings" class="p-2 hover:bg-gray-100 rounded-lg transition shrink-0" @click.stop>
-              <Setting class="w-5 h-5 text-gray-500" />
+              <Icon icon="mdi:cog" class="w-5 h-5 text-gray-500" />
             </router-link>
           </div>
         </header>
@@ -72,7 +70,7 @@
           :class="{ 'opacity-30 cursor-not-allowed': !player.hasPrev }"
           @click.stop="prevTrack"
         >
-          <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M18 18l-8.5-6 8.5-6v12zM8 6v12H6V6h2z"/></svg>
+          <Icon icon="mdi:skip-previous" class="w-6 h-6" />
         </button>
         
         <button 
@@ -80,8 +78,8 @@
           :class="{ 'opacity-30 cursor-not-allowed': !player.currentTrack }"
           @click.stop="togglePlay"
         >
-          <svg v-if="!player.isPlaying" class="w-8 h-8 sm:w-9 sm:h-9 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-          <svg v-else class="w-8 h-8 sm:w-9 sm:h-9" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+          <Icon v-if="!player.isPlaying" icon="mdi:play" class="w-8 h-8 sm:w-9 sm:h-9 ml-1" />
+          <Icon v-else icon="mdi:pause" class="w-8 h-8 sm:w-9 sm:h-9" />
         </button>
         
         <button 
@@ -89,17 +87,26 @@
           :class="{ 'opacity-30 cursor-not-allowed': !player.hasNext }"
           @click.stop="nextTrack"
         >
-          <svg class="w-6 h-6 sm:w-7 sm:h-7" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+          <Icon icon="mdi:skip-next" class="w-6 h-6 sm:w-7 sm:h-7" />
         </button>
       </div>
 
       <div class="hidden md:flex items-center justify-end space-x-5 w-1/3 text-gray-400">
+        <button
+          class="text-gray-500 hover:text-gray-900 active:scale-90 transition-all p-2"
+          :class="{ 'text-blue-500': player.playMode === 'shuffle' || player.playMode === 'single' }"
+          @click.stop="player.togglePlayMode()"
+        >
+          <Icon v-if="player.playMode === 'shuffle'" icon="mdi:shuffle-variant" class="w-5 h-5" />
+          <Icon v-else-if="player.playMode === 'single'" icon="mdi:repeat-once" class="w-5 h-5" />
+          <Icon v-else icon="mdi:repeat" class="w-5 h-5" />
+        </button>
         <button 
           class="hover:text-gray-900 transition p-2"
           :class="{ 'opacity-30 cursor-not-allowed': !player.currentTrack }"
           @click="scrollToCurrentTrack"
         >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          <Icon icon="lucide:crosshair" class="w-5 h-5" />
         </button>
       </div>
 
@@ -131,6 +138,7 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
+import { Icon } from '@iconify/vue'
 import PlayerDetail from './components/PlayerDetail.vue'
 import { usePlayerStore } from './stores/player'
 import { Headset, Position, Setting, Search, Star, DArrowLeft, CaretRight, DArrowRight, Document, Operation, Refresh, Switch, Collection, VideoPause } from '@element-plus/icons-vue'
@@ -216,6 +224,12 @@ const handleKeydown = (e) => {
       e.preventDefault()
       if (!showPlayerDetail.value) {
         nextTrack()
+      }
+      break
+    case 'KeyM':
+      e.preventDefault()
+      if (!showPlayerDetail.value) {
+        player.togglePlayMode()
       }
       break
     case 'KeyZ':

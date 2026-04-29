@@ -52,9 +52,9 @@
               </div>
             </div>
             <div class="flex items-center space-x-3 md:space-x-4 text-white/70 shrink-0">
-              <button class="hover:text-white transition"><svg class="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg></button>
-              <button class="hover:text-white transition"><svg class="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6"></path></svg></button>
-              <button class="hover:text-white transition" @click="showEditModal = true"><svg class="w-4 h-4 md:w-5 md:h-5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button>
+              <button class="hover:text-white transition"><Icon icon="mdi:heart-outline" class="w-4 h-4 md:w-5 md:h-5" /></button>
+              <button class="hover:text-white transition"><Icon icon="mdi:add" class="w-5 h-5 md:w-6 md:h-6" /></button>
+              <button class="hover:text-white transition" @click="showEditModal = true"><Icon icon="mdi:dots-vertical" class="w-4 h-4 md:w-5 md:h-5" /></button>
             </div>
           </div>
 
@@ -75,9 +75,7 @@
 
           <div class="mt-5 md:mt-6 flex items-center justify-between w-full px-1">
             <button @click="$emit('close')" class="text-white/60 hover:text-white transition p-2 hover:scale-110">
-              <svg class="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
-              </svg>
+              <Icon icon="mdi:chevron-down" class="w-5 h-5 md:w-6 md:h-6" />
             </button>
             
             <button 
@@ -85,15 +83,15 @@
               :class="{ 'opacity-30 cursor-not-allowed': !player.hasPrev }"
               @click="prevTrack"
             >
-              <svg class="w-6 h-6 md:w-7 md:h-7" fill="currentColor" viewBox="0 0 24 24"><path d="M18 18l-8.5-6 8.5-6v12zM8 6v12H6V6h2z"/></svg>
+              <Icon icon="mdi:skip-previous" class="w-6 h-6 md:w-7 md:h-7" />
             </button>
             
             <button 
               class="text-white hover:scale-105 active:scale-95 transition-all flex items-center justify-center w-12 h-12 md:w-14 md:h-14 drop-shadow-md"
               @click="togglePlay"
             >
-              <svg v-if="!player.isPlaying" class="w-10 h-10 md:w-12 md:h-12" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-              <svg v-else class="w-10 h-10 md:w-12 md:h-12" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+              <Icon v-if="!player.isPlaying" icon="mdi:play" class="w-10 h-10 md:w-12 md:h-12" />
+              <Icon v-else icon="mdi:pause" class="w-10 h-10 md:w-12 md:h-12" />
             </button>
             
             <button 
@@ -101,10 +99,18 @@
               :class="{ 'opacity-30 cursor-not-allowed': !player.hasNext }"
               @click="nextTrack"
             >
-              <svg class="w-6 h-6 md:w-7 md:h-7" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+              <Icon icon="mdi:skip-next" class="w-6 h-6 md:w-7 md:h-7" />
             </button>
 
-            <button class="text-white/60 hover:text-white transition p-2 hover:scale-110"><svg class="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <button
+              class="text-white/60 hover:text-white transition p-2 hover:scale-110"
+              :class="{ 'text-blue-400': player.playMode === 'shuffle' || player.playMode === 'single' }"
+              @click="player.togglePlayMode()"
+            >
+              <Icon v-if="player.playMode === 'shuffle'" icon="mdi:shuffle-variant" class="w-5 h-5" />
+              <Icon v-else-if="player.playMode === 'single'" icon="mdi:repeat-once" class="w-5 h-5" />
+              <Icon v-else icon="mdi:repeat" class="w-5 h-5" />
+            </button>
           </div>
 
 
@@ -124,6 +130,7 @@
 
 <script setup>
 import { computed, ref, watch, nextTick, onBeforeUpdate, onMounted, onUnmounted } from 'vue'
+import { Icon } from '@iconify/vue'
 import { usePlayerStore } from '../stores/player'
 import EditTrackModal from './EditTrackModal.vue'
 
@@ -172,6 +179,11 @@ const handleKeydown = (e) => {
       e.preventDefault()
       e.stopPropagation()
       nextTrack()
+      break
+    case 'KeyM':
+      e.preventDefault()
+      e.stopPropagation()
+      player.togglePlayMode()
       break
     case 'KeyZ':
       e.preventDefault()

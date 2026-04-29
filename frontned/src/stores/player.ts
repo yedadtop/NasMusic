@@ -12,14 +12,57 @@ export const usePlayerStore = defineStore('player', () => {
   const duration = ref(0)
   const volume = ref(1)
   const audioElement = ref(null)
+  const playMode = ref('sequential')
+  const shuffleOrder = ref([])
+  const shuffleHistory = ref([])
 
   const progress = computed(() => {
     if (!duration.value) return 0
     return (currentTime.value / duration.value) * 100
   })
 
-  const hasPrev = computed(() => currentIndex.value > 0)
-  const hasNext = computed(() => currentIndex.value < playlist.value.length - 1)
+  const hasPrev = computed(() => {
+    if (playMode.value === 'shuffle') {
+      return shuffleHistory.value.length > 0
+    }
+    if (playMode.value === 'single') {
+      return true
+    }
+    return currentIndex.value > 0
+  })
+
+  const hasNext = computed(() => {
+    if (playMode.value === 'shuffle') {
+      return shuffleOrder.value.length > 0
+    }
+    if (playMode.value === 'single') {
+      return true
+    }
+    return currentIndex.value < playlist.value.length - 1
+  })
+
+  function generateShuffleOrder(excludeIndex = -1) {
+    const indices = playlist.value.map((_, i) => i).filter(i => i !== excludeIndex)
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [indices[i], indices[j]] = [indices[j], indices[i]]
+    }
+    return indices
+  }
+
+  function togglePlayMode() {
+    if (playMode.value === 'sequential') {
+      playMode.value = 'shuffle'
+      shuffleOrder.value = generateShuffleOrder(currentIndex.value)
+      shuffleHistory.value = []
+    } else if (playMode.value === 'shuffle') {
+      playMode.value = 'single'
+    } else {
+      playMode.value = 'sequential'
+      shuffleOrder.value = []
+      shuffleHistory.value = []
+    }
+  }
 
   async function fetchTrackDetail(id) {
     try {
@@ -34,8 +77,16 @@ export const usePlayerStore = defineStore('player', () => {
     if (tracks.length > 0) {
       playlist.value = tracks
       currentIndex.value = index
+      shuffleOrder.value = playMode.value === 'shuffle' ? generateShuffleOrder(index) : []
+      shuffleHistory.value = []
     } else if (index >= 0) {
+      if (playMode.value === 'shuffle' && currentIndex.value !== -1) {
+        shuffleHistory.value.push(currentIndex.value)
+      }
       currentIndex.value = index
+      if (playMode.value === 'shuffle') {
+        shuffleOrder.value = generateShuffleOrder(index)
+      }
     }
     currentTrack.value = track
     isPlaying.value = true
@@ -45,6 +96,16 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function prevTrack() {
+    if (playMode.value === 'shuffle') {
+      if (shuffleHistory.value.length > 0) {
+        const prevIndex = shuffleHistory.value.pop()
+        const track = playlist.value[prevIndex]
+        currentIndex.value = prevIndex
+        playTrack(track)
+        return true
+      }
+      return false
+    }
     if (currentIndex.value > 0) {
       currentIndex.value--
       const track = playlist.value[currentIndex.value]
@@ -55,6 +116,20 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function nextTrack() {
+    if (playMode.value === 'shuffle') {
+      if (shuffleOrder.value.length > 0) {
+        shuffleHistory.value.push(currentIndex.value)
+        const nextIndex = shuffleOrder.value.shift()
+        const track = playlist.value[nextIndex]
+        currentIndex.value = nextIndex
+        playTrack(track)
+        return true
+      }
+      return false
+    }
+    if (playMode.value === 'single') {
+      return true
+    }
     if (currentIndex.value < playlist.value.length - 1) {
       currentIndex.value++
       const track = playlist.value[currentIndex.value]
@@ -94,6 +169,7 @@ export const usePlayerStore = defineStore('player', () => {
     duration,
     volume,
     audioElement,
+    playMode,
     progress,
     hasPrev,
     hasNext,
@@ -102,6 +178,7 @@ export const usePlayerStore = defineStore('player', () => {
     prevTrack,
     nextTrack,
     togglePlay,
+    togglePlayMode,
     setCurrentTime,
     setDuration,
     setVolume,
