@@ -1,6 +1,6 @@
 <template>
   <div class="flex flex-col h-screen w-screen bg-white text-gray-800 overflow-hidden font-sans">
-    <div class="flex flex-1 overflow-hidden">
+    <div class="flex flex-1 overflow-hidden" v-show="!isFullScreen">
       <main class="flex-1 flex flex-col min-w-0 bg-white relative">
         <header class="h-14 sm:h-16 flex items-center justify-between px-4 sm:px-6 md:px-8 shrink-0">
           <div class="flex items-center space-x-3 sm:space-x-4 md:space-x-6 text-base md:text-lg font-medium text-gray-500 shrink-0">
@@ -49,7 +49,13 @@
       </main>
     </div>
 
-    <footer class="h-16 sm:h-20 bg-white/75 backdrop-blur-2xl saturate-[150%] border-t border-gray-200/40 flex items-center justify-between px-4 sm:px-6 shrink-0 z-10 relative">
+    <router-view v-if="isFullScreen" v-slot="{ Component }">
+      <transition name="fade" mode="out-in">
+        <component :is="Component" />
+      </transition>
+    </router-view>
+
+    <footer v-show="!isFullScreen" class="h-16 sm:h-20 bg-white/75 backdrop-blur-2xl saturate-[150%] border-t border-gray-200/40 flex items-center justify-between px-4 sm:px-6 shrink-0 z-10 relative">
 
       <div class="flex items-center cursor-pointer group flex-1 md:flex-none md:w-1/3 min-w-0 pr-3 h-full" @click="showPlayerDetail = true">
         <div class="relative w-11 h-11 sm:w-14 sm:h-14 bg-gray-100 rounded-[10px] shadow-sm mr-3 sm:mr-4 shrink-0 overflow-hidden group-hover:shadow-md transition-shadow">
@@ -157,6 +163,7 @@ const player = usePlayerStore()
 const audioRef = ref(null)
 const windowWidth = ref(window.innerWidth)
 const isMobile = computed(() => windowWidth.value < 768)
+const isFullScreen = computed(() => route.meta?.fullScreen === true)
 const searchContainer = ref(null)
 let volumeTimer = null
 

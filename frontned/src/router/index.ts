@@ -35,7 +35,8 @@ const routes = [
   {
     path: '/lrc-editor',
     name: 'LrcEditor',
-    component: LrcEditor
+    component: LrcEditor,
+    meta: { fullScreen: true }
   }
 ]
 
