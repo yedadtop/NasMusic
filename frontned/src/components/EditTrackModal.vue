@@ -41,7 +41,10 @@
           </div>
 
           <div class="form-section">
-            <label class="form-label">歌词</label>
+            <div class="form-label-row">
+              <label class="form-label">歌词</label>
+              <button class="lrc-editor-btn" @click="goToLrcEditor">详细编辑</button>
+            </div>
             <textarea
               v-model="form.lyrics"
               class="form-textarea"
@@ -87,9 +90,12 @@
 
 <script setup>
 import { ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { usePlayerStore } from '../stores/player'
 import request from '../api'
 import AppleToast from './AppleToast.vue'
+
+const router = useRouter()
 
 const props = defineProps({
   modelValue: Boolean,
@@ -119,6 +125,12 @@ const showToast = (message, type = 'success') => {
   toastMessage.value = message
   toastType.value = type
   toastVisible.value = true
+}
+
+const goToLrcEditor = () => {
+  if (props.track?.id) {
+    window.open(`/lrc-editor?id=${props.track.id}`, '_blank')
+  }
 }
 
 watch(() => props.modelValue, async (val) => {
@@ -390,6 +402,33 @@ const handleSave = async () => {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 8px;
+}
+
+.form-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.form-label-row .form-label {
+  margin-bottom: 0;
+}
+
+.lrc-editor-btn {
+  font-size: 13px;
+  font-weight: 500;
+  color: #007AFF;
+  background: rgba(0, 122, 255, 0.1);
+  border: none;
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lrc-editor-btn:hover {
+  background: rgba(0, 122, 255, 0.2);
 }
 
 .form-item {

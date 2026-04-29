@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import LrcEditor from '../views/LrcEditor.vue'
 
 const routes = [
   {
@@ -30,6 +31,11 @@ const routes = [
     path: '/settings',
     name: 'Settings',
     component: () => import('../views/Settings.vue')
+  },
+  {
+    path: '/lrc-editor',
+    name: 'LrcEditor',
+    component: LrcEditor
   }
 ]
 
