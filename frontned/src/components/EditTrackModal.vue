@@ -196,31 +196,6 @@ const handleClose = () => {
 const handleSave = async () => {
   if (!props.track) return
 
-  const updatedData = {
-    id: props.track.id,
-    title: form.value.title,
-    artist_name: form.value.artist_name,
-    album_title: form.value.album_title,
-    track_cover: coverPreview.value || props.track.track_cover
-  }
-
-  const updatePlaylistTrack = (data) => {
-    const playlistIndex = player.playlist.findIndex(t => t.id === props.track.id)
-    if (playlistIndex !== -1) {
-      player.playlist.splice(playlistIndex, 1, { ...player.playlist[playlistIndex], ...data })
-    }
-  }
-
-  if (player.currentTrack && player.currentTrack.id === props.track.id) {
-    player.currentTrack = { ...player.currentTrack, ...updatedData }
-    if (player.currentTrackDetail) {
-      player.currentTrackDetail = { ...player.currentTrackDetail, ...updatedData }
-    }
-  }
-  updatePlaylistTrack(updatedData)
-
-  emit('success', updatedData)
-
   saving.value = true
   try {
     const formData = new FormData()
@@ -239,18 +214,28 @@ const handleSave = async () => {
       }
     })
 
-    if (player.currentTrack && player.currentTrack.id === props.track.id) {
-      player.currentTrackDetail = res.data
-      player.currentTrack = { ...player.currentTrack, ...res.data }
-    }
-    updatePlaylistTrack(res.data)
+    const updatedData = res.data
 
-    emit('success', res.data)
+    const updatePlaylistTrack = (data) => {
+      const playlistIndex = player.playlist.findIndex(t => t.id === props.track.id)
+      if (playlistIndex !== -1) {
+        player.playlist.splice(playlistIndex, 1, { ...player.playlist[playlistIndex], ...data })
+      }
+    }
+
+    if (player.currentTrack && player.currentTrack.id === props.track.id) {
+      player.currentTrack = { ...player.currentTrack, ...updatedData }
+      if (player.currentTrackDetail) {
+        player.currentTrackDetail = { ...player.currentTrackDetail, ...updatedData }
+      }
+    }
+    updatePlaylistTrack(updatedData)
+
+    emit('success', updatedData)
     handleClose()
   } catch (error) {
     console.error('保存失败:', error)
     showToast('保存失败，请重试', 'error')
-    emit('success', null, error)
   } finally {
     saving.value = false
   }
