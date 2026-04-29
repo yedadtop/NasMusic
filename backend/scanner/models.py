@@ -1,7 +1,6 @@
 # scanner/models.py
 from django.db import models
 
-
 class ScanTask(models.Model):
     STATUS_CHOICES = (
         ('pending', '等待中'),
@@ -17,6 +16,8 @@ class ScanTask(models.Model):
 
     added_count = models.IntegerField(default=0, verbose_name="新增数量")
     updated_count = models.IntegerField(default=0, verbose_name="更新数量")
+    # 新增：记录被删除的失效数据量
+    deleted_count = models.IntegerField(default=0, verbose_name="删除数量")
 
     current_file = models.CharField(max_length=1024, blank=True, null=True, verbose_name="当前正在处理的文件")
     error_message = models.TextField(blank=True, null=True, verbose_name="错误信息")
