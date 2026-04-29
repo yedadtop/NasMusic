@@ -45,7 +45,6 @@ class ScanStatusView(APIView):
     """
 
     def get(self, request):
-        # 允许前端通过 ?task_id=1 查询指定任务，如果不传，默认查询最新的一条记录
         task_id = request.query_params.get('task_id')
         if task_id:
             task = ScanTask.objects.filter(id=task_id).first()
@@ -55,19 +54,19 @@ class ScanStatusView(APIView):
         if not task:
             return Response({"message": "暂无扫描任务记录"}, status=status.HTTP_404_NOT_FOUND)
 
-        # 计算百分比进度
         progress = 0
         if task.total_files > 0:
             progress = int((task.processed_files / task.total_files) * 100)
 
         return Response({
             "task_id": task.id,
-            "status": task.status,  # 'running', 'completed', 'error'
-            "progress": progress,  # 例如: 45 (代表 45%)
+            "status": task.status,
+            "progress": progress,
             "total_files": task.total_files,
             "processed_files": task.processed_files,
             "current_file": task.current_file,
             "added_count": task.added_count,
             "updated_count": task.updated_count,
+            "deleted_count": getattr(task, 'deleted_count', 0), # 新增字段输出
             "error_message": task.error_message
         }, status=status.HTTP_200_OK)
