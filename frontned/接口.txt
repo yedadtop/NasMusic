@@ -1,0 +1,313 @@
+# NasMusic 后端 API 文档
+
+---
+
+## 1. 获取/播放音频流
+
+- **接口地址**：`GET /stream/{id}/`
+- **功能描述**：返回指定歌曲的音频二进制流。
+- **特性**：
+  - 支持 `HTTP 206 Partial Content`，完美支持 HTML5 `<audio>` 标签的拖拽、快进、快退。
+  - 自动识别 mp3, flac, ogg, m4a 并在响应头中设置正确的 MIME Type，防止浏览器直接下载。
+
+---
+
+## 2. 获取歌曲列表（支持分页与搜索）
+
+- **接口地址**：`GET /api/tracks/`
+- **功能描述**：返回曲库中的歌曲列表（按添加时间倒序排列）。为保证性能，此接口不包含歌词数据。
+- **Query 参数**（可选）：
+  - `page` (int): 请求的页码（默认 1）。
+  - `size` (int): 每页返回的数据条数（默认 50，最大 1000）。
+  - `search` (string): 全局模糊搜索关键词（支持匹配：歌名、歌手名、专辑名）。
+- **返回格式**：
+  ```json
+  {
+    "count": 358,
+    "next": "http://127.0.0.1:8000/api/tracks/?page=2",
+    "previous": null,
+    "results": [
+      {
+        "id": 56,
+        "title": "鼓楼",
+        "artist_name": "赵雷",
+        "all_artists": ["赵雷"],
+        "album_title": "无法长大",
+        "track_cover": "http://127.0.0.1:8000/media/covers/tracks/track_56_thumb.jpg",
+        "duration": 281.0,
+        "format": "mp3",
+        "added_at": "2026-04-26T14:12:30Z"
+      }
+    ]
+  }
+  ```
+
+---
+
+## 3. 获取歌曲详情（懒加载歌词）
+
+- **接口地址**：`GET /api/tracks/{id}/`
+- **功能描述**：获取某一首歌曲的完整详细信息，包含完整的 lyrics（歌词）字段和所有歌手信息。前端应在用户点击播放该首歌曲时调用此接口。
+- **返回格式**：
+  ```json
+  {
+    "id": 51,
+    "title": "南方姑娘",
+    "artist_name": "赵雷",
+    "all_artists": ["赵雷"],
+    "album_title": "赵小雷",
+    "track_cover": "http://127.0.0.1:8000/media/covers/tracks/track_51_thumb.jpg",
+    "duration": 332.64,
+    "format": "mp3",
+    "added_at": "2026-04-27T13:37:11.762484",
+    "lyrics": "[ti:南方姑娘]\n[ar:赵雷]\n..."
+  }
+  ```
+
+---
+
+## 4. 修改歌曲信息
+
+- **接口地址**：`PUT` 或 `PATCH /api/tracks/{id}/`
+- **功能描述**：修改歌曲信息。后端不仅会更新数据库，还会同步使用 mutagen 将修改内容写入物理音频文件的 ID3/Vorbis 标签中。
+- **Content-Type**：`multipart/form-data`（如果包含图片上传）或 `application/json`
+- **Body 参数**（可选）：
+  - `title` (string): 歌名
+  - `artist_name` (string): 主歌手名
+  - `all_artists_names` (array[string]): 所有歌手名数组，用于多歌手合唱歌曲
+  - `album_title` (string): 专辑名
+  - `lyrics` (string): 文本歌词
+  - `cover_upload` (File): 单曲专属封面图片文件。后端接收后会自动压缩为 300x300，并同步写入该首物理音频文件。
+- **多歌手示例**：
+  ```json
+  {
+    "title": "黄梅戏（氛围版）",
+    "artist_name": "泽国同学",
+    "all_artists_names": ["泽国同学", "Unknown Artist"]
+  }
+  ```
+
+---
+
+## 5. 彻底删除歌曲
+
+- **接口地址**：`DELETE /api/tracks/{id}/`
+- **功能描述**：彻底删除该首歌曲。
+- **⚠️ 危险操作注意**：此接口执行的是物理级抹除。不仅会删除数据库中的记录，系统还会通过信号（Signals）自动删除：
+  - 硬盘上的原始音频文件
+  - 对应的单曲封面缩略图文件
+  - 孤立的歌手（Artist）和专辑（Album）记录
+
+---
+
+## 6. 获取所有艺人
+
+- **接口地址**：`GET /api/artists/`
+- **功能描述**：返回所有艺人列表（支持分页、搜索）。
+- **Query 参数**（可选）：
+  - `page` (int): 请求的页码（默认 1）。
+  - `size` (int): 每页返回的数据条数（默认 50，最大 1000）。
+  - `search` (string): 模糊搜索艺人名。
+- **返回格式**：
+  ```json
+  {
+    "count": 10,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 1,
+        "name": "赵雷",
+        "track_count": 5,
+        "album_count": 3
+      }
+    ]
+  }
+  ```
+
+---
+
+## 7. 获取艺人详情
+
+- **接口地址**：`GET /api/artists/{id}/`
+- **功能描述**：获取指定艺人的详细信息，包含该艺人的所有歌曲。
+- **返回格式**：
+  ```json
+  {
+    "id": 1,
+    "name": "赵雷",
+    "track_count": 5,
+    "album_count": 3,
+    "tracks": [
+      {
+        "id": 56,
+        "title": "鼓楼",
+        "artist_name": "赵雷",
+        "all_artists": ["赵雷"],
+        "album_title": "无法长大",
+        "track_cover": "http://127.0.0.1:8000/media/covers/tracks/track_56_thumb.jpg",
+        "duration": 281.0,
+        "format": "mp3",
+        "added_at": "2026-04-26T14:12:30Z"
+      }
+    ]
+  }
+  ```
+
+---
+
+## 8. 获取所有专辑
+
+- **接口地址**：`GET /api/albums/`
+- **功能描述**：返回所有专辑列表（支持分页、搜索）。
+- **Query 参数**（可选）：
+  - `page` (int): 请求的页码（默认 1）。
+  - `size` (int): 每页返回的数据条数（默认 50，最大 1000）。
+  - `search` (string): 模糊搜索专辑名或艺人名。
+- **返回格式**：
+  ```json
+  {
+    "count": 15,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 1,
+        "title": "无法长大",
+        "artist_name": "赵雷",
+        "track_count": 8
+      }
+    ]
+  }
+  ```
+
+---
+
+## 9. 获取专辑详情
+
+- **接口地址**：`GET /api/albums/{id}/`
+- **功能描述**：获取指定专辑的详细信息，包含该专辑的所有歌曲。
+- **返回格式**：
+  ```json
+  {
+    "id": 1,
+    "title": "无法长大",
+    "artist_name": "赵雷",
+    "track_count": 8,
+    "tracks": [
+      {
+        "id": 56,
+        "title": "鼓楼",
+        "artist_name": "赵雷",
+        "all_artists": ["赵雷"],
+        "album_title": "无法长大",
+        "track_cover": "http://127.0.0.1:8000/media/covers/tracks/track_56_thumb.jpg",
+        "duration": 281.0,
+        "format": "mp3",
+        "added_at": "2026-04-26T14:12:30Z"
+      }
+    ]
+  }
+  ```
+
+---
+
+## 10. 触发本地目录扫描（异步）
+
+- **接口地址**：`POST /api/scanner/run/`
+- **功能描述**：命令后端启动守护线程，在后台遍历指定的本地物理文件夹，读取标签、提取单曲封面并自动入库。
+- **Body 参数**（JSON）：
+  ```json
+  {
+    "path": "C:\\1D\\Mass\\my_music"
+  }
+  ```
+  - `path` (string): 可选。如果不传，后端将使用默认目录 `C:\1D\Mass\my_music`。
+- **返回格式**（HTTP 202 Accepted）：
+  ```json
+  {
+    "message": "扫描任务已在后台启动",
+    "task_id": 12
+  }
+  ```
+
+---
+
+## 11. 查询扫描任务进度
+
+- **接口地址**：`GET /api/scanner/status/`
+- **功能描述**：前端用于定时拉取扫描进度的接口，用于渲染实时进度条。
+- **Query 参数**（可选）：
+  - `task_id` (int): 任务 ID。如果不传，默认返回最新的一条扫描任务。
+- **返回格式**：
+  ```json
+  {
+    "task_id": 12,
+    "status": "running",
+    "progress": 45,
+    "total_files": 200,
+    "processed_files": 90,
+    "current_file": "C:\\1D\\Mass\\my_music\\赵雷 - 我记得.mp3",
+    "added_count": 10,
+    "updated_count": 80,
+    "error_message": ""
+  }
+  ```
+  - `status` 可能值：`pending`、`running`、`completed`、`error`
+
+---
+
+## 12. 搜索
+
+- **接口地址**：`GET /api/tracks/?search=baby`
+- **功能描述**：在歌曲列表中搜索匹配的歌曲，支持歌名、歌手名、专辑名模糊搜索，不区分大小写。
+- **返回格式**：
+  ```json
+  {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 36,
+        "title": "Baby",
+        "artist_name": "Justin Bieber",
+        "all_artists": ["Justin Bieber"],
+        "album_title": "Sleep Music",
+        "track_cover": null,
+        "duration": 215.45,
+        "format": "flac",
+        "added_at": "2026-04-27T13:37:11.422255"
+      }
+    ]
+  }
+  ```
+
+---
+
+## 多歌手支持说明
+
+### 数据模型
+
+- **主歌手（artist）**：ForeignKey，用于专辑归属和兼容逻辑
+- **所有歌手（artists）**：ManyToManyField，支持多歌手合唱
+
+### 扫描入库时
+
+后端会自动解析音频文件中的歌手标签，支持以下分隔符：
+- `/`（如：`Maroon 5/Wiz Khalifa`）
+- `,`（如：`Artist1, Artist2`）
+- `&`（如：`Artist1 & Artist2`）
+- `feat.` / `ft.`（如：`Artist1 feat. Artist2`）
+
+### API 更新时
+
+- **只传 `artist_name`**：更新主歌手，M2M 列表自动同步添加该歌手
+- **传 `all_artists_names`**：完全替换 M2M 列表，主歌手自动保含在列表中
+
+### 歌手字段说明
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `artist_name` | string | 主歌手名称（来自 ForeignKey） |
+| `all_artists` | array[string] | 所有歌手名称列表（来自 ManyToMany） |
