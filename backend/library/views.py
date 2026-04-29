@@ -56,7 +56,11 @@ class TrackViewSet(viewsets.ModelViewSet):
                     audio['artist'] = track_instance.artist.name
                 else:
                     audio['artist'] = "Unknown Artist"
+
+                if track_instance.album:
                     audio['album'] = track_instance.album.title
+                else:
+                    audio['album'] = ""
 
                 if track_instance.lyrics is not None:
                     ext = track_instance.format.lower()
@@ -81,7 +85,7 @@ class TrackViewSet(viewsets.ModelViewSet):
 class ArtistViewSet(viewsets.ModelViewSet):
     queryset = Artist.objects.annotate(
         track_count=models.Count('collaborated_tracks')
-    ).filter(track_count__gt=0).prefetch_related('tracks__artists', 'tracks__album').order_by('-track_count', 'id')
+    ).filter(track_count__gt=0).prefetch_related('collaborated_tracks__artists', 'collaborated_tracks__album').order_by('-track_count', 'id')
 
     serializer_class = ArtistSerializer
     pagination_class = StandardResultsSetPagination
