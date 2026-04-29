@@ -50,27 +50,27 @@ class TrackViewSet(viewsets.ModelViewSet):
         try:
             audio = mutagen.File(track_instance.file_path)
             if audio is not None:
-                audio['title'] = track_instance.title
+                ext = track_instance.format.lower()
 
-                if track_instance.artist:
-                    audio['artist'] = track_instance.artist.name
+                if ext == 'mp3':
+                    from mutagen.id3 import ID3, TIT2, TPE1, TALB, USLT
+                    if audio.tags is None:
+                        audio.add_tags()
+                    audio.tags['title'] = TIT2(encoding=3, text=track_instance.title or '')
+                    artist_name = track_instance.artist.name if track_instance.artist else 'Unknown Artist'
+                    audio.tags['artist'] = TPE1(encoding=3, text=artist_name)
+                    album_name = track_instance.album.title if track_instance.album else ''
+                    audio.tags['album'] = TALB(encoding=3, text=album_name)
                 else:
-                    audio['artist'] = "Unknown Artist"
-
-                if track_instance.album:
-                    audio['album'] = track_instance.album.title
-                else:
-                    audio['album'] = ""
+                    audio['title'] = track_instance.title or ''
+                    audio['artist'] = track_instance.artist.name if track_instance.artist else 'Unknown Artist'
+                    audio['album'] = track_instance.album.title if track_instance.album else ''
 
                 if track_instance.lyrics is not None:
-                    ext = track_instance.format.lower()
-
-
-
                     lyrics_text = track_instance.lyrics
                     if ext == 'mp3':
-                        from mutagen.id3 import USLT
-                        if not audio.tags: audio.add_tags()
+                        if audio.tags is None:
+                            audio.add_tags()
                         audio.tags.setall("USLT", [USLT(encoding=3, lang='eng', desc='', text=lyrics_text)])
                     elif ext in ['flac', 'ogg']:
                         audio["lyrics"] = lyrics_text

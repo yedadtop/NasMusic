@@ -183,7 +183,32 @@ const handleClose = () => {
 
 const handleSave = async () => {
   if (!props.track) return
-  
+
+  const updatedData = {
+    id: props.track.id,
+    title: form.value.title,
+    artist_name: form.value.artist_name,
+    album_title: form.value.album_title,
+    track_cover: coverPreview.value || props.track.track_cover
+  }
+
+  const updatePlaylistTrack = (data) => {
+    const playlistIndex = player.playlist.findIndex(t => t.id === props.track.id)
+    if (playlistIndex !== -1) {
+      player.playlist.splice(playlistIndex, 1, { ...player.playlist[playlistIndex], ...data })
+    }
+  }
+
+  if (player.currentTrack && player.currentTrack.id === props.track.id) {
+    player.currentTrack = { ...player.currentTrack, ...updatedData }
+    if (player.currentTrackDetail) {
+      player.currentTrackDetail = { ...player.currentTrackDetail, ...updatedData }
+    }
+  }
+  updatePlaylistTrack(updatedData)
+
+  emit('success', updatedData)
+
   saving.value = true
   try {
     const formData = new FormData()
@@ -191,35 +216,29 @@ const handleSave = async () => {
     formData.append('artist_name', form.value.artist_name)
     formData.append('album_title', form.value.album_title)
     formData.append('lyrics', form.value.lyrics)
-    
+
     if (coverFile.value) {
       formData.append('cover_upload', coverFile.value)
     }
-    
+
     const res = await request.patch(`/tracks/${props.track.id}/`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
     })
-    
-    showToast('保存成功', 'success')
-    await player.fetchTrackDetail(props.track.id)
-    
+
     if (player.currentTrack && player.currentTrack.id === props.track.id) {
-      player.currentTrack = {
-        ...player.currentTrack,
-        title: res.data.title || form.value.title,
-        artist_name: res.data.artist_name || form.value.artist_name,
-        album_title: res.data.album_title || form.value.album_title,
-        track_cover: res.data.track_cover || player.currentTrack.track_cover
-      }
+      player.currentTrackDetail = res.data
+      player.currentTrack = { ...player.currentTrack, ...res.data }
     }
-    
-    emit('success')
+    updatePlaylistTrack(res.data)
+
+    emit('success', res.data)
     handleClose()
   } catch (error) {
     console.error('保存失败:', error)
     showToast('保存失败，请重试', 'error')
+    emit('success', null, error)
   } finally {
     saving.value = false
   }

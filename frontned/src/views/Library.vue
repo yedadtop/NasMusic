@@ -270,10 +270,13 @@ const showToast = (message, type = 'success') => {
   toastVisible.value = true
 }
 
-const handleEditSuccess = () => {
-  page.value = 1
-  allLoaded.value = false
-  fetchTracks()
+const handleEditSuccess = (updatedTrack) => {
+  if (updatedTrack) {
+    const index = tracks.value.findIndex(t => t.id === updatedTrack.id)
+    if (index !== -1) {
+      tracks.value[index] = { ...tracks.value[index], ...updatedTrack }
+    }
+  }
 }
 
 const scrollToCurrentTrack = async () => {
