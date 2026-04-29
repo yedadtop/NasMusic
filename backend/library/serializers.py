@@ -70,39 +70,43 @@ class TrackListSerializer(serializers.ModelSerializer):
 class TrackDetailSerializer(TrackListSerializer):
     artist_name = serializers.CharField(write_only=True, required=False)
     album_title = serializers.CharField(write_only=True, required=False)
-    # 前端传来的这个字段以后可以废弃了，为了不让前端报错先留着定义，但在逻辑里我们会忽略它
+    # 前端传来的这个字段已经废弃，仅做占位防止前端报错，逻辑中会被忽略
     all_artists_names = serializers.ListField(child=serializers.CharField(), write_only=True, required=False)
 
     class Meta(TrackListSerializer.Meta):
         fields = TrackListSerializer.Meta.fields + ['lyrics', 'all_artists_names', 'artist_name', 'album_title']
 
     def update(self, instance, validated_data):
-        # 1. 【核心】在修改前，记录下这首歌当前绑定的旧关联 ID [cite: 21]
+        # 1. 【核心】在修改前，记录下这首歌当前绑定的旧关联 ID
         old_artist_id = instance.artist.id if instance.artist else None
         old_album_id = instance.album.id if instance.album else None
-        # 记录旧的多对多歌手列表 [cite: 21]
         old_m2m_ids = list(instance.artists.values_list('id', flat=True))
 
         artist_name = validated_data.pop('artist_name', None)
         album_title = validated_data.pop('album_title', None)
-        validated_data.pop('all_artists_names', None) # 忽略前端传来的旧数组 [cite: 21]
+        # 彻底忽略前端传来的乱七八糟的数组
+        validated_data.pop('all_artists_names', None) 
 
-        # 2. 更新主歌手 [cite: 21]
+        # 2. 更新主歌手
         if artist_name:
             artist, _ = Artist.objects.get_or_create(name=artist_name)
             instance.artist = artist
 
-        # 3. 更新专辑 [cite: 22]
-        if album_title and instance.artist:
-            album, _ = Album.objects.get_or_create(title=album_title, artist=instance.artist)
-            instance.album = album
+        # 3. 【核心】更新专辑：只按名字匹配，防止产生同名重复专辑
+        if album_title:
+            existing_album = Album.objects.filter(title=album_title).first()
+            if existing_album:
+                instance.album = existing_album
+            else:
+                album = Album.objects.create(title=album_title, artist=instance.artist)
+                instance.album = album
 
-        # 4. 更新其他基础字段（歌名、歌词等）并保存 [cite: 22]
+        # 4. 更新其他基础字段（歌名、歌词等）并保存
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save() 
 
-        # 5. 【核心】自动拆分并重新绑定“所有歌手” [cite: 23, 24]
+        # 5. 【核心】自动拆分主歌手，并重新绑定给“所有歌手”
         if instance.artist:
             parsed_names = parse_artists(instance.artist.name)
             if len(parsed_names) > 1:
@@ -111,11 +115,12 @@ class TrackDetailSerializer(TrackListSerializer):
             else:
                 instance.artists.set([instance.artist])
 
-        # 6. 【核心】开始清理被废弃的“孤儿”数据 [cite: 25]
+        # 6. 【核心】连锁清理被废弃的“孤儿”数据
+        
         # A. 先检查并清理旧专辑
         if old_album_id and old_album_id != instance.album_id:
             old_album = Album.objects.filter(id=old_album_id).first()
-            # 如果这个旧专辑里已经一首歌都没有了，删掉它
+            # 如果这个旧专辑里已经一首歌都没有了，彻底删掉它
             if old_album and not old_album.tracks.exists():
                 old_album.delete()
 
@@ -127,10 +132,10 @@ class TrackDetailSerializer(TrackListSerializer):
         for aid in check_artist_ids:
             artist = Artist.objects.filter(id=aid).first()
             if artist:
-                # 检查：既没当过主唱，也没当过合唱，名下也没专辑，说明是彻底的废弃名字 [cite: 25]
+                # 检查：既没当过主唱，也没当过合唱，名下也没专辑，说明是废弃空壳
                 if not artist.tracks.exists() and \
-                not artist.collaborated_tracks.exists() and \
-                not artist.albums.exists():
+                   not artist.collaborated_tracks.exists() and \
+                   not artist.albums.exists():
                     artist.delete()
 
         return instance

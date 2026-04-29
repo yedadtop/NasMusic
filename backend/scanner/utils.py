@@ -111,7 +111,6 @@ def extract_and_save_thumbnail(file_path, track_obj):
         print(f"  ⚠️ 提取封面失败 {file_path}: {str(e)}")
 
 
-# --- 核心修改：支持接收 task_id 并更新进度 ---
 def scan_local_directory(directory_path, task_id=None):
     task = None
     if task_id:
@@ -136,13 +135,13 @@ def scan_local_directory(directory_path, task_id=None):
             if Path(file).suffix.lower() in SUPPORTED_FORMATS:
                 valid_files.append(os.path.join(root, file))
                 
-    # ================= 新增核心逻辑：同步删除 =================
+    # ================= 同步删除逻辑 =================
     # 获取数据库中属于该扫描目录，但在物理硬盘上已不存在的歌曲
     valid_files_set = set(valid_files)
     obsolete_tracks = Track.objects.filter(file_path__startswith=directory_path).exclude(file_path__in=valid_files_set)
     deleted_count = obsolete_tracks.count()
     
-    # 逐个调用 delete() 以确保触发 library/models.py 中的 pre_delete/post_delete 信号，清理孤儿专辑和艺人
+    # 逐个调用 delete() 以确保触发 pre_delete/post_delete 信号，清理孤儿数据
     for t in obsolete_tracks:
         t.delete()
     # ========================================================
@@ -169,27 +168,31 @@ def scan_local_directory(directory_path, task_id=None):
 
             title = _get_tag_value(audio_easy, 'title', default=Path(file_path).stem)
             
-            # 🚨 修改 1：先获取完整未拆分的原始字符串（例如 "徐良 小凌"）
+            # 【核心】：先获取完整未拆分的原始字符串作为主歌手
             raw_artist_string = _get_tag_value(audio_easy, 'artist', default="Unknown Artist")
-            # 提取拆分后的列表（例如 ["徐良", "小凌"]）
+            # 提取拆分后的列表用于 M2M 字段
             artist_names = parse_artists(raw_artist_string)  
 
             album_title = _get_tag_value(audio_easy, 'album', default="Unknown Album")
             duration = getattr(audio_easy.info, 'length', 0.0)
 
-            # 🚨 修改 2：主歌手直接使用未拆分的原始字符串，保留原貌
+            # 主歌手直接使用未拆分的原始字符串，保留原貌
             primary_artist_obj, _ = Artist.objects.get_or_create(name=raw_artist_string)
 
-            # 专辑也绑定到这个原始名字的艺人
-            if album_title == "Unknown Album":
-                unknown_artist, _ = Artist.objects.get_or_create(name="Unknown Artist")
-                album_obj, _ = Album.objects.get_or_create(title=album_title, artist=unknown_artist)
-            else:
-                album_obj, _ = Album.objects.get_or_create(title=album_title, artist=primary_artist_obj)
+            # 【核心】：专辑去重逻辑。只认名字，不绑定具体的歌手！
+            album_obj = Album.objects.filter(title=album_title).first()
+            if not album_obj:
+                # 只有当这是一个从未见过的新专辑时，才顺手把当前主歌手挂上去
+                if album_title == "Unknown Album":
+                    unknown_artist, _ = Artist.objects.get_or_create(name="Unknown Artist")
+                    album_obj = Album.objects.create(title=album_title, artist=unknown_artist)
+                else:
+                    album_obj = Album.objects.create(title=album_title, artist=primary_artist_obj)
 
             audio_raw = mutagen.File(file_path)
             lyrics_text = _get_lyrics(audio_raw)
 
+            # 更新或创建歌曲
             track_obj, created = Track.objects.update_or_create(
                 file_path=file_path,
                 defaults={
@@ -198,9 +201,8 @@ def scan_local_directory(directory_path, task_id=None):
                 }
             )
 
-            # 🚨 修改 3：把拆分后的独立歌手写入“所有歌手”(多对多) 字段
+            # 把拆分后的独立歌手写入“所有歌手”(多对多) 字段
             all_artist_objs = [Artist.objects.get_or_create(name=n)[0] for n in artist_names]
-            # .set() 会直接覆盖原有的关系，保证只剩下拆分后的独立艺人
             track_obj.artists.set(all_artist_objs)
             track_obj.save()
 

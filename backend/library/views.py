@@ -1,6 +1,7 @@
 import io
 from PIL import Image
 from django.core.files.base import ContentFile
+from django.db import models
 from rest_framework import viewsets
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.filters import SearchFilter
@@ -78,12 +79,10 @@ class TrackViewSet(viewsets.ModelViewSet):
 
 
 class ArtistViewSet(viewsets.ModelViewSet):
-    # 🚨 核心修改：增加 .filter(collaborated_tracks__isnull=False).distinct()
-    # 作用：只查询那些在“所有歌手”列表中出现过的真实独立歌手，过滤掉仅用于展示的组合名字
-    queryset = Artist.objects.filter(
-        collaborated_tracks__isnull=False
-    ).distinct().prefetch_related('tracks__artists', 'tracks__album').order_by('id')
-    
+    queryset = Artist.objects.annotate(
+        track_count=models.Count('collaborated_tracks')
+    ).filter(track_count__gt=0).prefetch_related('tracks__artists', 'tracks__album').order_by('-track_count', 'id')
+
     serializer_class = ArtistSerializer
     pagination_class = StandardResultsSetPagination
     filter_backends = [SearchFilter]
@@ -91,7 +90,9 @@ class ArtistViewSet(viewsets.ModelViewSet):
 
 
 class AlbumViewSet(viewsets.ModelViewSet):
-    queryset = Album.objects.prefetch_related('tracks__artists', 'artist').all().order_by('id')
+    queryset = Album.objects.prefetch_related('tracks__artists', 'artist').all().annotate(
+        track_count=models.Count('tracks')
+    ).order_by('-track_count', 'id')
     serializer_class = AlbumSerializer
     pagination_class = StandardResultsSetPagination
     filter_backends = [SearchFilter]

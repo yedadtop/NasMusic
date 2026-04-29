@@ -15,9 +15,7 @@ class Artist(models.Model):
 class Album(models.Model):
     title = models.CharField(max_length=255, verbose_name="专辑名")
     artist = models.ForeignKey(Artist, on_delete=models.CASCADE, related_name='albums', verbose_name="所属歌手")
-
-    # 去掉 unique_together，允许业务上存在同名但 ID 不同的合法专辑
-    def __str__(self): return f"{self.title} - {self.artist.name}"
+    def __str__(self): return self.title
 
 class Track(models.Model):
     title = models.CharField(max_length=255, verbose_name="歌曲名")
@@ -36,11 +34,7 @@ class Track(models.Model):
         # 确保外键对象已持久化，防止 M2M 写入失败
         if self.artist and not self.artist.pk: self.artist.save()
         if self.album and not self.album.pk: self.album.save()
-        
-        is_new = self.pk is None
         super().save(*args, **kwargs)
-        if is_new and self.artist and self.artist.pk:
-            self.artists.add(self.artist)
 
 # --- 安全的清理信号逻辑 ---
 @receiver(pre_delete, sender=Track)
@@ -85,6 +79,7 @@ library views.py:
 import io
 from PIL import Image
 from django.core.files.base import ContentFile
+from django.db import models
 from rest_framework import viewsets
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.filters import SearchFilter
@@ -162,7 +157,10 @@ class TrackViewSet(viewsets.ModelViewSet):
 
 
 class ArtistViewSet(viewsets.ModelViewSet):
-    queryset = Artist.objects.prefetch_related('tracks__artists', 'tracks__album').all().order_by('id')
+    queryset = Artist.objects.annotate(
+        track_count=models.Count('collaborated_tracks')
+    ).filter(track_count__gt=0).prefetch_related('tracks__artists', 'tracks__album').order_by('-track_count', 'id')
+
     serializer_class = ArtistSerializer
     pagination_class = StandardResultsSetPagination
     filter_backends = [SearchFilter]
@@ -170,7 +168,9 @@ class ArtistViewSet(viewsets.ModelViewSet):
 
 
 class AlbumViewSet(viewsets.ModelViewSet):
-    queryset = Album.objects.prefetch_related('tracks__artists', 'artist').all().order_by('id')
+    queryset = Album.objects.prefetch_related('tracks__artists', 'artist').all().annotate(
+        track_count=models.Count('tracks')
+    ).order_by('-track_count', 'id')
     serializer_class = AlbumSerializer
     pagination_class = StandardResultsSetPagination
     filter_backends = [SearchFilter]
@@ -260,30 +260,32 @@ class TrackDetailSerializer(TrackListSerializer):
         fields = TrackListSerializer.Meta.fields + ['lyrics', 'all_artists_names', 'artist_name', 'album_title']
 
     def update(self, instance, validated_data):
-        # 🚨 1. 在更新前，记录下这首歌原本绑定的旧歌手和所有M2M歌手的 ID
+        # 1. 【核心】在修改前，记录下这首歌当前绑定的旧关联 ID [cite: 21]
         old_artist_id = instance.artist.id if instance.artist else None
+        old_album_id = instance.album.id if instance.album else None
+        # 记录旧的多对多歌手列表 [cite: 21]
         old_m2m_ids = list(instance.artists.values_list('id', flat=True))
 
         artist_name = validated_data.pop('artist_name', None)
         album_title = validated_data.pop('album_title', None)
-        validated_data.pop('all_artists_names', None)  # 抛弃前端的数组
+        validated_data.pop('all_artists_names', None) # 忽略前端传来的旧数组 [cite: 21]
 
-        # 2. 保存新主歌手
+        # 2. 更新主歌手 [cite: 21]
         if artist_name:
             artist, _ = Artist.objects.get_or_create(name=artist_name)
             instance.artist = artist
 
-        # 3. 保存新专辑
+        # 3. 更新专辑 [cite: 22]
         if album_title and instance.artist:
             album, _ = Album.objects.get_or_create(title=album_title, artist=instance.artist)
             instance.album = album
 
-        # 4. 更新基础字段并保存
+        # 4. 更新其他基础字段（歌名、歌词等）并保存 [cite: 22]
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-        instance.save()
+        instance.save() 
 
-        # 5. 自动拆分并绑定“所有歌手”
+        # 5. 【核心】自动拆分并重新绑定“所有歌手” [cite: 23, 24]
         if instance.artist:
             parsed_names = parse_artists(instance.artist.name)
             if len(parsed_names) > 1:
@@ -292,17 +294,27 @@ class TrackDetailSerializer(TrackListSerializer):
             else:
                 instance.artists.set([instance.artist])
 
-        # 🚨 6. 核心清理逻辑：检查旧歌手是否变成了“孤儿”
-        all_old_ids = set(old_m2m_ids)
-        if old_artist_id:
-            all_old_ids.add(old_artist_id)
+        # 6. 【核心】开始清理被废弃的“孤儿”数据 [cite: 25]
+        # A. 先检查并清理旧专辑
+        if old_album_id and old_album_id != instance.album_id:
+            old_album = Album.objects.filter(id=old_album_id).first()
+            # 如果这个旧专辑里已经一首歌都没有了，删掉它
+            if old_album and not old_album.tracks.exists():
+                old_album.delete()
 
-        for aid in all_old_ids:
-            if aid:
-                old_artist = Artist.objects.filter(id=aid).first()
-                # 如果这个旧歌手名下已经没有任何主唱歌曲、合唱歌曲和专辑了，彻底删掉他
-                if old_artist and not old_artist.tracks.exists() and not old_artist.collaborated_tracks.exists() and not old_artist.albums.exists():
-                    old_artist.delete()
+        # B. 再检查并清理旧歌手（包括主歌手和所有合唱歌手）
+        check_artist_ids = set(old_m2m_ids)
+        if old_artist_id:
+            check_artist_ids.add(old_artist_id)
+
+        for aid in check_artist_ids:
+            artist = Artist.objects.filter(id=aid).first()
+            if artist:
+                # 检查：既没当过主唱，也没当过合唱，名下也没专辑，说明是彻底的废弃名字 [cite: 25]
+                if not artist.tracks.exists() and \
+                not artist.collaborated_tracks.exists() and \
+                not artist.albums.exists():
+                    artist.delete()
 
         return instance
 
@@ -444,12 +456,12 @@ class TrackAdmin(admin.ModelAdmin):
 
 
     def save_related(self, request, form, formsets, change):
-        # 1. 先让 Django 按默认表单保存关联数据
+        # 1. 先让 Django 按默认表单保存关联数据 [cite: 39]
         super().save_related(request, form, formsets, change)
 
         obj = form.instance
         
-        # 2. 🚨 强制覆盖：不管后台表单“所有歌手”选了什么，强制用主歌手的拆分结果覆盖
+        # 2. 【核心】无论后台表单怎么选，强制用主歌手的拆分结果覆盖“所有歌手” [cite: 40]
         raw_artist_name = obj.artist.name if obj.artist else "Unknown Artist"
         parsed = parse_artists(raw_artist_name)
         if len(parsed) > 1:
@@ -458,21 +470,34 @@ class TrackAdmin(admin.ModelAdmin):
         else:
             obj.artists.set([obj.artist])
 
-        # 3. 🚨 清理废弃歌手：通过比对表单初始数据，删掉被改掉的旧歌手
+        # 3. 【核心】清理逻辑：通过对比修改前的初始数据 (form.initial)，删掉被改掉的旧名字 [cite: 41, 42, 43]
         if change and form.initial:
             old_artist_id = form.initial.get('artist')
+            old_album_id = form.initial.get('album')
             old_m2m_ids = form.initial.get('artists', [])
             
+            # A. 清理空专辑
+            if old_album_id and old_album_id != obj.album_id:
+                old_album = Album.objects.filter(id=old_album_id).first()
+                if old_album and not old_album.tracks.exists():
+                    old_album.delete()
+
+            # B. 清理废弃歌手
             all_old_ids = set(old_m2m_ids)
             if old_artist_id:
                 all_old_ids.add(old_artist_id)
                 
             for aid in all_old_ids:
-                if aid:
-                    old_artist = Artist.objects.filter(id=aid).first()
-                    # 检查是否变为了空壳数据
-                    if old_artist and not old_artist.tracks.exists() and not old_artist.collaborated_tracks.exists() and not old_artist.albums.exists():
-                        old_artist.delete()
+                if not aid: continue
+                # 健壮性处理：aid 可能是 ID 也可能是对象 
+                artist_item = aid if isinstance(aid, Artist) else Artist.objects.filter(pk=aid).first()
+                
+                if artist_item and artist_item.pk:
+                    # 深度检查是否有任何关联记录 [cite: 43]
+                    if not artist_item.tracks.exists() and \
+                    not artist_item.collaborated_tracks.exists() and \
+                    not artist_item.albums.exists():
+                        artist_item.delete()
 
 
 ------------------------------------------------------------

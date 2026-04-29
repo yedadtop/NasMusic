@@ -36,7 +36,7 @@
         </div>
         <div class="mt-2">
           <div class="font-semibold text-sm text-blue-500 truncate">{{ album.title }}</div>
-          <div class="text-xs text-gray-500 mt-0.5 truncate">{{ album.artist_name }}</div>
+          <div class="text-xs text-gray-500 mt-0.5 truncate">{{ album.artist_name }} · {{ album.track_count }} 首歌曲</div>
         </div>
       </div>
     </div>
