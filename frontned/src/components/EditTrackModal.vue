@@ -182,7 +182,16 @@ const handleCoverSelect = (event) => {
   const file = event.target.files?.[0]
   if (file) {
     coverFile.value = file
-    coverPreview.value = URL.createObjectURL(file)
+    const localUrl = URL.createObjectURL(file)
+    coverPreview.value = localUrl
+
+    if (player.currentTrack && player.currentTrack.id === props.track.id) {
+      player.currentTrack = { ...player.currentTrack, track_cover: localUrl }
+    }
+    const playlistIndex = player.playlist.findIndex(t => t.id === props.track.id)
+    if (playlistIndex !== -1) {
+      player.playlist[playlistIndex] = { ...player.playlist[playlistIndex], track_cover: localUrl }
+    }
   }
 }
 
@@ -208,30 +217,12 @@ const handleSave = async () => {
       formData.append('cover_upload', coverFile.value)
     }
 
-    const res = await request.patch(`/tracks/${props.track.id}/`, formData, {
+    await request.patch(`/tracks/${props.track.id}/`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
     })
 
-    const updatedData = res.data
-
-    const updatePlaylistTrack = (data) => {
-      const playlistIndex = player.playlist.findIndex(t => t.id === props.track.id)
-      if (playlistIndex !== -1) {
-        player.playlist.splice(playlistIndex, 1, { ...player.playlist[playlistIndex], ...data })
-      }
-    }
-
-    if (player.currentTrack && player.currentTrack.id === props.track.id) {
-      player.currentTrack = { ...player.currentTrack, ...updatedData }
-      if (player.currentTrackDetail) {
-        player.currentTrackDetail = { ...player.currentTrackDetail, ...updatedData }
-      }
-    }
-    updatePlaylistTrack(updatedData)
-
-    emit('success', updatedData)
     handleClose()
   } catch (error) {
     console.error('保存失败:', error)
