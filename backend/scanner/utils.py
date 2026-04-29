@@ -117,7 +117,7 @@ def extract_and_save_thumbnail(file_path, track_obj):
 def scan_local_directory(directory_path, task_id=None):
     task = None
     if task_id:
-        from .models import ScanTask  # 延迟导入，防止循环引用
+        from .models import ScanTask 
         task = ScanTask.objects.filter(id=task_id).first()
 
     if not os.path.exists(directory_path):
@@ -137,9 +137,21 @@ def scan_local_directory(directory_path, task_id=None):
         for file in files:
             if Path(file).suffix.lower() in SUPPORTED_FORMATS:
                 valid_files.append(os.path.join(root, file))
+                
+    # ================= 新增核心逻辑：同步删除 =================
+    # 获取数据库中属于该扫描目录，但在物理硬盘上已不存在的歌曲
+    valid_files_set = set(valid_files)
+    obsolete_tracks = Track.objects.filter(file_path__startswith=directory_path).exclude(file_path__in=valid_files_set)
+    deleted_count = obsolete_tracks.count()
+    
+    # 逐个调用 delete() 以确保触发 library/models.py 中的 pre_delete/post_delete 信号，清理孤儿专辑和艺人
+    for t in obsolete_tracks:
+        t.delete()
+    # ========================================================
 
     if task:
         task.total_files = len(valid_files)
+        task.deleted_count = deleted_count
         task.save()
 
     added_count = 0
@@ -147,11 +159,9 @@ def scan_local_directory(directory_path, task_id=None):
 
     # 2. 正式开始逐个扫描 (分子)
     for index, file_path in enumerate(valid_files):
-        # 每处理 1 个文件，更新一次数据库里的进度
         if task:
             task.processed_files = index + 1
             task.current_file = file_path
-            # 为了防止 SQLite 被频繁写入锁死，每处理 5 首歌或者最后一首歌时才 save 一次数据库
             if index % 5 == 0 or index == len(valid_files) - 1:
                 task.save()
 
