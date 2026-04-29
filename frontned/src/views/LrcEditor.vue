@@ -55,47 +55,43 @@
               <span class="text-sm text-gray-400 font-mono">{{ formatTime(duration) }}</span>
             </div>
           </div>
-          
-          <div class="flex items-center justify-center space-x-4 mt-2">
-            <el-button size="large" circle @click="seekRelative(-5)" title="快退5秒" class="hover:border-blue-300 hover:text-blue-500 font-bold">-5s</el-button>
-            <el-button size="large" circle @click="seekRelative(-1)" title="微调后退1秒" class="hover:border-blue-300 hover:text-blue-500">-1s</el-button>
-            <el-button size="small" circle @click="seekRelative(-0.1)" title="微调后退0.1秒" class="hover:border-blue-300 hover:text-blue-500">-0.1s</el-button>
-            
+
+          <div class="flex items-center justify-center space-x-3">
+            <el-button size="default" circle @click="seekRelative(-5)" title="快退5秒" class="hover:border-blue-300 hover:text-blue-500 font-bold">-5s</el-button>
+            <el-button size="default" circle @click="seekRelative(-1)" title="快退1秒" class="hover:border-blue-300 hover:text-blue-500">-1s</el-button>
+
             <el-button circle type="primary" @click="togglePlay" class="w-16 h-16 shadow-lg transform transition hover:scale-110 active:scale-95">
               <el-icon class="text-3xl"><component :is="isPlaying ? VideoPause : VideoPlay" /></el-icon>
             </el-button>
 
-            <el-button size="small" circle @click="seekRelative(0.1)" title="微调前进0.1秒" class="hover:border-blue-300 hover:text-blue-500">+0.1s</el-button>
-            <el-button size="large" circle @click="seekRelative(1)" title="微调前进1秒" class="hover:border-blue-300 hover:text-blue-500">+1s</el-button>
-            <el-button size="large" circle @click="seekRelative(5)" title="快进5秒" class="hover:border-blue-300 hover:text-blue-500 font-bold">+5s</el-button>
+            <el-button size="default" circle @click="seekRelative(1)" title="快进1秒" class="hover:border-blue-300 hover:text-blue-500">+1s</el-button>
+            <el-button size="default" circle @click="seekRelative(5)" title="快进5秒" class="hover:border-blue-300 hover:text-blue-500 font-bold">+5s</el-button>
           </div>
 
-          <div class="flex items-center justify-center space-x-3 mt-4 pt-4 border-t border-gray-200">
+          <div class="flex items-center justify-center space-x-2 mt-4 pt-3 border-t border-gray-200">
             <span class="text-xs text-gray-400 font-bold shrink-0">倍速</span>
-            <el-button size="small" circle @click="adjustPlaybackRate(-0.1)" :icon="Minus" class="shadow-sm" />
-            <div class="w-20 text-center">
-              <el-input
-                v-model.number="playbackRate"
-                type="number"
-                :min="0.1"
-                :max="2.0"
-                :step="0.1"
-                size="small"
-                @change="setPlaybackRate(playbackRate)"
-                class="text-center font-mono font-bold"
-              >
-                <template #suffix>
-                  <span class="text-xs text-gray-400">x</span>
-                </template>
-              </el-input>
+            <el-button size="small" circle @click="adjustPlaybackRate(-0.1)" :icon="Minus" class="shadow-sm w-7 h-7" />
+            <el-input
+              v-model.number="playbackRate"
+              type="number"
+              :min="0.1"
+              :max="2.0"
+              :step="0.1"
+              size="small"
+              @change="setPlaybackRate(playbackRate)"
+              class="w-16 text-center"
+            >
+              <template #suffix>
+                <span class="text-xs text-gray-400 mr-1">x</span>
+              </template>
+            </el-input>
+            <el-button size="small" circle @click="adjustPlaybackRate(0.1)" :icon="Plus" class="shadow-sm w-7 h-7" />
+            <div class="flex items-center space-x-1 ml-2 border-l border-gray-200 pl-2">
+              <el-button size="small" type="info" plain @click="setPlaybackRate(0.5)" class="text-xs px-2 py-1" :class="{'bg-blue-100 border-blue-400': playbackRate === 0.5}">0.5x</el-button>
+              <el-button size="small" type="info" plain @click="setPlaybackRate(1.0)" class="text-xs px-2 py-1" :class="{'bg-blue-100 border-blue-400': playbackRate === 1.0}">1x</el-button>
+              <el-button size="small" type="info" plain @click="setPlaybackRate(1.5)" class="text-xs px-2 py-1" :class="{'bg-blue-100 border-blue-400': playbackRate === 1.5}">1.5x</el-button>
+              <el-button size="small" type="info" plain @click="setPlaybackRate(2.0)" class="text-xs px-2 py-1" :class="{'bg-blue-100 border-blue-400': playbackRate === 2.0}">2x</el-button>
             </div>
-            <el-button size="small" circle @click="adjustPlaybackRate(0.1)" :icon="Plus" class="shadow-sm" />
-          </div>
-          <div class="flex items-center justify-center space-x-2 mt-3">
-            <el-button size="small" type="info" plain @click="setPlaybackRate(0.5)" class="text-xs px-3" :class="{'bg-blue-100 border-blue-400': playbackRate === 0.5}">0.5x</el-button>
-            <el-button size="small" type="info" plain @click="setPlaybackRate(1.0)" class="text-xs px-3" :class="{'bg-blue-100 border-blue-400': playbackRate === 1.0}">1x</el-button>
-            <el-button size="small" type="info" plain @click="setPlaybackRate(1.5)" class="text-xs px-3" :class="{'bg-blue-100 border-blue-400': playbackRate === 1.5}">1.5x</el-button>
-            <el-button size="small" type="info" plain @click="setPlaybackRate(2.0)" class="text-xs px-3" :class="{'bg-blue-100 border-blue-400': playbackRate === 2.0}">2x</el-button>
           </div>
         </div>
 
@@ -227,9 +223,11 @@ import { useRoute, useRouter } from 'vue-router'
 import AppleToast from '../components/AppleToast.vue'
 import { Back, Check, VideoPlay, VideoPause, RefreshLeft, Document, Plus, Minus, Delete, Refresh } from '@element-plus/icons-vue'
 import request from '../api'
+import { usePlayerStore } from '../stores/player'
 
 const route = useRoute()
 const router = useRouter()
+const playerStore = usePlayerStore()
 
 const track = ref(null)
 const audioRef = ref(null)
@@ -243,7 +241,7 @@ const saving = ref(false)
 // 🚨 核心分离：编辑光标与播放光标
 const editIndex = ref(-1)    // 当前等待被打点的行（高亮带边框）
 const playingIndex = ref(-1) // 当前正在播放的行（仅文字变蓝）
-const playbackRate = ref(0.5) // 播放倍速
+const playbackRate = ref(1.0) // 播放倍速
 const deletedLines = ref([]) // 被删除的行（用于撤销）
 const timeOffsetMs = ref(250) // 时间偏移量（毫秒），用于补偿延迟
 const autoScroll = ref(true) // 预览开关，自动滚动到当前播放行
@@ -501,6 +499,10 @@ const handleKeyDown = (e) => {
 }
 
 onMounted(() => {
+  if (playerStore.audioElement) {
+    playerStore.audioElement.pause()
+  }
+  playerStore.isPlaying = false
   loadTrackData()
   window.addEventListener('keydown', handleKeyDown)
 })
