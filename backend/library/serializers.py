@@ -70,11 +70,12 @@ class TrackListSerializer(serializers.ModelSerializer):
 class TrackDetailSerializer(TrackListSerializer):
     artist_name = serializers.CharField(write_only=True, required=False)
     album_title = serializers.CharField(write_only=True, required=False)
+    cover_upload = serializers.FileField(write_only=True, required=False)
     # 前端传来的这个字段已经废弃，仅做占位防止前端报错，逻辑中会被忽略
     all_artists_names = serializers.ListField(child=serializers.CharField(), write_only=True, required=False)
 
     class Meta(TrackListSerializer.Meta):
-        fields = TrackListSerializer.Meta.fields + ['lyrics', 'all_artists_names', 'artist_name', 'album_title']
+        fields = TrackListSerializer.Meta.fields + ['lyrics', 'all_artists_names', 'artist_name', 'album_title', 'cover_upload']
 
     def update(self, instance, validated_data):
         # 1. 【核心】在修改前，记录下这首歌当前绑定的旧关联 ID
