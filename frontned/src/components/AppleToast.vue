@@ -81,10 +81,10 @@ watch(() => props.modelValue, (val) => {
   align-items: center;
   gap: 10px;
   padding: 12px 20px;
-  background-color: rgba(0, 0, 0, 0.85);
+  background-color: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(20px);
   border-radius: 12px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
 }
 
 .apple-toast-icon {
@@ -94,7 +94,7 @@ watch(() => props.modelValue, (val) => {
 .apple-toast-text {
   font-size: 14px;
   font-weight: 500;
-  color: #ffffff;
+  color: #1f2937;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
 }
 
