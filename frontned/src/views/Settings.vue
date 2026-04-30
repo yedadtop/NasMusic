@@ -247,6 +247,7 @@ const musicPath = ref('')
 const scanning = ref(false)
 const saving = ref(false)
 let timer = null
+let delayedScanTimer = null
 
 const toastVisible = ref(false)
 const toastMessage = ref('')
@@ -339,6 +340,7 @@ const restoreFile = async (path) => {
     await axios.post('/api/scanner/trash/', { paths: [path] })
     showToast('文件已恢复', 'success')
     await fetchTrashFiles()
+    scheduleScanAfterRestore()
   } catch (error) {
     console.error('恢复失败:', error)
     showToast('恢复失败', 'error')
@@ -351,6 +353,7 @@ const restoreAllFiles = async () => {
     await axios.post('/api/scanner/trash/', { restore_all: true })
     showToast('已恢复全部文件', 'success')
     await fetchTrashFiles()
+    scheduleScanAfterRestore()
   } catch (error) {
     console.error('恢复全部失败:', error)
     showToast('恢复失败', 'error')
@@ -440,6 +443,17 @@ const startScan = async () => {
     showToast(msg, 'error')
     scanning.value = false
   }
+}
+
+// 延迟扫描（恢复操作后使用，防止用户连续点击）
+const scheduleScanAfterRestore = (delay = 5000) => {
+  if (delayedScanTimer) {
+    clearTimeout(delayedScanTimer)
+  }
+  delayedScanTimer = setTimeout(() => {
+    startScan()
+    delayedScanTimer = null
+  }, delay)
 }
 
 // 轮询状态
