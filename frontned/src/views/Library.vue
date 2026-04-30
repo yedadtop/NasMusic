@@ -5,6 +5,7 @@
       :key="track.id" 
       :data-track-id="track.id"
       class="group flex items-center justify-between py-3 px-2 hover:bg-gray-50 rounded-lg transition cursor-pointer border-b border-gray-50"
+      :class="{ '!bg-blue-50': highlightedTrackId === track.id }"
       @click="playTrack(track, index)"
     >
       <div class="flex items-center flex-1 min-w-0">
@@ -91,6 +92,12 @@ const tracks = ref([])
 const loading = ref(false)
 const page = ref(1)
 const size = ref(50)
+const highlightedTrackId = ref(null)
+
+watch(() => player.currentTrack?.id, (newId) => {
+  highlightedTrackId.value = newId
+}, { immediate: true })
+
 const totalCount = ref(0)
 const searchKeyword = ref('')
 const allLoaded = ref(false)
