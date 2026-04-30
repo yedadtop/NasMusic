@@ -143,6 +143,15 @@ export const usePlayerStore = defineStore('player', () => {
     isPlaying.value = !isPlaying.value
   }
 
+  function stop() {
+    isPlaying.value = false
+    currentTime.value = 0
+    if (audioElement.value) {
+      audioElement.value.pause()
+      audioElement.value.currentTime = 0
+    }
+  }
+
   function setCurrentTime(time) {
     currentTime.value = time
   }
@@ -179,6 +188,7 @@ export const usePlayerStore = defineStore('player', () => {
     nextTrack,
     togglePlay,
     togglePlayMode,
+    stop,
     setCurrentTime,
     setDuration,
     setVolume,

@@ -258,6 +258,10 @@ const openDeleteConfirm = (track) => {
 const handleDeleteConfirm = async () => {
   showConfirmModal.value = false
   if (!trackToDelete.value) return
+
+  if (player.currentTrack && player.currentTrack.id === trackToDelete.value.id) {
+    player.stop()
+  }
   
   try {
     await request.delete(`/tracks/${trackToDelete.value.id}/`)
