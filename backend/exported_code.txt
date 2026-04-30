@@ -976,19 +976,24 @@ def extract_and_save_thumbnail(file_path, track_obj, force_reextract_cover=False
         if audio is None: return
         picture_data = None
 
-        # 寻找内嵌封面数据
-        if hasattr(audio, 'tags') and audio.tags:
+        # 寻找内嵌封面数据 (修复 if-elif 逻辑短路的问题)
+        
+        # 1. 优先尝试从 FLAC / OGG 的 pictures 属性获取
+        if hasattr(audio, 'pictures') and audio.pictures:
+            picture_data = audio.pictures[0].data
+            
+        # 2. 尝试从 M4A / MP4 的 'covr' 键获取
+        elif 'covr' in audio and audio['covr']:
+            picture_data = bytes(audio['covr'][0])
+            
+        # 3. 最后尝试从 MP3 的 ID3 tags 获取 (寻找 APIC)
+        elif hasattr(audio, 'tags') and audio.tags:
             for tag_key in audio.tags.keys():
                 if tag_key.startswith('APIC'):
                     picture_data = audio.tags[tag_key].data
                     break
-        elif hasattr(audio, 'pictures') and audio.pictures:
-            picture_data = audio.pictures[0].data
-        elif 'covr' in audio:
-            picture_data = bytes(audio['covr'][0])
 
         # 如果找到了图片，压缩并保存
-# 如果找到了图片，压缩并保存
         if picture_data:
             image = Image.open(io.BytesIO(picture_data))
             if image.mode != 'RGB':
@@ -1004,7 +1009,6 @@ def extract_and_save_thumbnail(file_path, track_obj, force_reextract_cover=False
             print(f"  ⚪ 文件本身无内嵌图片: {file_path}")
 
     except Exception as e:
-        # 暴露出真实的错误信息，不要再用 pass 掩盖了！
         print(f"  ⚠️ 提取封面失败 {file_path}: {str(e)}")
 
 

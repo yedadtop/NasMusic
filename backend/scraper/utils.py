@@ -1,9 +1,10 @@
 # scraper/utils.py
 import requests
+import mutagen
 from django.core.files.base import ContentFile
 from library.utils import sync_cover_to_audio_file
 from .models import ScraperAPI
-
+from opencc import OpenCC
 
 def fetch_and_embed_cover(track):
     """
@@ -81,3 +82,81 @@ def fetch_and_embed_cover(track):
 
     print(f"[刮削] 歌曲 '{track.title}' 失败: 所有可用接口均未匹配到封面或请求失败")
     return False, "所有可用接口均未匹配到封面或请求失败。"
+
+
+def fetch_and_embed_lyrics(track):
+    """
+    通过 LRCLIB 接口抓取歌词（优先取时间轴滚动歌词），自动简繁转换，并嵌入物理文件与数据库。
+    返回: (布尔值是否成功, 提示信息)
+    """
+    # 初始化简繁转换器 (t2s 代表繁体转简体)
+    cc = OpenCC('t2s')
+
+    # 获取歌手名和歌名，确保有搜索关键词
+    artist_name = track.artist.name if track.artist and hasattr(track.artist, 'name') else ''
+    title = track.title or ''
+
+    if not title:
+        print(f"[歌词刮削] 失败: 歌曲 (ID:{track.id}) 缺少标题")
+        return False, "歌曲缺少标题，无法进行搜索。"
+
+    # LRCLIB 的固定 API URL
+    api_url = "https://lrclib.net/api/search"
+    params = {
+        'track_name': title,
+        'artist_name': artist_name
+    }
+
+    print(f"[歌词刮削] 开始搜索: '{title}' - '{artist_name}'")
+
+    try:
+        response = requests.get(api_url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        if not data or len(data) == 0:
+            print(f"[歌词刮削] LRCLIB 未找到匹配结果")
+            return False, "未找到匹配的歌词。"
+
+        # 获取第一条最匹配的结果，优先使用带时间轴的 syncedLyrics
+        best_match = data[0]
+        raw_lyrics = best_match.get('syncedLyrics') or best_match.get('plainLyrics')
+
+        if not raw_lyrics:
+            print(f"[歌词刮削] 找到了歌曲信息，但暂无歌词内容")
+            return False, "该歌曲在曲库中暂无歌词内容。"
+
+        # 将繁体歌词转换为简体
+        simplified_lyrics = cc.convert(raw_lyrics)
+        print(f"[歌词刮削] 成功获取歌词，长度: {len(simplified_lyrics)} 字符 (已转简体)")
+
+        # 1. 更新数据库中的歌词字段
+        track.lyrics = simplified_lyrics
+        track.save(update_fields=['lyrics'])
+
+        # 2. 将歌词嵌入到物理音频文件中 (复用你现有的 mutagen 逻辑)
+        audio = mutagen.File(track.file_path)
+        if audio is not None:
+            ext = track.format.lower()
+
+            if ext == 'mp3':
+                from mutagen.id3 import USLT
+                if getattr(audio, 'tags', None) is None:
+                    audio.add_tags()
+                audio.tags.setall("USLT", [USLT(encoding=3, lang='eng', desc='', text=simplified_lyrics)])
+            elif ext in ['flac', 'ogg']:
+                audio["lyrics"] = simplified_lyrics
+            elif ext == 'm4a':
+                audio['\xa9lyr'] = simplified_lyrics
+
+            audio.save()
+            print(f"[歌词刮削] 成功将歌词嵌入到物理文件: {track.file_path}")
+
+        return True, "成功刮削并嵌入歌词！"
+
+    except requests.RequestException as e:
+        print(f"⚠️ LRCLIB 接口请求失败: {e}")
+        return False, f"请求歌词接口失败: {str(e)}"
+    except Exception as e:
+        print(f"⚠️ 解析或写入歌词时发生异常: {e}")
+        return False, f"写入歌词时发生内部错误: {str(e)}"
