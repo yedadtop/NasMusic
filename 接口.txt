@@ -215,11 +215,19 @@
 
 - **接口地址**：`POST /api/scanner/run/`
 - **功能描述**：命令后端启动守护线程，在后台遍历指定的本地物理文件夹，读取标签、提取单曲封面并自动入库。**注意：音乐路径必须先通过系统配置接口设置，否则扫描将失败。**
+- **Body 参数**（JSON）：
+  ```json
+  {
+    "force_reextract_cover": true
+  }
+  ```
+  - `force_reextract_cover` (boolean): **可选**，默认 `false`。设置为 `true` 时，强制重新提取所有歌曲的内嵌封面图片，即使数据库中已存在封面记录。此参数仅在全量扫描时有效。
 - **返回格式**（HTTP 202 Accepted）：
   ```json
   {
     "message": "扫描任务已在后台启动",
-    "task_id": 12
+    "task_id": 12,
+    "force_reextract_cover": true
   }
   ```
 - **错误返回**（HTTP 400 Bad Request）：

@@ -96,6 +96,18 @@
           </div>
         </div>
 
+        <div class="flex justify-end">
+          <el-button
+            type="warning"
+            :loading="scanning"
+            @click="openRescanCoversConfirm"
+            class="custom-apple-button !bg-[#ff9500] !border-[#ff9500]"
+          >
+            <Icon icon="mdi:image-refresh" class="w-4 h-4 mr-2" />
+            重新提取封面
+          </el-button>
+        </div>
+
         <div v-if="scanTask.current_file" class="text-[13px] text-[#86868b] truncate pb-1">
           正在处理: {{ scanTask.current_file }}
         </div>
@@ -308,6 +320,15 @@ const openDeleteAllConfirm = () => {
   showConfirmModal.value = true
 }
 
+const openRescanCoversConfirm = () => {
+  confirmTitle.value = '重新提取封面'
+  confirmMessage.value = '确定要强制重新提取所有歌曲的内嵌封面吗？这将删除并重新提取所有封面图片，可能需要较长时间。'
+  confirmConfirmText.value = '确定'
+  confirmAction.value = 'rescanCovers'
+  confirmFile.value = null
+  showConfirmModal.value = true
+}
+
 const handleConfirm = async () => {
   showConfirmModal.value = false
   if (confirmAction.value === 'restore') {
@@ -318,6 +339,8 @@ const handleConfirm = async () => {
     await deleteFile(confirmFile.value.trash_path)
   } else if (confirmAction.value === 'deleteAll') {
     await deleteAllFiles()
+  } else if (confirmAction.value === 'rescanCovers') {
+    await rescanCovers()
   }
 }
 
@@ -437,6 +460,23 @@ const startScan = async () => {
     const res = await axios.post('/api/scanner/run/')
     scanTask.value.id = res.data.task_id
     showToast('扫描任务已在后台启动', 'success')
+    startPolling()
+  } catch (error) {
+    const msg = error.response?.data?.message || '启动失败，请检查后端服务'
+    showToast(msg, 'error')
+    scanning.value = false
+  }
+}
+
+// 强制重新提取封面
+const rescanCovers = async () => {
+  try {
+    scanning.value = true
+    const res = await axios.post('/api/scanner/run/', {
+      force_reextract_cover: true
+    })
+    scanTask.value.id = res.data.task_id
+    showToast('封面重提取任务已在后台启动', 'success')
     startPolling()
   } catch (error) {
     const msg = error.response?.data?.message || '启动失败，请检查后端服务'

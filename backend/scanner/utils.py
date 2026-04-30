@@ -69,16 +69,25 @@ def _get_lyrics(audio):
     return ""
 
 
-def extract_and_save_thumbnail(file_path, track_obj):
+def extract_and_save_thumbnail(file_path, track_obj, force_reextract_cover=False):
     """从音频文件提取封面并保存到 Track 模型 (带防丢图机制)"""
 
-    # 1. 防御性检查：不仅查数据库，还要查物理文件是否真的存在
-    if track_obj.cover_thumbnail:
-        try:
-            if os.path.isfile(track_obj.cover_thumbnail.path):
-                return  # 只有当物理图片真的在硬盘上时，才跳过提取
-        except ValueError:
-            pass  # 如果触发异常，说明路径无效，继续往下执行提取逻辑
+    if force_reextract_cover:
+        if track_obj.cover_thumbnail:
+            try:
+                if os.path.isfile(track_obj.cover_thumbnail.path):
+                    os.remove(track_obj.cover_thumbnail.path)
+            except ValueError:
+                pass
+            track_obj.cover_thumbnail = ''
+            track_obj.save()
+    else:
+        if track_obj.cover_thumbnail:
+            try:
+                if os.path.isfile(track_obj.cover_thumbnail.path):
+                    return
+            except ValueError:
+                pass
 
     try:
         audio = mutagen.File(file_path)
@@ -100,21 +109,15 @@ def extract_and_save_thumbnail(file_path, track_obj):
 # 如果找到了图片，压缩并保存
         if picture_data:
             image = Image.open(io.BytesIO(picture_data))
-            if image.mode != 'RGB': image = image.convert('RGB')
-            
-            # 【画质飞跃 1】：将分辨率提升到 800x800（满足所有大屏播放器需求）
-            # 【画质飞跃 2】：加入 Image.Resampling.LANCZOS 高级抗锯齿重采样算法，缩小图片不发虚
-            image.thumbnail((800, 800), Image.Resampling.LANCZOS) 
-            
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+
             thumb_io = io.BytesIO()
-            
-            # 【画质飞跃 3】：将质量提升到 95 (100通常会导致体积成倍暴增且肉眼无区别，95是最佳甜点)
-            # subsampling=0 会关闭色度抽样，让红色、文字等高对比度边缘极其锐利！
-            image.save(thumb_io, format='JPEG', quality=95, subsampling=0) 
+            image.save(thumb_io, format='JPEG', quality=95, subsampling=0)
 
             filename = f"track_{track_obj.id}_thumb.jpg"
             track_obj.cover_thumbnail.save(filename, ContentFile(thumb_io.getvalue()), save=True)
-            print(f"  📸 成功提取高清封面: {filename}")
+            print(f"  📸 成功提取封面: {filename}")
         else:
             print(f"  ⚪ 文件本身无内嵌图片: {file_path}")
 
@@ -123,7 +126,7 @@ def extract_and_save_thumbnail(file_path, track_obj):
         print(f"  ⚠️ 提取封面失败 {file_path}: {str(e)}")
 
 
-def scan_local_directory(directory_path, task_id=None):
+def scan_local_directory(directory_path, task_id=None, force_reextract_cover=False):
     task = None
     if task_id:
         from .models import ScanTask 
@@ -170,9 +173,11 @@ def scan_local_directory(directory_path, task_id=None):
     is_path_changed = (norm_config_path != norm_directory_path) or \
                       (Track.objects.exists() and not db_track_in_current_dir)
 
-    if is_path_changed:
-        # 路径变化：全量清空数据库，重新提取
-        print(f"  🔄 扫描路径已变化 ({config_path} → {directory_path})，执行全量扫描")
+    if is_path_changed or force_reextract_cover:
+        if force_reextract_cover:
+            print(f"  🔄 强制重新提取封面，执行全量扫描")
+        else:
+            print(f"  🔄 扫描路径已变化 ({config_path} → {directory_path})，执行全量扫描")
 
         # 清理封面缩略图物理文件
         for t in Track.objects.exclude(cover_thumbnail='').iterator():
@@ -296,7 +301,7 @@ def scan_local_directory(directory_path, task_id=None):
             track_obj.artists.set(all_artist_objs)
             track_obj.save()
 
-            extract_and_save_thumbnail(file_path, track_obj)
+            extract_and_save_thumbnail(file_path, track_obj, force_reextract_cover)
 
             if created: added_count += 1
             else: updated_count += 1

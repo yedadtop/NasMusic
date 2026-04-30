@@ -33,12 +33,15 @@ class ScanLibraryView(APIView):
                 "message": "请先在系统配置中设置音乐文件路径"
             }, status=status.HTTP_400_BAD_REQUEST)
 
+        force_reextract_cover = request.data.get('force_reextract_cover', False)
+
         task = ScanTask.objects.create(target_path=music_path)
-        run_scan_async(music_path, task.id)
+        run_scan_async(music_path, task.id, force_reextract_cover=force_reextract_cover)
 
         return Response({
             "message": "扫描任务已在后台启动",
-            "task_id": task.id
+            "task_id": task.id,
+            "force_reextract_cover": force_reextract_cover
         }, status=status.HTTP_202_ACCEPTED)
 
 
