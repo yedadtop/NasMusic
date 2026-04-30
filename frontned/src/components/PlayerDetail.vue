@@ -324,6 +324,9 @@ const handleTrackUpdated = (updatedTrack) => {
   if (updatedTrack) {
     if (player.currentTrack && player.currentTrack.id === updatedTrack.id) {
       player.currentTrack = { ...player.currentTrack, ...updatedTrack }
+      if (player.currentTrackDetail && player.currentTrackDetail.id === updatedTrack.id) {
+        player.currentTrackDetail = { ...player.currentTrackDetail, ...updatedTrack }
+      }
     }
     const index = player.playlist.findIndex(t => t.id === updatedTrack.id)
     if (index !== -1) {
