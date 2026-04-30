@@ -125,6 +125,7 @@
             class="flex-1 custom-textarea h-full"
             placeholder="在此粘贴网上复制的纯文本歌词，然后点击右上角解析..."
             resize="none"
+            @paste="handlePaste"
           />
         </div>
       </aside>
@@ -256,11 +257,6 @@ const toastVisible = ref(false)
 const toastMessage = ref('')
 const toastType = ref('success')
 
-watch(rawText, (newVal) => {
-  const lines = newVal.split('\n').filter(line => line.trim() !== '')
-  rawText.value = lines.join('\n')
-})
-
 const showToast = (message, type = 'success') => {
   toastVisible.value = false
   toastMessage.value = message
@@ -268,6 +264,14 @@ const showToast = (message, type = 'success') => {
   setTimeout(() => {
     toastVisible.value = true
   }, 50)
+}
+
+const handlePaste = (e) => {
+  const pastedText = e.clipboardData?.getData('text') || ''
+  const lines = pastedText.split('\n').filter(line => line.trim() !== '')
+  const filteredText = lines.join('\n')
+  rawText.value = rawText.value + filteredText
+  e.preventDefault()
 }
 
 const lrcListRef = ref(null)
