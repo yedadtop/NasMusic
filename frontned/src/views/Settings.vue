@@ -214,6 +214,15 @@
           <Icon icon="mdi:image-refresh" class="w-4 h-4 mr-2" />
           更新所有封面
         </el-button>
+        <el-button
+          type="primary"
+          :loading="scraping"
+          @click="openScrapeCoversConfirm"
+          class="w-full sm:w-auto custom-apple-button"
+        >
+          <Icon icon="mdi:cloud-download" class="w-4 h-4 mr-2" />
+          补全缺失封面
+        </el-button>
       </div>
     </section>
 
@@ -285,6 +294,7 @@ const isSettingsActive = computed(() => route.path === '/settings')
 
 const musicPath = ref('')
 const scanning = ref(false)
+const scraping = ref(false)
 const saving = ref(false)
 let timer = null
 let delayedScanTimer = null
@@ -357,6 +367,15 @@ const openRescanCoversConfirm = () => {
   showConfirmModal.value = true
 }
 
+const openScrapeCoversConfirm = () => {
+  confirmTitle.value = '补全缺失封面'
+  confirmMessage.value = '确定要通过网络爬取所有缺失封面的歌曲封面吗？系统会自动检测物理文件中没有封面的歌曲，然后通过API接口获取并嵌入高清封面。'
+  confirmConfirmText.value = '确定'
+  confirmAction.value = 'scrapeCovers'
+  confirmFile.value = null
+  showConfirmModal.value = true
+}
+
 const handleConfirm = async () => {
   showConfirmModal.value = false
   if (confirmAction.value === 'restore') {
@@ -369,6 +388,8 @@ const handleConfirm = async () => {
     await deleteAllFiles()
   } else if (confirmAction.value === 'rescanCovers') {
     await rescanCovers()
+  } else if (confirmAction.value === 'scrapeCovers') {
+    await scrapeCovers()
   }
 }
 
@@ -513,6 +534,24 @@ const rescanCovers = async () => {
   }
 }
 
+// 爬取封面并嵌入
+const scrapeCovers = async () => {
+  try {
+    scraping.value = true
+    const res = await axios.post('/api/scanner/run/')
+    scanTask.value.id = res.data.task_id
+    await axios.post('/api/scraper/batch/scrape/', {
+      task_id: res.data.task_id
+    })
+    showToast('补全封面任务已在后台启动', 'success')
+    startPolling()
+  } catch (error) {
+    const msg = error.response?.data?.message || '启动失败，请检查后端服务'
+    showToast(msg, 'error')
+    scraping.value = false
+  }
+}
+
 // 延迟扫描（恢复操作后使用，防止用户连续点击）
 const scheduleScanAfterRestore = (delay = 5000) => {
   if (delayedScanTimer) {
@@ -545,9 +584,15 @@ const fetchStatus = async () => {
     if (data.status === 'completed') {
       stopPolling()
       scanning.value = false
+      if (scraping.value) {
+        scraping.value = false
+      }
     } else if (data.status === 'error') {
       stopPolling()
       scanning.value = false
+      if (scraping.value) {
+        scraping.value = false
+      }
       const errMsg = data.error_message || '扫描发生未知错误'
       showToast(errMsg, 'error')
     }

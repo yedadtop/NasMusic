@@ -2,6 +2,41 @@
 import mutagen
 
 
+def has_embedded_cover(file_path, format_str):
+    """
+    检查物理音频文件是否已嵌入封面图片
+    返回: True 表示已有封面, False 表示没有封面
+    """
+    try:
+        audio = mutagen.File(file_path)
+        if audio is None:
+            return False
+
+        ext = format_str.lower()
+
+        if ext == 'mp3':
+            if getattr(audio, 'tags', None):
+                for tag in audio.tags:
+                    if tag.startswith('APIC'):
+                        return True
+            return False
+
+        elif ext in ['flac', 'ogg']:
+            if hasattr(audio, 'pictures') and audio.pictures:
+                return True
+            return False
+
+        elif ext == 'm4a':
+            if 'covr' in audio:
+                return True
+            return False
+
+        return False
+    except Exception as e:
+        print(f"检查封面失败 {file_path}: {e}")
+        return False
+
+
 def sync_cover_to_audio_file(file_path, format_str, image_bytes):
     """
     将图片二进制数据写入物理音频文件 (支持 MP3, FLAC, M4A)
