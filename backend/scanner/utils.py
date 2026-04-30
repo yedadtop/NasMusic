@@ -97,16 +97,24 @@ def extract_and_save_thumbnail(file_path, track_obj):
             picture_data = bytes(audio['covr'][0])
 
         # 如果找到了图片，压缩并保存
+# 如果找到了图片，压缩并保存
         if picture_data:
             image = Image.open(io.BytesIO(picture_data))
             if image.mode != 'RGB': image = image.convert('RGB')
-            image.thumbnail((300, 300))
+            
+            # 【画质飞跃 1】：将分辨率提升到 800x800（满足所有大屏播放器需求）
+            # 【画质飞跃 2】：加入 Image.Resampling.LANCZOS 高级抗锯齿重采样算法，缩小图片不发虚
+            image.thumbnail((800, 800), Image.Resampling.LANCZOS) 
+            
             thumb_io = io.BytesIO()
-            image.save(thumb_io, format='JPEG', quality=85)
+            
+            # 【画质飞跃 3】：将质量提升到 95 (100通常会导致体积成倍暴增且肉眼无区别，95是最佳甜点)
+            # subsampling=0 会关闭色度抽样，让红色、文字等高对比度边缘极其锐利！
+            image.save(thumb_io, format='JPEG', quality=95, subsampling=0) 
 
             filename = f"track_{track_obj.id}_thumb.jpg"
             track_obj.cover_thumbnail.save(filename, ContentFile(thumb_io.getvalue()), save=True)
-            print(f"  📸 成功提取并保存封面: {filename}")
+            print(f"  📸 成功提取高清封面: {filename}")
         else:
             print(f"  ⚪ 文件本身无内嵌图片: {file_path}")
 
