@@ -16,13 +16,21 @@
       </p>
 
       <div class="flex flex-col sm:flex-row gap-4">
-        <el-input 
-          v-model="musicPath" 
-          placeholder="例如: /home/music 或 C:\Music" 
+        <el-input
+          v-model="musicPath"
+          placeholder="例如: /home/music 或 C:\Music"
           class="flex-1 custom-apple-input"
         />
-        <el-button 
-          type="primary" 
+        <el-button
+          type="primary"
+          :loading="saving"
+          @click="saveConfig"
+          class="w-full sm:w-auto custom-apple-button"
+        >
+          保存路径
+        </el-button>
+        <el-button
+          type="primary"
           :loading="scanning"
           @click="startScan"
           class="w-full sm:w-auto custom-apple-button"
@@ -146,8 +154,9 @@ import axios from 'axios'
 import { FolderOpened, Loading, CircleCheck } from '@element-plus/icons-vue'
 import AppleToast from '../components/AppleToast.vue'
 
-const musicPath = ref('C:\\1D\\Mass\\my_music') // 默认路径
+const musicPath = ref('')
 const scanning = ref(false)
+const saving = ref(false)
 let timer = null
 
 const toastVisible = ref(false)
@@ -182,20 +191,38 @@ const statusText = computed(() => {
   return map[scanTask.value.status] || '未开始'
 })
 
-// 启动扫描
-const startScan = async () => {
+// 保存配置
+const saveConfig = async () => {
   if (!musicPath.value) {
     showToast('请输入媒体库路径', 'info')
     return
   }
   try {
+    saving.value = true
+    await axios.put('/api/scanner/config/', {
+      key: 'music_path',
+      value: musicPath.value,
+      description: '音乐文件路径'
+    })
+    showToast('路径保存成功', 'success')
+  } catch (error) {
+    showToast('保存失败，请检查后端服务', 'error')
+  } finally {
+    saving.value = false
+  }
+}
+
+// 启动扫描
+const startScan = async () => {
+  try {
     scanning.value = true
-    const res = await axios.post('/api/scanner/run/', { path: musicPath.value })
+    const res = await axios.post('/api/scanner/run/')
     scanTask.value.id = res.data.task_id
     showToast('扫描任务已在后台启动', 'success')
     startPolling()
   } catch (error) {
-    showToast('启动失败，请检查后端服务', 'error')
+    const msg = error.response?.data?.message || '启动失败，请检查后端服务'
+    showToast(msg, 'error')
     scanning.value = false
   }
 }
@@ -236,8 +263,15 @@ const stopPolling = () => {
   if (timer) clearInterval(timer)
 }
 
-onMounted(() => {
-  // 页面加载时查询一次最新的扫描状态
+onMounted(async () => {
+  try {
+    const res = await axios.get('/api/scanner/config/')
+    if (res.data.music_path) {
+      musicPath.value = res.data.music_path.value
+    }
+  } catch (error) {
+    console.error('获取配置失败', error)
+  }
   fetchStatus()
 })
 

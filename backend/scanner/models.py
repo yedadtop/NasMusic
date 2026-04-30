@@ -1,6 +1,25 @@
 # scanner/models.py
 from django.db import models
 
+
+class SystemConfig(models.Model):
+    CONFIG_KEY_CHOICES = (
+        ('music_path', '音乐文件路径'),
+    )
+
+    key = models.CharField(max_length=100, choices=CONFIG_KEY_CHOICES, unique=True, verbose_name="配置键")
+    value = models.CharField(max_length=1024, verbose_name="配置值")
+    description = models.CharField(max_length=255, blank=True, null=True, verbose_name="配置描述")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "系统配置"
+        verbose_name_plural = "系统配置"
+
+    def __str__(self):
+        return f"{self.get_key_display()} = {self.value}"
+
+
 class ScanTask(models.Model):
     STATUS_CHOICES = (
         ('pending', '等待中'),

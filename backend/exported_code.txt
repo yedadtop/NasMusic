@@ -128,23 +128,27 @@ class TrackViewSet(viewsets.ModelViewSet):
         try:
             audio = mutagen.File(track_instance.file_path)
             if audio is not None:
-                audio['title'] = track_instance.title
+                ext = track_instance.format.lower()
 
-                if track_instance.artist:
-                    audio['artist'] = track_instance.artist.name
+                if ext == 'mp3':
+                    from mutagen.id3 import ID3, TIT2, TPE1, TALB, USLT
+                    if audio.tags is None:
+                        audio.add_tags()
+                    audio.tags['title'] = TIT2(encoding=3, text=track_instance.title or '')
+                    artist_name = track_instance.artist.name if track_instance.artist else 'Unknown Artist'
+                    audio.tags['artist'] = TPE1(encoding=3, text=artist_name)
+                    album_name = track_instance.album.title if track_instance.album else ''
+                    audio.tags['album'] = TALB(encoding=3, text=album_name)
                 else:
-                    audio['artist'] = "Unknown Artist"
-                    audio['album'] = track_instance.album.title
+                    audio['title'] = track_instance.title or ''
+                    audio['artist'] = track_instance.artist.name if track_instance.artist else 'Unknown Artist'
+                    audio['album'] = track_instance.album.title if track_instance.album else ''
 
                 if track_instance.lyrics is not None:
-                    ext = track_instance.format.lower()
-
-
-
                     lyrics_text = track_instance.lyrics
                     if ext == 'mp3':
-                        from mutagen.id3 import USLT
-                        if not audio.tags: audio.add_tags()
+                        if audio.tags is None:
+                            audio.add_tags()
                         audio.tags.setall("USLT", [USLT(encoding=3, lang='eng', desc='', text=lyrics_text)])
                     elif ext in ['flac', 'ogg']:
                         audio["lyrics"] = lyrics_text
@@ -159,7 +163,7 @@ class TrackViewSet(viewsets.ModelViewSet):
 class ArtistViewSet(viewsets.ModelViewSet):
     queryset = Artist.objects.annotate(
         track_count=models.Count('collaborated_tracks')
-    ).filter(track_count__gt=0).prefetch_related('tracks__artists', 'tracks__album').order_by('-track_count', 'id')
+    ).filter(track_count__gt=0).prefetch_related('collaborated_tracks__artists', 'collaborated_tracks__album').order_by('-track_count', 'id')
 
     serializer_class = ArtistSerializer
     pagination_class = StandardResultsSetPagination
@@ -253,39 +257,44 @@ class TrackListSerializer(serializers.ModelSerializer):
 class TrackDetailSerializer(TrackListSerializer):
     artist_name = serializers.CharField(write_only=True, required=False)
     album_title = serializers.CharField(write_only=True, required=False)
-    # 前端传来的这个字段以后可以废弃了，为了不让前端报错先留着定义，但在逻辑里我们会忽略它
+    cover_upload = serializers.FileField(write_only=True, required=False)
+    # 前端传来的这个字段已经废弃，仅做占位防止前端报错，逻辑中会被忽略
     all_artists_names = serializers.ListField(child=serializers.CharField(), write_only=True, required=False)
 
     class Meta(TrackListSerializer.Meta):
-        fields = TrackListSerializer.Meta.fields + ['lyrics', 'all_artists_names', 'artist_name', 'album_title']
+        fields = TrackListSerializer.Meta.fields + ['lyrics', 'all_artists_names', 'artist_name', 'album_title', 'cover_upload']
 
     def update(self, instance, validated_data):
-        # 1. 【核心】在修改前，记录下这首歌当前绑定的旧关联 ID [cite: 21]
+        # 1. 【核心】在修改前，记录下这首歌当前绑定的旧关联 ID
         old_artist_id = instance.artist.id if instance.artist else None
         old_album_id = instance.album.id if instance.album else None
-        # 记录旧的多对多歌手列表 [cite: 21]
         old_m2m_ids = list(instance.artists.values_list('id', flat=True))
 
         artist_name = validated_data.pop('artist_name', None)
         album_title = validated_data.pop('album_title', None)
-        validated_data.pop('all_artists_names', None) # 忽略前端传来的旧数组 [cite: 21]
+        # 彻底忽略前端传来的乱七八糟的数组
+        validated_data.pop('all_artists_names', None) 
 
-        # 2. 更新主歌手 [cite: 21]
+        # 2. 更新主歌手
         if artist_name:
             artist, _ = Artist.objects.get_or_create(name=artist_name)
             instance.artist = artist
 
-        # 3. 更新专辑 [cite: 22]
-        if album_title and instance.artist:
-            album, _ = Album.objects.get_or_create(title=album_title, artist=instance.artist)
-            instance.album = album
+        # 3. 【核心】更新专辑：只按名字匹配，防止产生同名重复专辑
+        if album_title:
+            existing_album = Album.objects.filter(title=album_title).first()
+            if existing_album:
+                instance.album = existing_album
+            else:
+                album = Album.objects.create(title=album_title, artist=instance.artist)
+                instance.album = album
 
-        # 4. 更新其他基础字段（歌名、歌词等）并保存 [cite: 22]
+        # 4. 更新其他基础字段（歌名、歌词等）并保存
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save() 
 
-        # 5. 【核心】自动拆分并重新绑定“所有歌手” [cite: 23, 24]
+        # 5. 【核心】自动拆分主歌手，并重新绑定给“所有歌手”
         if instance.artist:
             parsed_names = parse_artists(instance.artist.name)
             if len(parsed_names) > 1:
@@ -294,11 +303,12 @@ class TrackDetailSerializer(TrackListSerializer):
             else:
                 instance.artists.set([instance.artist])
 
-        # 6. 【核心】开始清理被废弃的“孤儿”数据 [cite: 25]
+        # 6. 【核心】连锁清理被废弃的“孤儿”数据
+        
         # A. 先检查并清理旧专辑
         if old_album_id and old_album_id != instance.album_id:
             old_album = Album.objects.filter(id=old_album_id).first()
-            # 如果这个旧专辑里已经一首歌都没有了，删掉它
+            # 如果这个旧专辑里已经一首歌都没有了，彻底删掉它
             if old_album and not old_album.tracks.exists():
                 old_album.delete()
 
@@ -310,10 +320,10 @@ class TrackDetailSerializer(TrackListSerializer):
         for aid in check_artist_ids:
             artist = Artist.objects.filter(id=aid).first()
             if artist:
-                # 检查：既没当过主唱，也没当过合唱，名下也没专辑，说明是彻底的废弃名字 [cite: 25]
+                # 检查：既没当过主唱，也没当过合唱，名下也没专辑，说明是废弃空壳
                 if not artist.tracks.exists() and \
-                not artist.collaborated_tracks.exists() and \
-                not artist.albums.exists():
+                   not artist.collaborated_tracks.exists() and \
+                   not artist.albums.exists():
                     artist.delete()
 
         return instance
@@ -553,6 +563,25 @@ scanner models.py:
 # scanner/models.py
 from django.db import models
 
+
+class SystemConfig(models.Model):
+    CONFIG_KEY_CHOICES = (
+        ('music_path', '音乐文件路径'),
+    )
+
+    key = models.CharField(max_length=100, choices=CONFIG_KEY_CHOICES, unique=True, verbose_name="配置键")
+    value = models.CharField(max_length=1024, verbose_name="配置值")
+    description = models.CharField(max_length=255, blank=True, null=True, verbose_name="配置描述")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "系统配置"
+        verbose_name_plural = "系统配置"
+
+    def __str__(self):
+        return f"{self.get_key_display()} = {self.value}"
+
+
 class ScanTask(models.Model):
     STATUS_CHOICES = (
         ('pending', '等待中'),
@@ -588,8 +617,15 @@ scanner views.py:
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import ScanTask
+from .models import ScanTask, SystemConfig
 from .tasks import run_scan_async
+
+
+def get_music_path():
+    config = SystemConfig.objects.filter(key='music_path').first()
+    if config and config.value:
+        return config.value
+    return None
 
 
 class ScanLibraryView(APIView):
@@ -598,27 +634,22 @@ class ScanLibraryView(APIView):
     """
 
     def post(self, request):
-        # ==========================================
-        # 🚨 核心拦截逻辑：防止同时启动多个扫描线程
-        # ==========================================
         active_task = ScanTask.objects.filter(status__in=['pending', 'running']).first()
         if active_task:
             return Response({
                 "message": "当前已有扫描任务正在进行中，请勿重复点击！",
                 "task_id": active_task.id
             }, status=status.HTTP_429_TOO_MANY_REQUESTS)
-            # 返回 429 Too Many Requests，告诉前端不要再发了
 
-        # 如果没有正在运行的任务，再继续正常启动
-        directory_path = request.data.get('path', r"C:\1D\Mass\my_music")
+        music_path = get_music_path()
+        if not music_path:
+            return Response({
+                "message": "请先在系统配置中设置音乐文件路径"
+            }, status=status.HTTP_400_BAD_REQUEST)
 
-        # 1. 在数据库中创建一条扫描任务记录
-        task = ScanTask.objects.create(target_path=directory_path)
+        task = ScanTask.objects.create(target_path=music_path)
+        run_scan_async(music_path, task.id)
 
-        # 2. 将任务丢给后台线程去跑
-        run_scan_async(directory_path, task.id)
-
-        # 3. 立刻返回给前端
         return Response({
             "message": "扫描任务已在后台启动",
             "task_id": task.id
@@ -653,8 +684,45 @@ class ScanStatusView(APIView):
             "current_file": task.current_file,
             "added_count": task.added_count,
             "updated_count": task.updated_count,
-            "deleted_count": getattr(task, 'deleted_count', 0), # 新增字段输出
+            "deleted_count": getattr(task, 'deleted_count', 0),
             "error_message": task.error_message
+        }, status=status.HTTP_200_OK)
+
+
+class SystemConfigView(APIView):
+    """
+    获取或更新系统配置
+    """
+
+    def get(self, request):
+        configs = SystemConfig.objects.all()
+        result = {}
+        for config in configs:
+            result[config.key] = {
+                "value": config.value,
+                "description": config.description,
+                "updated_at": config.updated_at
+            }
+        return Response(result, status=status.HTTP_200_OK)
+
+    def put(self, request):
+        key = request.data.get('key')
+        value = request.data.get('value')
+        description = request.data.get('description', '')
+
+        if not key or value is None:
+            return Response({"message": "key 和 value 不能为空"}, status=status.HTTP_400_BAD_REQUEST)
+
+        config, created = SystemConfig.objects.update_or_create(
+            key=key,
+            defaults={'value': value, 'description': description}
+        )
+
+        return Response({
+            "message": "配置更新成功" if not created else "配置创建成功",
+            "key": config.key,
+            "value": config.value,
+            "description": config.description
         }, status=status.HTTP_200_OK)
 
 
@@ -783,7 +851,6 @@ def extract_and_save_thumbnail(file_path, track_obj):
         print(f"  ⚠️ 提取封面失败 {file_path}: {str(e)}")
 
 
-# --- 核心修改：支持接收 task_id 并更新进度 ---
 def scan_local_directory(directory_path, task_id=None):
     task = None
     if task_id:
@@ -808,13 +875,13 @@ def scan_local_directory(directory_path, task_id=None):
             if Path(file).suffix.lower() in SUPPORTED_FORMATS:
                 valid_files.append(os.path.join(root, file))
                 
-    # ================= 新增核心逻辑：同步删除 =================
+    # ================= 同步删除逻辑 =================
     # 获取数据库中属于该扫描目录，但在物理硬盘上已不存在的歌曲
     valid_files_set = set(valid_files)
     obsolete_tracks = Track.objects.filter(file_path__startswith=directory_path).exclude(file_path__in=valid_files_set)
     deleted_count = obsolete_tracks.count()
     
-    # 逐个调用 delete() 以确保触发 library/models.py 中的 pre_delete/post_delete 信号，清理孤儿专辑和艺人
+    # 逐个调用 delete() 以确保触发 pre_delete/post_delete 信号，清理孤儿数据
     for t in obsolete_tracks:
         t.delete()
     # ========================================================
@@ -841,27 +908,31 @@ def scan_local_directory(directory_path, task_id=None):
 
             title = _get_tag_value(audio_easy, 'title', default=Path(file_path).stem)
             
-            # 🚨 修改 1：先获取完整未拆分的原始字符串（例如 "徐良 小凌"）
+            # 【核心】：先获取完整未拆分的原始字符串作为主歌手
             raw_artist_string = _get_tag_value(audio_easy, 'artist', default="Unknown Artist")
-            # 提取拆分后的列表（例如 ["徐良", "小凌"]）
+            # 提取拆分后的列表用于 M2M 字段
             artist_names = parse_artists(raw_artist_string)  
 
             album_title = _get_tag_value(audio_easy, 'album', default="Unknown Album")
             duration = getattr(audio_easy.info, 'length', 0.0)
 
-            # 🚨 修改 2：主歌手直接使用未拆分的原始字符串，保留原貌
+            # 主歌手直接使用未拆分的原始字符串，保留原貌
             primary_artist_obj, _ = Artist.objects.get_or_create(name=raw_artist_string)
 
-            # 专辑也绑定到这个原始名字的艺人
-            if album_title == "Unknown Album":
-                unknown_artist, _ = Artist.objects.get_or_create(name="Unknown Artist")
-                album_obj, _ = Album.objects.get_or_create(title=album_title, artist=unknown_artist)
-            else:
-                album_obj, _ = Album.objects.get_or_create(title=album_title, artist=primary_artist_obj)
+            # 【核心】：专辑去重逻辑。只认名字，不绑定具体的歌手！
+            album_obj = Album.objects.filter(title=album_title).first()
+            if not album_obj:
+                # 只有当这是一个从未见过的新专辑时，才顺手把当前主歌手挂上去
+                if album_title == "Unknown Album":
+                    unknown_artist, _ = Artist.objects.get_or_create(name="Unknown Artist")
+                    album_obj = Album.objects.create(title=album_title, artist=unknown_artist)
+                else:
+                    album_obj = Album.objects.create(title=album_title, artist=primary_artist_obj)
 
             audio_raw = mutagen.File(file_path)
             lyrics_text = _get_lyrics(audio_raw)
 
+            # 更新或创建歌曲
             track_obj, created = Track.objects.update_or_create(
                 file_path=file_path,
                 defaults={
@@ -870,9 +941,8 @@ def scan_local_directory(directory_path, task_id=None):
                 }
             )
 
-            # 🚨 修改 3：把拆分后的独立歌手写入“所有歌手”(多对多) 字段
+            # 把拆分后的独立歌手写入“所有歌手”(多对多) 字段
             all_artist_objs = [Artist.objects.get_or_create(name=n)[0] for n in artist_names]
-            # .set() 会直接覆盖原有的关系，保证只剩下拆分后的独立艺人
             track_obj.artists.set(all_artist_objs)
             track_obj.save()
 
@@ -891,3 +961,146 @@ def scan_local_directory(directory_path, task_id=None):
         task.updated_count = updated_count
         task.current_file = '扫描完成'
         task.save()
+
+
+------------------------------------------------------------
+stream models.py:
+------------------------------------------------------------
+from django.db import models
+
+# Create your models here.
+
+
+
+------------------------------------------------------------
+stream views.py:
+------------------------------------------------------------
+# stream/views.py
+import os
+import re
+import mimetypes
+from django.http import StreamingHttpResponse, Http404
+from django.shortcuts import get_object_or_404
+from library.models import Track
+
+# --- 新增这三行，手动注册容易丢失的音频 MIME 类型 ---
+mimetypes.add_type('audio/flac', '.flac')
+mimetypes.add_type('audio/mp4', '.m4a')
+mimetypes.add_type('audio/ogg', '.ogg')
+
+# 正则表达式，用于解析前端传来的 Range 头，例如 "bytes=32768-65535"
+RANGE_RE = re.compile(r'bytes\s*=\s*(\d+)\s*-\s*(\d*)', re.I)
+
+
+def file_iterator(file_path, chunk_size=8192, offset=0, length=None):
+    """
+    文件生成器：将大文件切分成小块 (chunk) 返回，避免一次性吃满服务器内存。
+    """
+    with open(file_path, 'rb') as f:
+        # 游标移动到前端请求的起始字节
+        f.seek(offset, os.SEEK_SET)
+        remaining = length
+        while remaining > 0:
+            # 每次最多只读 chunk_size 大小的数据
+            bytes_to_read = min(chunk_size, remaining)
+            data = f.read(bytes_to_read)
+            if not data:
+                break
+            remaining -= len(data)
+            yield data
+
+
+def stream_audio(request, track_id):
+    """
+    处理 HTTP 206 范围请求的音频流视图
+    """
+    # 1. 从数据库获取歌曲路径
+    track = get_object_or_404(Track, id=track_id)
+    file_path = track.file_path
+
+    if not os.path.exists(file_path):
+        raise Http404("Audio file not found on disk")
+
+    # 2. 获取文件总大小和 MIME 类型 (audio/mpeg, audio/flac 等)
+    file_size = os.path.getsize(file_path)
+    content_type, _ = mimetypes.guess_type(file_path)
+    content_type = content_type or 'application/octet-stream'
+
+    # 3. 解析前端发来的 HTTP_RANGE 请求头
+    range_header = request.META.get('HTTP_RANGE', '').strip()
+    range_match = RANGE_RE.match(range_header)
+
+    if range_match:
+        # --- 前端拖拽了进度条，请求 HTTP 206 部分数据 ---
+        first_byte, last_byte = range_match.groups()
+        first_byte = int(first_byte) if first_byte else 0
+        last_byte = int(last_byte) if last_byte else file_size - 1
+
+        # 防止越界
+        if last_byte >= file_size:
+            last_byte = file_size - 1
+
+        # 计算本次需要返回的字节长度
+        length = last_byte - first_byte + 1
+
+        # 使用 StreamingHttpResponse 和生成器返回数据
+        response = StreamingHttpResponse(
+            file_iterator(file_path, offset=first_byte, length=length),
+            status=206,  # 核心：HTTP 206 状态码
+            content_type=content_type
+        )
+        # 必须告诉浏览器我们实际返回了哪一段数据
+        response['Content-Length'] = str(length)
+        response['Content-Range'] = f'bytes {first_byte}-{last_byte}/{file_size}'
+    else:
+        # --- 前端第一次请求（无 Range 头），默认返回 HTTP 200 全量数据 ---
+        response = StreamingHttpResponse(
+            file_iterator(file_path, length=file_size),
+            status=200,
+            content_type=content_type
+        )
+        response['Content-Length'] = str(file_size)
+
+    # 核心：告诉浏览器，这个接口支持按字节 (bytes) 拖拽和切片
+    response['Accept-Ranges'] = 'bytes'
+
+    # 允许跨域请求（如果你前端 Vue 是运行在另外的端口上，这句很重要）
+    response['Access-Control-Allow-Origin'] = '*'
+
+    return response
+
+
+------------------------------------------------------------
+stream admin.py:
+------------------------------------------------------------
+from django.contrib import admin
+
+# Register your models here.
+
+
+
+------------------------------------------------------------
+scraper models.py:
+------------------------------------------------------------
+from django.db import models
+
+# Create your models here.
+
+
+
+------------------------------------------------------------
+scraper views.py:
+------------------------------------------------------------
+from django.shortcuts import render
+
+# Create your views here.
+
+
+
+------------------------------------------------------------
+scraper admin.py:
+------------------------------------------------------------
+from django.contrib import admin
+
+# Register your models here.
+

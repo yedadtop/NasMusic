@@ -214,19 +214,18 @@
 ## 10. 触发本地目录扫描（异步）
 
 - **接口地址**：`POST /api/scanner/run/`
-- **功能描述**：命令后端启动守护线程，在后台遍历指定的本地物理文件夹，读取标签、提取单曲封面并自动入库。
-- **Body 参数**（JSON）：
-  ```json
-  {
-    "path": "C:\\1D\\Mass\\my_music"
-  }
-  ```
-  - `path` (string): 可选。如果不传，后端将使用默认目录 `C:\1D\Mass\my_music`。
+- **功能描述**：命令后端启动守护线程，在后台遍历指定的本地物理文件夹，读取标签、提取单曲封面并自动入库。**注意：音乐路径必须先通过系统配置接口设置，否则扫描将失败。**
 - **返回格式**（HTTP 202 Accepted）：
   ```json
   {
     "message": "扫描任务已在后台启动",
     "task_id": 12
+  }
+  ```
+- **错误返回**（HTTP 400 Bad Request）：
+  ```json
+  {
+    "message": "请先在系统配置中设置音乐文件路径"
   }
   ```
 
@@ -257,7 +256,51 @@
 
 ---
 
-## 12. 搜索
+## 12. 获取系统配置
+
+- **接口地址**：`GET /api/scanner/config/`
+- **功能描述**：获取所有系统配置项。
+- **返回格式**：
+  ```json
+  {
+    "music_path": {
+      "value": "C:\\1D\\Mass\\my_music",
+      "description": "音乐文件路径",
+      "updated_at": "2026-04-30T12:00:00Z"
+    }
+  }
+  ```
+
+---
+
+## 13. 更新系统配置
+
+- **接口地址**：`PUT /api/scanner/config/`
+- **功能描述**：创建或更新系统配置项。
+- **Body 参数**（JSON）：
+  ```json
+  {
+    "key": "music_path",
+    "value": "D:\\Music",
+    "description": "音乐文件路径"
+  }
+  ```
+  - `key` (string): **必填**。配置键名，当前支持：`music_path`
+  - `value` (string): **必填**。配置值
+  - `description` (string): 可选。配置描述
+- **返回格式**（HTTP 200 OK）：
+  ```json
+  {
+    "message": "配置更新成功",
+    "key": "music_path",
+    "value": "D:\\Music",
+    "description": "音乐文件路径"
+  }
+  ```
+
+---
+
+## 14. 搜索
 
 - **接口地址**：`GET /api/tracks/?search=baby`
 - **功能描述**：在歌曲列表中搜索匹配的歌曲，支持歌名、歌手名、专辑名模糊搜索，不区分大小写。
