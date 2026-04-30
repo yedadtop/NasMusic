@@ -187,6 +187,7 @@ const loadMore = () => {
 }
 
 const playTrack = (track, index) => {
+  if (player.currentTrack?.id === track.id) return
   emit('play', { track, index, tracks: tracks.value })
 }
 
