@@ -134,6 +134,7 @@
         <div class="px-8 py-4 border-b border-gray-200 bg-white/70 backdrop-blur flex justify-between items-center shadow-sm z-10 sticky top-0">
           <span class="text-sm font-bold text-gray-700">LRC 制作轨道 (共 {{ lyrics.filter(l => !l.deleted).length }} 行)</span>
           <div class="flex items-center space-x-3">
+            <el-button size="small" :icon="Plus" @click="addLine" type="primary" plain class="font-bold">新增行</el-button>
             <el-switch
               v-model="autoScroll"
               size="small"
@@ -475,6 +476,22 @@ const deleteLine = (index) => {
     deletedLines.value.push(index)
     showToast('已删除，可撤销', 'success')
   }
+}
+
+const addLine = () => {
+  const newLine = { time: 0, timeStr: '00:00.00', text: '', deleted: false }
+  let insertIndex = editIndex.value >= 0 ? editIndex.value + 1 : lyrics.value.length
+  
+  if (insertIndex > lyrics.value.length) {
+    insertIndex = lyrics.value.length
+  }
+  
+  lyrics.value.splice(insertIndex, 0, newLine)
+  editIndex.value = insertIndex
+  nextTick(() => {
+    scrollToLine(editIndex.value)
+  })
+  showToast('已在下方新增空白行', 'success')
 }
 
 const undoDelete = () => {
