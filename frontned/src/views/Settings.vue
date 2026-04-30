@@ -96,18 +96,6 @@
           </div>
         </div>
 
-        <div class="flex justify-end">
-          <el-button
-            type="warning"
-            :loading="scanning"
-            @click="openRescanCoversConfirm"
-            class="custom-apple-button !bg-[#ff9500] !border-[#ff9500]"
-          >
-            <Icon icon="mdi:image-refresh" class="w-4 h-4 mr-2" />
-            重新提取封面
-          </el-button>
-        </div>
-
         <div v-if="scanTask.current_file" class="text-[13px] text-[#86868b] truncate pb-1">
           正在处理: {{ scanTask.current_file }}
         </div>
@@ -190,6 +178,31 @@
             </el-button>
           </div>
         </div>
+      </div>
+    </section>
+
+    <section class="mb-10 bg-white rounded-[20px] p-6 sm:p-8 shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100/50">
+      <div class="flex items-center mb-3">
+        <div class="w-10 h-10 bg-[#f3e5f5] text-[#af52de] rounded-[10px] flex items-center justify-center mr-4">
+          <Icon icon="mdi:image-multiple" class="w-5 h-5" />
+        </div>
+        <h2 class="text-xl font-semibold tracking-tight">批量操作</h2>
+      </div>
+
+      <p class="text-[15px] text-[#86868b] mb-6 leading-relaxed">
+        对音乐库中的封面、标签等信息进行批量管理和更新操作。
+      </p>
+
+      <div class="flex flex-col sm:flex-row gap-4">
+        <el-button
+          type="warning"
+          :loading="scanning"
+          @click="openRescanCoversConfirm"
+          class="w-full sm:w-auto custom-apple-button !bg-[#ff9500] !border-[#ff9500]"
+        >
+          <Icon icon="mdi:image-refresh" class="w-4 h-4 mr-2" />
+          更新所有封面
+        </el-button>
       </div>
     </section>
 
@@ -321,8 +334,8 @@ const openDeleteAllConfirm = () => {
 }
 
 const openRescanCoversConfirm = () => {
-  confirmTitle.value = '重新提取封面'
-  confirmMessage.value = '确定要强制重新提取所有歌曲的内嵌封面吗？这将删除并重新提取所有封面图片，可能需要较长时间。'
+  confirmTitle.value = '更新所有封面'
+  confirmMessage.value = '确定要更新所有歌曲的内嵌封面吗？这将删除并重新提取所有封面图片，可能需要较长时间。'
   confirmConfirmText.value = '确定'
   confirmAction.value = 'rescanCovers'
   confirmFile.value = null

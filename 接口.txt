@@ -421,6 +421,148 @@
 
 ---
 
+## 18. 获取所有刮削接口
+
+- **接口地址**：`GET /api/scraper/apis/`
+- **功能描述**：返回所有已配置的刮削接口列表（支持分页）。
+- **Query 参数**（可选）：
+  - `page` (int): 请求的页码（默认 1）。
+  - `size` (int): 每页返回的数据条数（默认 50，最大 1000）。
+- **返回格式**：
+  ```json
+  {
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 1,
+        "name": "iTunes API",
+        "url": "https://itunes.apple.com/search",
+        "is_active": true,
+        "priority": 0,
+        "created_at": "2026-04-30T12:00:00Z",
+        "updated_at": "2026-04-30T12:00:00Z"
+      }
+    ]
+  }
+  ```
+
+---
+
+## 19. 创建刮削接口
+
+- **接口地址**：`POST /api/scraper/apis/`
+- **功能描述**：创建一个新的刮削接口配置。
+- **Body 参数**（JSON）：
+  ```json
+  {
+    "name": "iTunes API",
+    "url": "https://itunes.apple.com/search",
+    "is_active": true,
+    "priority": 0
+  }
+  ```
+  - `name` (string): **必填**。接口名称
+  - `url` (string): **必填**。接口地址 URL
+  - `is_active` (boolean): 可选，是否启用（默认 true）
+  - `priority` (int): 可选，优先级（默认 0，数字越小优先级越高）
+- **返回格式**（HTTP 201 Created）：
+  ```json
+  {
+    "id": 1,
+    "name": "iTunes API",
+    "url": "https://itunes.apple.com/search",
+    "is_active": true,
+    "priority": 0,
+    "created_at": "2026-04-30T12:00:00Z",
+    "updated_at": "2026-04-30T12:00:00Z"
+  }
+  ```
+
+---
+
+## 20. 获取刮削接口详情
+
+- **接口地址**：`GET /api/scraper/apis/{id}/`
+- **功能描述**：获取指定刮削接口的详细信息。
+- **返回格式**：
+  ```json
+  {
+    "id": 1,
+    "name": "iTunes API",
+    "url": "https://itunes.apple.com/search",
+    "is_active": true,
+    "priority": 0,
+    "created_at": "2026-04-30T12:00:00Z",
+    "updated_at": "2026-04-30T12:00:00Z"
+  }
+  ```
+
+---
+
+## 21. 更新刮削接口
+
+- **接口地址**：`PUT` 或 `PATCH /api/scraper/apis/{id}/`
+- **功能描述**：更新指定刮削接口的配置。
+- **Body 参数**（JSON）：
+  ```json
+  {
+    "name": "iTunes API (备份)",
+    "url": "https://itunes.apple.com/search",
+    "is_active": false,
+    "priority": 1
+  }
+  ```
+- **返回格式**（HTTP 200 OK）：
+  ```json
+  {
+    "id": 1,
+    "name": "iTunes API (备份)",
+    "url": "https://itunes.apple.com/search",
+    "is_active": false,
+    "priority": 1,
+    "created_at": "2026-04-30T12:00:00Z",
+    "updated_at": "2026-04-30T12:30:00Z"
+  }
+  ```
+
+---
+
+## 22. 删除刮削接口
+
+- **接口地址**：`DELETE /api/scraper/apis/{id}/`
+- **功能描述**：删除指定的刮削接口配置。
+- **返回格式**（HTTP 204 No Content）
+
+---
+
+## 23. 手动刮削歌曲封面（高清）
+
+- **接口地址**：`POST /api/scraper/track/{track_id}/scrape/`
+- **功能描述**：手动触发单首歌曲的封面高清刮削。后端会按优先级尝试所有已启用的刮削接口，从搜索结果中提取 1000x1000 高清封面图，同时写入数据库和物理音频文件。
+- **注意**：此接口会覆盖原有的封面图片。
+- **返回格式**（HTTP 200 OK）：
+  ```json
+  {
+    "message": "成功通过接口 [iTunes API] 获取并原图嵌入高清封面！"
+  }
+  ```
+- **错误返回**（HTTP 404 Not Found）：
+  ```json
+  {
+    "error": "系统中没有已启用的刮削接口，请先配置。"
+  }
+  ```
+  或
+  ```json
+  {
+    "error": "所有可用接口均未匹配到封面或请求失败。"
+  }
+  ```
+
+---
+
 ## 多歌手支持说明
 
 ### 数据模型
