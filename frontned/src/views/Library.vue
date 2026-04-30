@@ -259,18 +259,27 @@ const handleDeleteConfirm = async () => {
   showConfirmModal.value = false
   if (!trackToDelete.value) return
 
-  if (player.currentTrack && player.currentTrack.id === trackToDelete.value.id) {
+  const deletedTrack = trackToDelete.value
+  const deletedIndex = tracks.value.findIndex(t => t.id === deletedTrack.id)
+  
+  if (deletedIndex !== -1) {
+    tracks.value.splice(deletedIndex, 1)
+    totalCount.value = Math.max(0, totalCount.value - 1)
+  }
+  
+  if (player.currentTrack && player.currentTrack.id === deletedTrack.id) {
     player.stop()
   }
   
   try {
-    await request.delete(`/tracks/${trackToDelete.value.id}/`)
+    await request.delete(`/tracks/${deletedTrack.id}/`)
     showToast('删除成功', 'success')
-    page.value = 1
-    allLoaded.value = false
-    await fetchTracks()
   } catch (error) {
     console.error('删除失败:', error)
+    if (deletedIndex !== -1) {
+      tracks.value.splice(deletedIndex, 0, deletedTrack)
+      totalCount.value++
+    }
     showToast('删除失败，请重试', 'error')
   }
 }
