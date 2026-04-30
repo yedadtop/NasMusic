@@ -33,6 +33,11 @@ const routes = [
     component: () => import('../views/Settings.vue')
   },
   {
+    path: '/interfaces',
+    name: 'Interfaces',
+    component: () => import('../views/Interfaces.vue')
+  },
+  {
     path: '/lrc-editor',
     name: 'LrcEditor',
     component: LrcEditor,

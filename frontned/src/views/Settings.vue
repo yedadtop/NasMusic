@@ -1,6 +1,17 @@
 <template>
   <div class="max-w-3xl mx-auto px-6 py-10 pb-32 apple-font text-[#1d1d1f]">
-    <AppleToast v-model="toastVisible" :message="toastMessage" :type="toastType" />
+    <div class="mb-8">
+      <div class="flex items-center border-b border-gray-200/60">
+        <router-link to="/settings" class="pb-3 px-1 text-[17px] font-semibold border-b-2 transition-colors mr-6" :class="isSettingsActive ? 'border-[#0071e3] text-[#0071e3]' : 'border-transparent text-[#86868b] hover:text-[#1d1d1f]'">
+          设置
+        </router-link>
+        <router-link to="/interfaces" class="pb-3 px-1 text-[17px] font-semibold border-b-2 transition-colors" :class="!isSettingsActive ? 'border-[#0071e3] text-[#0071e3]' : 'border-transparent text-[#86868b] hover:text-[#1d1d1f]'">
+          接口
+        </router-link>
+      </div>
+    </div>
+
+    <AppleToast v-if="toastVisible" v-model="toastVisible" :message="toastMessage" :type="toastType" />
     <AppleConfirmModal
       v-model="showConfirmModal"
       :title="confirmTitle"
@@ -262,11 +273,15 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import axios from 'axios'
 import { FolderOpened, Loading, CircleCheck } from '@element-plus/icons-vue'
 import { Icon } from '@iconify/vue'
 import AppleToast from '../components/AppleToast.vue'
 import AppleConfirmModal from '../components/AppleConfirmModal.vue'
+
+const route = useRoute()
+const isSettingsActive = computed(() => route.path === '/settings')
 
 const musicPath = ref('')
 const scanning = ref(false)
