@@ -223,6 +223,15 @@
           <Icon icon="mdi:cloud-download" class="w-4 h-4 mr-2" />
           补全缺失封面
         </el-button>
+        <el-button
+          type="success"
+          :loading="scrapingLyrics"
+          @click="openScrapeLyricsConfirm"
+          class="w-full sm:w-auto custom-apple-button !bg-[#34c759] !border-[#34c759]"
+        >
+          <Icon icon="mdi:music-note" class="w-4 h-4 mr-2" />
+          补全缺失歌词
+        </el-button>
       </div>
     </section>
 
@@ -295,6 +304,7 @@ const isSettingsActive = computed(() => route.path === '/settings')
 const musicPath = ref('')
 const scanning = ref(false)
 const scraping = ref(false)
+const scrapingLyrics = ref(false)
 const saving = ref(false)
 let timer = null
 let delayedScanTimer = null
@@ -376,6 +386,15 @@ const openScrapeCoversConfirm = () => {
   showConfirmModal.value = true
 }
 
+const openScrapeLyricsConfirm = () => {
+  confirmTitle.value = '补全缺失歌词'
+  confirmMessage.value = '确定要通过网络爬取所有缺失歌词的歌曲吗？系统会自动检测数据库中没有歌词的歌曲，然后通过LRCLIB接口获取并嵌入歌词。'
+  confirmConfirmText.value = '确定'
+  confirmAction.value = 'scrapeLyrics'
+  confirmFile.value = null
+  showConfirmModal.value = true
+}
+
 const handleConfirm = async () => {
   showConfirmModal.value = false
   if (confirmAction.value === 'restore') {
@@ -390,6 +409,8 @@ const handleConfirm = async () => {
     await rescanCovers()
   } else if (confirmAction.value === 'scrapeCovers') {
     await scrapeCovers()
+  } else if (confirmAction.value === 'scrapeLyrics') {
+    await scrapeLyrics()
   }
 }
 
@@ -552,6 +573,24 @@ const scrapeCovers = async () => {
   }
 }
 
+// 爬取歌词并嵌入
+const scrapeLyrics = async () => {
+  try {
+    scrapingLyrics.value = true
+    const res = await axios.post('/api/scanner/run/')
+    scanTask.value.id = res.data.task_id
+    await axios.post('/api/scraper/batch/scrape_lyrics/', {
+      task_id: res.data.task_id
+    })
+    showToast('补全歌词任务已在后台启动', 'success')
+    startPolling()
+  } catch (error) {
+    const msg = error.response?.data?.message || '启动失败，请检查后端服务'
+    showToast(msg, 'error')
+    scrapingLyrics.value = false
+  }
+}
+
 // 延迟扫描（恢复操作后使用，防止用户连续点击）
 const scheduleScanAfterRestore = (delay = 5000) => {
   if (delayedScanTimer) {
@@ -587,11 +626,17 @@ const fetchStatus = async () => {
       if (scraping.value) {
         scraping.value = false
       }
+      if (scrapingLyrics.value) {
+        scrapingLyrics.value = false
+      }
     } else if (data.status === 'error') {
       stopPolling()
       scanning.value = false
       if (scraping.value) {
         scraping.value = false
+      }
+      if (scrapingLyrics.value) {
+        scrapingLyrics.value = false
       }
       const errMsg = data.error_message || '扫描发生未知错误'
       showToast(errMsg, 'error')
