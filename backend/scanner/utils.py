@@ -6,7 +6,10 @@ import mutagen
 from pathlib import Path
 from PIL import Image
 from django.core.files.base import ContentFile
+from django.db.models.signals import pre_delete, post_delete
 from library.models import Artist, Album, Track
+from library.models import store_ids_before_delete, cleanup_after_track_delete
+from scanner.models import SystemConfig
 
 SUPPORTED_FORMATS = {'.mp3', '.flac', '.ogg', '.m4a'}
 
@@ -129,22 +132,83 @@ def scan_local_directory(directory_path, task_id=None):
         task.save()
 
     # 1. 预扫描：统计总共有多少个支持的音频文件 (分母)
+    # 统一格式化路径，避免斜杠差异
+    norm_directory_path = os.path.normpath(directory_path)
     valid_files = []
-    for root, _, files in os.walk(directory_path):
+    for root, dirs, files in os.walk(norm_directory_path):
+        dirs[:] = [d for d in dirs if not d.startswith('.')]
         for file in files:
             if Path(file).suffix.lower() in SUPPORTED_FORMATS:
-                valid_files.append(os.path.join(root, file))
-                
-    # ================= 同步删除逻辑 =================
-    # 获取数据库中属于该扫描目录，但在物理硬盘上已不存在的歌曲
-    valid_files_set = set(valid_files)
-    obsolete_tracks = Track.objects.filter(file_path__startswith=directory_path).exclude(file_path__in=valid_files_set)
-    deleted_count = obsolete_tracks.count()
-    
-    # 逐个调用 delete() 以确保触发 pre_delete/post_delete 信号，清理孤儿数据
-    for t in obsolete_tracks:
-        t.delete()
-    # ========================================================
+                valid_files.append(os.path.normpath(os.path.join(root, file)))
+
+    # ================= 判断是增量扫描还是全量扫描 =================
+    config_music_path = SystemConfig.objects.filter(key='music_path').first()
+    config_path = config_music_path.value if config_music_path else None
+
+    # 使用 normpath 统一路径格式，避免 / 与 \ 的差异
+    norm_config_path = os.path.normpath(config_path) if config_path else None
+
+    # 检查数据库中是否有歌曲，以及现有歌曲是否在当前扫描目录下
+    # 【修复2】首个文件路径格式化：必须先对 db_track.file_path 做 normpath
+    db_track = Track.objects.first()
+    db_track_in_current_dir = False
+    if db_track and db_track.file_path:
+        norm_db_file_path = os.path.normpath(db_track.file_path)
+        db_track_dir = os.path.dirname(norm_db_file_path)
+        db_track_in_current_dir = db_track_dir.startswith(norm_directory_path)
+
+    # 路径变化：当配置路径与当前扫描路径不同，或数据库中的歌曲不在当前目录下时
+    is_path_changed = (norm_config_path != norm_directory_path) or \
+                      (Track.objects.exists() and not db_track_in_current_dir)
+
+    if is_path_changed:
+        # 路径变化：全量清空数据库，重新提取
+        print(f"  🔄 扫描路径已变化 ({config_path} → {directory_path})，执行全量扫描")
+
+        # 清理封面缩略图物理文件
+        for t in Track.objects.exclude(cover_thumbnail='').iterator():
+            try:
+                if t.cover_thumbnail and os.path.isfile(t.cover_thumbnail.path):
+                    os.remove(t.cover_thumbnail.path)
+            except Exception:
+                pass
+
+        pre_delete.disconnect(store_ids_before_delete, sender=Track)
+        post_delete.disconnect(cleanup_after_track_delete, sender=Track)
+
+        deleted_count = Track.objects.count()
+        Track.objects.all().delete()
+        Album.objects.all().delete()
+        Artist.objects.all().delete()
+
+        pre_delete.connect(store_ids_before_delete, sender=Track)
+        post_delete.connect(cleanup_after_track_delete, sender=Track)
+
+        # 更新配置路径为当前扫描路径
+        SystemConfig.objects.update_or_create(
+            key='music_path',
+            defaults={'value': directory_path, 'description': '音乐文件路径'}
+        )
+    else:
+        # 路径未变化：增量扫描
+        print(f"  ➕ 增量扫描模式")
+
+        # 【修复3】幽灵文件内存级比对：弃用存在斜杠陷阱的 Django ORM 查询
+        # 改为获取所有 Track 记录，在 Python 内存中用 normpath 比对
+        valid_files_set = set(valid_files)
+        ghost_tracks = []
+        for t in Track.objects.all():
+            norm_file_path = os.path.normpath(t.file_path)
+            if norm_file_path not in valid_files_set:
+                ghost_tracks.append(t)
+        deleted_count = len(ghost_tracks)
+
+        if ghost_tracks:
+            print(f"  👻 发现 {deleted_count} 首幽灵歌曲，开始清理...")
+            for t in ghost_tracks:
+                t._skip_physical_delete = True  # 跳过物理文件删除
+                t.delete()
+    # =================================================================
 
     if task:
         task.total_files = len(valid_files)
@@ -154,6 +218,9 @@ def scan_local_directory(directory_path, task_id=None):
     added_count = 0
     updated_count = 0
 
+    # 【修复4】跳过机制集合格式化：将查出的每条历史路径都经过 normpath 处理后再放入 set
+    existing_paths = set(os.path.normpath(p) for p in Track.objects.values_list('file_path', flat=True)) if not is_path_changed else set()
+
     # 2. 正式开始逐个扫描 (分子)
     for index, file_path in enumerate(valid_files):
         if task:
@@ -161,6 +228,10 @@ def scan_local_directory(directory_path, task_id=None):
             task.current_file = file_path
             if index % 5 == 0 or index == len(valid_files) - 1:
                 task.save()
+
+        # 增量扫描模式下，跳过已存在的歌曲
+        if not is_path_changed and os.path.normpath(file_path) in existing_paths:
+            continue
 
         try:
             audio_easy = mutagen.File(file_path, easy=True)

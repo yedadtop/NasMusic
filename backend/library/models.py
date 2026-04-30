@@ -1,8 +1,30 @@
 # library/models.py
 import os
+from datetime import datetime
 from django.db import models, transaction
 from django.db.models.signals import pre_delete, post_delete
 from django.dispatch import receiver
+
+def move_to_trash(file_path):
+    """将文件移动到所在目录的 .trash 隐藏文件夹"""
+    if not file_path or not os.path.isfile(file_path):
+        return
+    try:
+        file_dir = os.path.dirname(file_path)
+        trash_dir = os.path.join(file_dir, '.trash')
+        os.makedirs(trash_dir, exist_ok=True)
+
+        filename = os.path.basename(file_path)
+        trash_path = os.path.join(trash_dir, filename)
+
+        if os.path.exists(trash_path):
+            base, ext = os.path.splitext(filename)
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            trash_path = os.path.join(trash_dir, f"{base}_{timestamp}{ext}")
+
+        os.rename(file_path, trash_path)
+    except Exception as e:
+        print(f"⚠️ 文件移动到回收站失败 ({file_path}): {str(e)}")
 
 class Artist(models.Model):
     name = models.CharField(max_length=255, unique=True, verbose_name="歌手名")
@@ -44,20 +66,22 @@ def store_ids_before_delete(sender, instance, **kwargs):
 
 @receiver(post_delete, sender=Track)
 def cleanup_after_track_delete(sender, instance, **kwargs):
-    # 1. 物理清理
-    for p in [getattr(instance, '_file_to_del', None), getattr(instance, '_thumb_to_del', None)]:
-        if p and os.path.isfile(p):
-            try: os.remove(p)
-            except: pass
+    skip_physical = getattr(instance, '_skip_physical_delete', False)
 
-    # 2. 数据库清理 (在事务提交后执行，使用 filter 防止报错)
+    if not skip_physical:
+        # 物理清理 - 移动到 .trash 文件夹而非删除
+        for p in [getattr(instance, '_file_to_del', None), getattr(instance, '_thumb_to_del', None)]:
+            if p:
+                move_to_trash(p)
+
+    # 数据库清理 (在事务提交后执行，使用 filter 防止报错)
     def do_cleanup():
         # 清理专辑
         a_id = getattr(instance, '_saved_album_id', None)
         if a_id:
             album = Album.objects.filter(id=a_id).first()
             if album and not album.tracks.exists(): album.delete()
-        
+
         # 清理歌手组
         art_ids = {getattr(instance, '_saved_artist_id', None)} | set(getattr(instance, '_saved_collab_ids', []))
         for aid in art_ids:
