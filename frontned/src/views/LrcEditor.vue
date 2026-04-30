@@ -300,7 +300,7 @@ const parseRawText = () => {
   if (!rawText.value.trim()) return
   const lines = rawText.value.split('\n')
   lyrics.value = lines.map(line => {
-    const match = line.match(/^\[(\d{2}:?\d{2}\.\d{2,3})\](.*)/)
+    const match = line.match(/^\[(\d{2}:\d{2}(?::\d{2}(?:\.\d{2,3})?|\.\d{2,3}))\](.*)/)
     if (match) {
       return { time: strToSeconds(match[1]), timeStr: match[1], text: match[2].trim(), deleted: false }
     }
@@ -315,16 +315,27 @@ const parseRawText = () => {
 // 时间转换工具
 const formatTime = (seconds) => {
   if (isNaN(seconds)) return '00:00.00'
-  const mins = Math.floor(seconds / 60).toString().padStart(2, '0')
+  const hours = Math.floor(seconds / 3600)
+  const mins = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0')
   const secs = Math.floor(seconds % 60).toString().padStart(2, '0')
   const ms = Math.floor((seconds % 1) * 100).toString().padStart(2, '0')
-  return `${mins}:${secs}.${ms}`
+  return hours > 0
+    ? `${hours}:${mins}:${secs}.${ms}`
+    : `${mins}:${secs}.${ms}`
 }
 
 const strToSeconds = (str) => {
   const parts = str.split(':')
-  if (parts.length !== 2) return 0
-  return parseFloat(parts[0]) * 60 + parseFloat(parts[1])
+  if (parts.length === 3) {
+    if (parts[2].includes('.')) {
+      return parseFloat(parts[0]) * 3600 + parseFloat(parts[1]) * 60 + parseFloat(parts[2])
+    }
+    return parseFloat(parts[0]) * 60 + parseFloat(parts[1]) + parseFloat(parts[2]) / 100
+  }
+  if (parts.length === 2) {
+    return parseFloat(parts[0]) * 60 + parseFloat(parts[1])
+  }
+  return 0
 }
 
 const syncTimeFromStr = (index) => {
