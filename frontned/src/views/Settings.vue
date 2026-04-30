@@ -291,8 +291,8 @@ const openRestoreAllConfirm = () => {
 }
 
 const openDeleteConfirm = (file) => {
-  confirmTitle.value = '彻底删除'
-  confirmMessage.value = `确定要彻底删除 "${file.filename}" 吗？此操作不可恢复！`
+  confirmTitle.value = '物理删除！！'
+  confirmMessage.value = `确定要彻底删除 "${file.filename}" 吗？此操作不可恢复！！！`
   confirmConfirmText.value = '删除'
   confirmAction.value = 'delete'
   confirmFile.value = file
