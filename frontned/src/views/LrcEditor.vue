@@ -18,16 +18,80 @@
             <kbd class="bg-white border border-gray-300 shadow-sm px-2 py-0.5 rounded text-xs text-blue-600 mr-2 font-mono font-bold">Enter</kbd>
             打点并跳至下行
           </span>
-          <span class="w-px h-4 bg-gray-300"></span>
-          <span class="flex items-center">
-            <kbd class="bg-white border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-700 mr-1 font-mono font-bold">1~4</kbd>
-            ±5s/±1s
-          </span>
-          <span class="w-px h-4 bg-gray-300"></span>
-          <span class="flex items-center">
-            <kbd class="bg-white border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-700 mr-1 font-mono font-bold">QWER</kbd>
-            0.5/1/1.5/2x
-          </span>
+          <el-popover
+            placement="bottom"
+            :width="280"
+            trigger="click"
+          >
+            <template #reference>
+              <el-icon class="ml-2 cursor-pointer text-gray-400 hover:text-gray-600 transition-colors"><QuestionFilled /></el-icon>
+            </template>
+            <div class="text-sm">
+              <div class="font-bold text-gray-700 mb-3 border-b pb-2">键盘快捷键</div>
+              <div class="space-y-2.5">
+                <div class="flex items-center justify-between">
+                  <span class="flex items-center">
+                    <kbd class="bg-gray-100 border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-600 mr-2 font-mono">Space</kbd>
+                    播放 / 暂停
+                  </span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="flex items-center">
+                    <kbd class="bg-blue-50 border border-blue-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-blue-600 mr-2 font-mono">Enter</kbd>
+                    打点并跳转下一行
+                  </span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="flex items-center">
+                    <kbd class="bg-gray-100 border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-600 mr-2 font-mono">1</kbd>
+                    快退 5 秒
+                  </span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="flex items-center">
+                    <kbd class="bg-gray-100 border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-600 mr-2 font-mono">2</kbd>
+                    快退 1 秒
+                  </span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="flex items-center">
+                    <kbd class="bg-gray-100 border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-600 mr-2 font-mono">3</kbd>
+                    快进 1 秒
+                  </span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="flex items-center">
+                    <kbd class="bg-gray-100 border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-600 mr-2 font-mono">4</kbd>
+                    快进 5 秒
+                  </span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="flex items-center">
+                    <kbd class="bg-gray-100 border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-600 mr-2 font-mono">Q</kbd>
+                    0.5x 倍速
+                  </span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="flex items-center">
+                    <kbd class="bg-gray-100 border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-600 mr-2 font-mono">W</kbd>
+                    1.0x 倍速
+                  </span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="flex items-center">
+                    <kbd class="bg-gray-100 border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-600 mr-2 font-mono">E</kbd>
+                    1.5x 倍速
+                  </span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="flex items-center">
+                    <kbd class="bg-gray-100 border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-600 mr-2 font-mono">R</kbd>
+                    2.0x 倍速
+                  </span>
+                </div>
+              </div>
+            </div>
+          </el-popover>
         </div>
         <div class="flex items-center space-x-2 text-sm text-gray-500">
           <span class="shrink-0">偏移量</span>
@@ -230,7 +294,7 @@
 import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppleToast from '../components/AppleToast.vue'
-import { Back, Check, VideoPlay, VideoPause, RefreshLeft, Document, Plus, Minus, Delete, Refresh } from '@element-plus/icons-vue'
+import { Back, Check, VideoPlay, VideoPause, RefreshLeft, Document, Plus, Minus, Delete, Refresh, QuestionFilled } from '@element-plus/icons-vue'
 import request from '../api'
 import { usePlayerStore } from '../stores/player'
 
