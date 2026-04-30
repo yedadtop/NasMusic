@@ -1,11 +1,25 @@
 # library/models.py
 import os
 import time
+import threading
 from datetime import datetime
 from django.db import models, transaction
 from django.db.models.signals import pre_delete, post_delete
 from django.dispatch import receiver
 from scanner.models import SystemConfig
+
+def _async_move(src, dst, max_retries=30, retry_delay=2.0):
+    """后台守护线程：异步重试移动文件到回收站"""
+    for attempt in range(max_retries):
+        try:
+            os.rename(src, dst)
+            print(f"✅ 文件已移动到回收站（后台重试成功）: {dst}")
+            return
+        except OSError:
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+                continue
+    print(f"⚠️ 文件移动到回收站失败，已放弃: {src}")
 
 def get_music_path():
     config = SystemConfig.objects.filter(key='music_path').first()
@@ -13,7 +27,7 @@ def get_music_path():
         return os.path.normpath(config.value)
     return None
 
-def move_to_trash(file_path, max_retries=3, retry_delay=0.5):
+def move_to_trash(file_path):
     """将文件移动到音乐库根目录下的 .trash 文件夹"""
     if not file_path or not os.path.isfile(file_path):
         return
@@ -23,36 +37,28 @@ def move_to_trash(file_path, max_retries=3, retry_delay=0.5):
         print(f"⚠️ 无法获取音乐库路径，文件 {file_path} 无法移动到回收站")
         return
     
-    last_error = None
-    for attempt in range(max_retries):
-        try:
-            file_dir = os.path.dirname(os.path.normpath(file_path))
-            if not file_dir.startswith(music_path):
-                print(f"⚠️ 文件不在音乐库目录内: {file_path}")
-                return
-            
-            trash_dir = os.path.join(music_path, '.trash')
-            os.makedirs(trash_dir, exist_ok=True)
-
-            filename = os.path.basename(file_path)
-            trash_path = os.path.join(trash_dir, filename)
-
-            if os.path.exists(trash_path):
-                base, ext = os.path.splitext(filename)
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                trash_path = os.path.join(trash_dir, f"{base}_{timestamp}{ext}")
-
-            os.rename(file_path, trash_path)
-            print(f"✅ 文件已移动到回收站: {trash_path}")
-            return
-        except Exception as e:
-            last_error = e
-            if attempt < max_retries - 1:
-                print(f"⏳ 文件被占用，{retry_delay}秒后重试... ({attempt + 1}/{max_retries})")
-                time.sleep(retry_delay)
-            continue
+    file_dir = os.path.dirname(os.path.normpath(file_path))
+    if not file_dir.startswith(music_path):
+        print(f"⚠️ 文件不在音乐库目录内: {file_path}")
+        return
     
-    print(f"⚠️ 文件移动到回收站失败 ({file_path}): {str(last_error)}")
+    trash_dir = os.path.join(music_path, '.trash')
+    os.makedirs(trash_dir, exist_ok=True)
+
+    filename = os.path.basename(file_path)
+    trash_path = os.path.join(trash_dir, filename)
+
+    if os.path.exists(trash_path):
+        base, ext = os.path.splitext(filename)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        trash_path = os.path.join(trash_dir, f"{base}_{timestamp}{ext}")
+
+    try:
+        os.rename(file_path, trash_path)
+        print(f"✅ 文件已移动到回收站: {trash_path}")
+    except OSError:
+        print(f"⚠️ 文件正在被占用，已启动后台守护线程")
+        threading.Thread(target=_async_move, args=(file_path, trash_path), daemon=True).start()
 
 class Artist(models.Model):
     name = models.CharField(max_length=255, unique=True, verbose_name="歌手名")
