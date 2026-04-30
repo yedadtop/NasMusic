@@ -307,7 +307,10 @@ def scan_local_directory(directory_path, task_id=None):
 
 def _is_trash_path(path):
     norm = os.path.normpath(path)
-    return '/.trash/' in norm or '\\.trash\\' in norm
+    sep = os.sep
+    escaped_sep = sep if sep == '/' else re.escape(sep)
+    pattern = rf'{escaped_sep}\.trash{escaped_sep}|{escaped_sep}\.trash$|^\.trash{escaped_sep}|^\.trash$'
+    return bool(re.search(pattern, norm))
 
 
 def get_trash_files():
@@ -319,8 +322,7 @@ def get_trash_files():
     trash_files = []
 
     for root, dirs, files in os.walk(music_path):
-        norm_root = os.path.normpath(root)
-        if '/.trash/' in norm_root or '\\.trash\\' in norm_root:
+        if _is_trash_path(root):
             for filename in files:
                 file_path = os.path.normpath(os.path.join(root, filename))
                 try:
