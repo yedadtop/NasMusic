@@ -63,7 +63,7 @@
     <AppleConfirmModal 
       v-model="showConfirmModal"
       title="删除确认"
-      message="确定要删除这首歌曲吗？此操作会同时删除硬盘上的音频文件和封面。"
+      message="可在设置页面的回收站找回删除的歌曲!"
       confirm-text="删除"
       cancel-text="取消"
       @confirm="handleDeleteConfirm"

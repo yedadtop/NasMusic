@@ -335,11 +335,15 @@ def get_trash_files():
                 match = re.search(r'_(\d{8}_\d{6})$', base)
                 if match:
                     try:
-                        deleted_time = datetime.strptime(match.group(1), '%Y%m%d_%H%M%')
+                        deleted_time = datetime.strptime(match.group(1), '%Y%m%d_%H%M%S')
                     except ValueError:
                         pass
 
-                original_dir = os.path.dirname(os.path.dirname(file_path))
+                root_norm = os.path.normpath(root)
+                if root_norm.endswith('.trash'):
+                    original_dir = os.path.dirname(root_norm)
+                else:
+                    original_dir = os.path.dirname(os.path.dirname(file_path))
                 trash_files.append({
                     'filename': filename,
                     'trash_path': file_path,
@@ -376,7 +380,11 @@ def restore_trash_files(paths_list=None, restore_all=False):
         clean_base = re.sub(r'_\d{8}_\d{6}$', '', base)
         original_filename = f"{clean_base}{ext}"
 
-        original_dir = os.path.dirname(os.path.dirname(norm_trash))
+        trash_dir = os.path.dirname(norm_trash)
+        if os.path.normpath(trash_dir).endswith('.trash'):
+            original_dir = os.path.dirname(trash_dir)
+        else:
+            original_dir = os.path.dirname(os.path.dirname(norm_trash))
         restore_path = os.path.normpath(os.path.join(original_dir, original_filename))
 
         if os.path.exists(restore_path):

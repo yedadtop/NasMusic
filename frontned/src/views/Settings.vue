@@ -460,9 +460,14 @@ const fetchStatus = async () => {
     scanTask.value.deleted = data.deleted_count || 0
     scanTask.value.current_file = data.current_file
 
-    if (data.status === 'completed' || data.status === 'error') {
+    if (data.status === 'completed') {
       stopPolling()
       scanning.value = false
+    } else if (data.status === 'error') {
+      stopPolling()
+      scanning.value = false
+      const errMsg = data.error_message || '扫描发生未知错误'
+      showToast(errMsg, 'error')
     }
   } catch (error) {
     console.error('获取状态失败', error)
