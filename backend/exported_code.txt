@@ -578,6 +578,41 @@ library utils.py:
 import mutagen
 
 
+def has_embedded_cover(file_path, format_str):
+    """
+    检查物理音频文件是否已嵌入封面图片
+    返回: True 表示已有封面, False 表示没有封面
+    """
+    try:
+        audio = mutagen.File(file_path)
+        if audio is None:
+            return False
+
+        ext = format_str.lower()
+
+        if ext == 'mp3':
+            if getattr(audio, 'tags', None):
+                for tag in audio.tags:
+                    if tag.startswith('APIC'):
+                        return True
+            return False
+
+        elif ext in ['flac', 'ogg']:
+            if hasattr(audio, 'pictures') and audio.pictures:
+                return True
+            return False
+
+        elif ext == 'm4a':
+            if 'covr' in audio:
+                return True
+            return False
+
+        return False
+    except Exception as e:
+        print(f"检查封面失败 {file_path}: {e}")
+        return False
+
+
 def sync_cover_to_audio_file(file_path, format_str, image_bytes):
     """
     将图片二进制数据写入物理音频文件 (支持 MP3, FLAC, M4A)
@@ -1429,25 +1464,250 @@ from django.contrib import admin
 ------------------------------------------------------------
 scraper models.py:
 ------------------------------------------------------------
+# scraper/models.py
 from django.db import models
 
-# Create your models here.
+class ScraperAPI(models.Model):
+    name = models.CharField(max_length=100, verbose_name="接口名称")
+    url = models.URLField(max_length=500, verbose_name="接口地址", help_text="例如: https://itunes.apple.com/search")
+    is_active = models.BooleanField(default=True, verbose_name="是否启用")
+    priority = models.IntegerField(default=0, verbose_name="优先级", help_text="数字越小优先级越高")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        ordering = ['priority', '-id']
+        verbose_name = "刮削接口配置"
+        verbose_name_plural = "刮削接口配置"
+
+    def __str__(self):
+        return f"{self.name} ({'启用' if self.is_active else '停用'})"
 
 
 ------------------------------------------------------------
 scraper views.py:
 ------------------------------------------------------------
-from django.shortcuts import render
+# scraper/views.py
+import threading
+from rest_framework import viewsets, status
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
+from library.models import Track
+from .models import ScraperAPI
+from .serializers import ScraperAPISerializer
+from .utils import fetch_and_embed_cover
 
-# Create your views here.
 
+class ScraperAPIViewSet(viewsets.ModelViewSet):
+    """
+    刮削接口的增删改查视图
+    """
+    queryset = ScraperAPI.objects.all()
+    serializer_class = ScraperAPISerializer
+
+
+class TrackScrapeView(APIView):
+    """
+    手动触发单首歌曲的封面高清刮削
+    """
+
+    def post(self, request, track_id):
+        track = get_object_or_404(Track, id=track_id)
+
+        success, message = fetch_and_embed_cover(track)
+
+        if success:
+            return Response({"message": message}, status=status.HTTP_200_OK)
+        else:
+            return Response({"error": message}, status=status.HTTP_404_NOT_FOUND)
+
+
+class BatchScrapeCoverView(APIView):
+    """
+    批量刮削并嵌入所有缺少封面的歌曲封面
+    """
+
+    def post(self, request):
+        task_id = request.data.get('task_id')
+        if not task_id:
+            return Response({"message": "缺少 task_id 参数"}, status=status.HTTP_400_BAD_REQUEST)
+
+        def run_batch_scrape():
+            from scanner.models import ScanTask
+            import os
+
+            task = ScanTask.objects.filter(id=task_id).first()
+            if not task:
+                print(f"[批量刮削] 任务 {task_id} 不存在")
+                return
+
+            tracks = Track.objects.all()
+            tracks_to_scrape = []
+            tracks_file_not_exist = []
+
+            print(f"[批量刮削] 测试模式：跳过封面检查，直接刮削所有歌曲，共 {tracks.count()} 首")
+
+            for track in tracks:
+                if not os.path.exists(track.file_path):
+                    tracks_file_not_exist.append(track.file_path)
+                    print(f"[批量刮削] 文件不存在，跳过: {track.file_path}")
+                    continue
+                tracks_to_scrape.append(track)
+                print(f"[批量刮削] 待刮削: {track.title} - {track.file_path}")
+
+            print(f"[批量刮削] 检查完成: 待刮削 {len(tracks_to_scrape)} 首, 文件不存在 {len(tracks_file_not_exist)} 首")
+
+            total = len(tracks_to_scrape)
+            task.total_files = total
+            task.processed_files = 0
+            task.status = 'running'
+            task.save()
+
+            success_count = 0
+            failed_count = 0
+
+            for track in tracks_to_scrape:
+                task.current_file = track.file_path
+                task.save()
+
+                print(f"[批量刮削] 开始刮削: {track.title} - {track.file_path}")
+                success, message = fetch_and_embed_cover(track)
+                if success:
+                    success_count += 1
+                    print(f"[批量刮削] ✅ 成功: {track.title} - {message}")
+                else:
+                    failed_count += 1
+                    print(f"[批量刮削] ❌ 失败: {track.title} - {message}")
+
+                task.processed_files = success_count + failed_count
+                task.save()
+
+            task.status = 'completed'
+            task.current_file = ''
+            task.save()
+
+            print(f"[批量刮削] 任务完成: 成功 {success_count} 首, 失败 {failed_count} 首")
+
+        threading.Thread(target=run_batch_scrape, daemon=True).start()
+
+        return Response({
+            "message": "批量刮削任务已在后台启动",
+            "task_id": task_id
+        }, status=status.HTTP_202_ACCEPTED)
+
+
+------------------------------------------------------------
+scraper serializers.py:
+------------------------------------------------------------
+# scraper/serializers.py
+from rest_framework import serializers
+from .models import ScraperAPI
+
+class ScraperAPISerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ScraperAPI
+        fields = '__all__'
 
 
 ------------------------------------------------------------
 scraper admin.py:
 ------------------------------------------------------------
+# scraper/admin.py
 from django.contrib import admin
+from .models import ScraperAPI
 
-# Register your models here.
+@admin.register(ScraperAPI)
+class ScraperAPIAdmin(admin.ModelAdmin):
+    list_display = ('name', 'url', 'priority', 'is_active', 'updated_at')
+    list_filter = ('is_active',)
+    search_fields = ('name', 'url')
+    list_editable = ('priority', 'is_active')
 
+
+------------------------------------------------------------
+scraper utils.py:
+------------------------------------------------------------
+# scraper/utils.py
+import requests
+from django.core.files.base import ContentFile
+from library.utils import sync_cover_to_audio_file
+from .models import ScraperAPI
+
+
+def fetch_and_embed_cover(track):
+    """
+    通过数据库配置的接口抓取高清封面，并直接嵌入到物理文件及数据库中 (原图保存，无压缩)
+    返回: (布尔值是否成功, 提示信息)
+    """
+    apis = ScraperAPI.objects.filter(is_active=True).order_by('priority')
+    if not apis.exists():
+        print(f"[刮削] 歌曲 '{track.title}' 失败: 系统中没有已启用的刮削接口")
+        return False, "系统中没有已启用的刮削接口，请先配置。"
+
+    # 构造搜索词：歌名 + 主歌手
+    artist_name = track.artist.name if track.artist and hasattr(track.artist, 'name') and track.artist.name else ''
+    search_term = f"{track.title} {artist_name}".strip()
+    print(f"[刮削] 歌曲 '{track.title}' 搜索词: '{search_term}'")
+
+    for api in apis:
+        try:
+            params = {
+                'term': search_term,
+                'media': 'music',
+                'entity': 'song',
+                'limit': 1
+            }
+            print(f"[刮削] 调用接口 [{api.name}]: {api.url}")
+            # 设置较短的超时时间，防止阻塞
+            response = requests.get(api.url, params=params, timeout=5)
+            response.raise_for_status()
+            data = response.json()
+
+            result_count = data.get('resultCount', 0)
+            print(f"[刮削] 接口 [{api.name}] 返回结果数: {result_count}")
+
+            if result_count > 0:
+                item = data['results'][0]
+                artwork_url = item.get('artworkUrl100', '')
+                print(f"[刮削] 接口 [{api.name}] 原始封面URL: {artwork_url}")
+
+                if not artwork_url:
+                    print(f"[刮削] 接口 [{api.name}] 未获取到封面URL，继续下一个接口")
+                    continue
+
+                # 将 100x100 的缩略图 URL 替换为 1000x1000 的高清原图
+                high_res_url = artwork_url.replace('100x100bb.jpg', '1000x1000bb.jpg')
+                print(f"[刮削] 接口 [{api.name}] 高清封面URL: {high_res_url}")
+
+                # 下载高清图片原始字节流
+                img_resp = requests.get(high_res_url, timeout=10)
+                img_resp.raise_for_status()
+                image_bytes = img_resp.content
+                print(f"[刮削] 接口 [{api.name}] 图片下载成功，大小: {len(image_bytes)} bytes")
+
+                # 1. 物理文件删除旧图（如果存在）
+                if track.cover_thumbnail:
+                    print(f"[刮削] 删除旧封面: {track.cover_thumbnail.path}")
+                    track.cover_thumbnail.delete(save=False)
+
+                # 2. 将未经压缩的高清原图字节直接存入数据库的 cover_thumbnail 字段
+                filename = f"track_{track.id}_cover.jpg"
+                track.cover_thumbnail.save(filename, ContentFile(image_bytes), save=True)
+                print(f"[刮削] 保存封面到数据库: {track.cover_thumbnail.path}")
+
+                # 3. 将高清原图字节直接写入物理音频文件
+                print(f"[刮削] 嵌入封面到物理文件: {track.file_path}")
+                sync_cover_to_audio_file(track.file_path, track.format, image_bytes)
+
+                return True, f"成功通过接口 [{api.name}] 获取并原图嵌入高清封面！"
+
+        except requests.RequestException as e:
+            print(f"⚠️ 刮削接口 [{api.name}] 请求失败: {e}")
+            continue  # 失败则无缝切换到下一个优先级的接口
+        except Exception as e:
+            print(f"⚠️ 解析或写入封面时发生异常: {e}")
+            continue
+
+    print(f"[刮削] 歌曲 '{track.title}' 失败: 所有可用接口均未匹配到封面或请求失败")
+    return False, "所有可用接口均未匹配到封面或请求失败。"
