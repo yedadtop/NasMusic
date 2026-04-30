@@ -69,10 +69,13 @@ def cleanup_after_track_delete(sender, instance, **kwargs):
     skip_physical = getattr(instance, '_skip_physical_delete', False)
 
     if not skip_physical:
-        # 物理清理 - 移动到 .trash 文件夹而非删除
-        for p in [getattr(instance, '_file_to_del', None), getattr(instance, '_thumb_to_del', None)]:
-            if p:
-                move_to_trash(p)
+        file_path = getattr(instance, '_file_to_del', None)
+        if file_path:
+            move_to_trash(file_path)
+
+        thumb_path = getattr(instance, '_thumb_to_del', None)
+        if thumb_path and os.path.isfile(thumb_path):
+            os.remove(thumb_path)
 
     # 数据库清理 (在事务提交后执行，使用 filter 防止报错)
     def do_cleanup():

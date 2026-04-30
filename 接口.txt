@@ -328,6 +328,91 @@
 
 ---
 
+## 15. 获取回收站文件列表
+
+- **接口地址**：`GET /api/scanner/trash/`
+- **功能描述**：获取音乐库回收站（`.trash` 文件夹）中的所有文件列表。
+- **返回格式**（HTTP 200 OK）：
+  ```json
+  {
+    "count": 3,
+    "files": [
+      {
+        "filename": "赵雷 - 成都_20260430_143520.mp3",
+        "trash_path": "C:\\1D\\Mass\\my_music\\华语\\赵雷\\无法长大\\.trash\\赵雷 - 成都_20260430_143520.mp3",
+        "original_dir": "C:\\1D\\Mass\\my_music\\华语\\赵雷\\无法长大",
+        "file_size": 8563210,
+        "deleted_time": "2026-04-30 14:35:20"
+      }
+    ]
+  }
+  ```
+  - `filename`: 回收站中的文件名（含时间戳后缀）
+  - `trash_path`: 文件在回收站中的绝对路径
+  - `original_dir`: 文件原始所在目录
+  - `file_size`: 文件大小（字节）
+  - `deleted_time`: 通过文件名时间戳解析出的删除时间（解析失败时为 `null`）
+
+---
+
+## 16. 恢复回收站文件
+
+- **接口地址**：`POST /api/scanner/trash/`
+- **功能描述**：将文件从回收站恢复到原始目录。如果原目录已存在同名文件，则自动添加时间戳后缀避免覆盖。
+- **Body 参数**（JSON）：
+  ```json
+  {
+    "paths": ["C:\\1D\\Mass\\my_music\\华语\\赵雷\\无法长大\\.trash\\赵雷 - 成都_20260430_143520.mp3"]
+  }
+  ```
+  或
+  ```json
+  {
+    "restore_all": true
+  }
+  ```
+  - `paths` (array[string]): 要恢复的文件绝对路径列表
+  - `restore_all` (boolean): 是否恢复回收站中的所有文件
+- **返回格式**（HTTP 200 OK）：
+  ```json
+  {
+    "message": "成功恢复 2 个文件",
+    "restored": 2,
+    "failed": []
+  }
+  ```
+
+---
+
+## 17. 彻底删除回收站文件
+
+- **接口地址**：`DELETE /api/scanner/trash/`
+- **功能描述**：物理删除回收站中的文件（不可恢复）。删除后如果 `.trash` 文件夹为空，将自动删除该空文件夹。
+- **Body 参数**（JSON）：
+  ```json
+  {
+    "paths": ["C:\\1D\\Mass\\my_music\\华语\\赵雷\\无法长大\\.trash\\赵雷 - 成都_20260430_143520.mp3"]
+  }
+  ```
+  或
+  ```json
+  {
+    "delete_all": true
+  }
+  ```
+  - `paths` (array[string]): 要删除的文件绝对路径列表
+  - `delete_all` (boolean): 是否清空整个回收站
+- **返回格式**（HTTP 200 OK）：
+  ```json
+  {
+    "message": "成功删除 2 个文件",
+    "deleted": 2,
+    "failed": []
+  }
+  ```
+
+---
+
 ## 多歌手支持说明
 
 ### 数据模型

@@ -2,6 +2,7 @@
 import os
 import io
 import re
+import shutil
 import mutagen
 from pathlib import Path
 from PIL import Image
@@ -173,6 +174,16 @@ def scan_local_directory(directory_path, task_id=None):
             except Exception:
                 pass
 
+        # 清空历史垃圾封面
+        from django.conf import settings
+        trash_covers_dir = os.path.join(settings.MEDIA_ROOT, 'covers', 'tracks', '.trash')
+        if os.path.exists(trash_covers_dir):
+            try:
+                shutil.rmtree(trash_covers_dir)
+                print(f"  🗑️ 已清空历史垃圾封面目录: {trash_covers_dir}")
+            except Exception:
+                pass
+
         pre_delete.disconnect(store_ids_before_delete, sender=Track)
         post_delete.disconnect(cleanup_after_track_delete, sender=Track)
 
@@ -292,3 +303,138 @@ def scan_local_directory(directory_path, task_id=None):
         task.updated_count = updated_count
         task.current_file = '扫描完成'
         task.save()
+
+
+def _is_trash_path(path):
+    norm = os.path.normpath(path)
+    return '/.trash/' in norm or '\\.trash\\' in norm
+
+
+def get_trash_files():
+    config = SystemConfig.objects.filter(key='music_path').first()
+    if not config or not config.value:
+        return []
+
+    music_path = os.path.normpath(config.value)
+    trash_files = []
+
+    for root, dirs, files in os.walk(music_path):
+        norm_root = os.path.normpath(root)
+        if '/.trash/' in norm_root or '\\.trash\\' in norm_root:
+            for filename in files:
+                file_path = os.path.normpath(os.path.join(root, filename))
+                try:
+                    file_size = os.path.getsize(file_path)
+                except OSError:
+                    file_size = 0
+
+                deleted_time = None
+                base, ext = os.path.splitext(filename)
+                match = re.search(r'_(\d{8}_\d{6})$', base)
+                if match:
+                    try:
+                        deleted_time = datetime.strptime(match.group(1), '%Y%m%d_%H%M%')
+                    except ValueError:
+                        pass
+
+                original_dir = os.path.dirname(os.path.dirname(file_path))
+                trash_files.append({
+                    'filename': filename,
+                    'trash_path': file_path,
+                    'original_dir': original_dir,
+                    'file_size': file_size,
+                    'deleted_time': deleted_time
+                })
+
+    return trash_files
+
+
+def restore_trash_files(paths_list=None, restore_all=False):
+    if restore_all:
+        paths_list = [f['trash_path'] for f in get_trash_files()]
+
+    if not paths_list:
+        return {'restored': 0, 'failed': []}
+
+    restored_count = 0
+    failed = []
+
+    for trash_path in paths_list:
+        norm_trash = os.path.normpath(trash_path)
+        if not _is_trash_path(norm_trash):
+            failed.append({'path': trash_path, 'reason': 'Invalid trash path'})
+            continue
+
+        if not os.path.isfile(norm_trash):
+            failed.append({'path': trash_path, 'reason': 'File not found'})
+            continue
+
+        filename = os.path.basename(norm_trash)
+        base, ext = os.path.splitext(filename)
+        clean_base = re.sub(r'_\d{8}_\d{6}$', '', base)
+        original_filename = f"{clean_base}{ext}"
+
+        original_dir = os.path.dirname(os.path.dirname(norm_trash))
+        restore_path = os.path.normpath(os.path.join(original_dir, original_filename))
+
+        if os.path.exists(restore_path):
+            clean_base2, ext2 = os.path.splitext(original_filename)
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            restore_path = os.path.normpath(os.path.join(original_dir, f"{clean_base2}_{timestamp}{ext2}"))
+
+        try:
+            os.rename(norm_trash, restore_path)
+            restored_count += 1
+        except Exception as e:
+            failed.append({'path': trash_path, 'reason': str(e)})
+
+    # Clean up empty .trash folders
+    for trash_path in paths_list:
+        norm_trash = os.path.normpath(trash_path)
+        trash_dir = os.path.dirname(norm_trash)
+        try:
+            if os.path.isdir(trash_dir) and not os.listdir(trash_dir):
+                os.rmdir(trash_dir)
+        except Exception:
+            pass
+
+    return {'restored': restored_count, 'failed': failed}
+
+
+def delete_trash_files(paths_list=None, delete_all=False):
+    if delete_all:
+        paths_list = [f['trash_path'] for f in get_trash_files()]
+
+    if not paths_list:
+        return {'deleted': 0, 'failed': []}
+
+    deleted_count = 0
+    failed = []
+    trash_dirs_cleaned = set()
+
+    for trash_path in paths_list:
+        norm_trash = os.path.normpath(trash_path)
+        if not _is_trash_path(norm_trash):
+            failed.append({'path': trash_path, 'reason': 'Invalid trash path'})
+            continue
+
+        if not os.path.isfile(norm_trash):
+            failed.append({'path': trash_path, 'reason': 'File not found'})
+            continue
+
+        try:
+            os.remove(norm_trash)
+            deleted_count += 1
+            trash_dirs_cleaned.add(os.path.dirname(norm_trash))
+        except Exception as e:
+            failed.append({'path': trash_path, 'reason': str(e)})
+
+    # Clean up empty .trash folders
+    for trash_dir in trash_dirs_cleaned:
+        try:
+            if os.path.isdir(trash_dir) and not os.listdir(trash_dir):
+                os.rmdir(trash_dir)
+        except Exception:
+            pass
+
+    return {'deleted': deleted_count, 'failed': failed}

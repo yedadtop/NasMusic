@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import ScanTask, SystemConfig
 from .tasks import run_scan_async
+from .utils import get_trash_files, restore_trash_files, delete_trash_files
 
 
 def get_music_path():
@@ -108,4 +109,46 @@ class SystemConfigView(APIView):
             "key": config.key,
             "value": config.value,
             "description": config.description
+        }, status=status.HTTP_200_OK)
+
+
+class TrashManagerView(APIView):
+
+    def get(self, request):
+        trash_files = get_trash_files()
+        return Response({
+            "count": len(trash_files),
+            "files": trash_files
+        }, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        paths = request.data.get('paths', [])
+        restore_all = request.data.get('restore_all', False)
+
+        if not paths and not restore_all:
+            return Response({
+                "message": "请提供 paths 列表或设置 restore_all 为 true"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        result = restore_trash_files(paths_list=paths if paths else None, restore_all=restore_all)
+        return Response({
+            "message": f"成功恢复 {result['restored']} 个文件",
+            "restored": result['restored'],
+            "failed": result['failed']
+        }, status=status.HTTP_200_OK)
+
+    def delete(self, request):
+        paths = request.data.get('paths', [])
+        delete_all = request.data.get('delete_all', False)
+
+        if not paths and not delete_all:
+            return Response({
+                "message": "请提供 paths 列表或设置 delete_all 为 true"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        result = delete_trash_files(paths_list=paths if paths else None, delete_all=delete_all)
+        return Response({
+            "message": f"成功删除 {result['deleted']} 个文件",
+            "deleted": result['deleted'],
+            "failed": result['failed']
         }, status=status.HTTP_200_OK)
