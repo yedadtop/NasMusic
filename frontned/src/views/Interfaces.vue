@@ -236,10 +236,10 @@ const fetchInterfaces = async (page = 1) => {
     })
 
     const data = res.data
-    interfaces.value = data.results || []
-    totalCount.value = data.count || 0
-    next.value = data.next
-    previous = data.previous
+    interfaces.value = Array.isArray(data) ? data : (data.results || [])
+    totalCount.value = Array.isArray(data) ? data.length : (data.count || 0)
+    next.value = Array.isArray(data) ? null : data.next
+    previous.value = Array.isArray(data) ? null : data.previous
     currentPage.value = page
   } catch (error) {
     console.error('获取接口列表失败:', error)
