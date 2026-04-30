@@ -320,11 +320,14 @@ const seekToLine = (time) => {
   }
 }
 
-const handleTrackUpdated = () => {
-  if (player.currentTrack && player.playlist.length > 0) {
-    const index = player.playlist.findIndex(t => t.id === player.currentTrack.id)
+const handleTrackUpdated = (updatedTrack) => {
+  if (updatedTrack) {
+    if (player.currentTrack && player.currentTrack.id === updatedTrack.id) {
+      player.currentTrack = { ...player.currentTrack, ...updatedTrack }
+    }
+    const index = player.playlist.findIndex(t => t.id === updatedTrack.id)
     if (index !== -1) {
-      player.playlist[index] = { ...player.currentTrack }
+      player.playlist[index] = { ...player.playlist[index], ...updatedTrack }
     }
   }
   emit('trackUpdated')

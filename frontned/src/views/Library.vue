@@ -276,6 +276,9 @@ const handleEditSuccess = (updatedTrack) => {
     if (index !== -1) {
       tracks.value[index] = { ...tracks.value[index], ...updatedTrack }
     }
+    if (player.currentTrack && player.currentTrack.id === updatedTrack.id) {
+      player.currentTrack = { ...player.currentTrack, ...updatedTrack }
+    }
   }
 }
 
