@@ -217,12 +217,21 @@ const handleSave = async () => {
       formData.append('cover_upload', coverFile.value)
     }
 
-    await request.patch(`/tracks/${props.track.id}/`, formData, {
+    const res = await request.patch(`/tracks/${props.track.id}/`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
     })
 
+    const updatedTrack = {
+      ...props.track,
+      title: form.value.title,
+      artist_name: form.value.artist_name,
+      album_title: form.value.album_title,
+      lyrics: form.value.lyrics,
+      track_cover: coverPreview.value || props.track.track_cover
+    }
+    emit('success', updatedTrack)
     handleClose()
   } catch (error) {
     console.error('保存失败:', error)
