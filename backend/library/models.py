@@ -72,7 +72,6 @@ class Album(models.Model):
 class Track(models.Model):
     title = models.CharField(max_length=255, verbose_name="歌曲名")
     artist = models.ForeignKey(Artist, on_delete=models.CASCADE, related_name='tracks', verbose_name="主歌手")
-    # 支持多人演唱的多对多关系
     artists = models.ManyToManyField(Artist, related_name='collaborated_tracks', blank=True, verbose_name="所有歌手")
     album = models.ForeignKey(Album, on_delete=models.CASCADE, related_name='tracks', verbose_name="专辑")
     file_path = models.CharField(max_length=1024, unique=True, verbose_name="文件绝对路径")
@@ -83,10 +82,30 @@ class Track(models.Model):
     added_at = models.DateTimeField(auto_now_add=True, verbose_name="添加时间")
 
     def save(self, *args, **kwargs):
-        # 确保外键对象已持久化，防止 M2M 写入失败
         if self.artist and not self.artist.pk: self.artist.save()
         if self.album and not self.album.pk: self.album.save()
+
+        if self.pk:
+            try:
+                old_track = Track.objects.get(pk=self.pk)
+                old_cover = old_track.cover_thumbnail
+                new_cover = self.cover_thumbnail
+
+                old_cover_cleared = old_cover and not new_cover
+                if old_cover_cleared:
+                    old_cover_path = old_cover.path
+                    self._old_cover_path_to_delete = old_cover_path
+            except Track.DoesNotExist:
+                pass
+
         super().save(*args, **kwargs)
+
+        if getattr(self, '_old_cover_path_to_delete', None):
+            old_path = self._old_cover_path_to_delete
+            if old_path and os.path.isfile(old_path):
+                os.remove(old_path)
+                print(f"✅ 已删除孤立的封面文件: {old_path}")
+            del self._old_cover_path_to_delete
 
 # --- 安全的清理信号逻辑 ---
 @receiver(pre_delete, sender=Track)
