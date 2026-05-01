@@ -1,5 +1,31 @@
 <template>
   <div class="flex-1 overflow-y-auto px-4 sm:px-6 md:px-8 pb-4 custom-scrollbar">
+    <div class="sticky top-0 z-10 bg-white border-b border-gray-200">
+      <div class="flex items-center py-3 px-2 text-xs text-gray-500 font-medium uppercase tracking-wider">
+        <div class="w-10 h-5 sm:w-12 sm:h-5 mr-3 sm:mr-4 shrink-0 text-center">#</div>
+        <div class="flex-1 min-w-0 flex items-center cursor-pointer hover:text-gray-700 transition" @click="toggleSort('title')">
+          <span class="truncate">标题</span>
+          <span v-if="sortBy === 'title'" class="ml-1 text-blue-500">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
+        </div>
+        <div class="hidden sm:flex sm:w-24 md:w-1/4 items-center cursor-pointer hover:text-gray-700 transition truncate mx-2" @click="toggleSort('album_title')">
+          <span class="truncate">专辑</span>
+          <span v-if="sortBy === 'album_title'" class="ml-1 text-blue-500 shrink-0">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
+        </div>
+        <div class="hidden md:flex md:w-1/6 items-center cursor-pointer hover:text-gray-700 transition" @click="toggleSort('added_at')">
+          <span>添加日期</span>
+          <span v-if="sortBy === 'added_at'" class="ml-1 text-blue-500">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
+        </div>
+        <div class="hidden lg:block w-20 text-center text-xs cursor-pointer hover:text-gray-700 transition" @click="toggleSort('format')">
+          <span>格式</span>
+          <span v-if="sortBy === 'format'" class="ml-1 text-blue-500">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
+        </div>
+        <div class="w-16 sm:w-24 flex items-center justify-end cursor-pointer hover:text-gray-700 transition pr-2 sm:pr-4" @click="toggleSort('duration')">
+          <span class="text-right">时长</span>
+          <span v-if="sortBy === 'duration'" class="ml-1 text-blue-500">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
+        </div>
+        <div class="w-8 shrink-0"></div>
+      </div>
+    </div>
     <div 
       v-for="(track, index) in tracks" 
       :key="track.id" 
@@ -19,6 +45,7 @@
       </div>
       <div class="hidden sm:block w-24 md:w-1/4 text-sm text-gray-500 truncate mx-2">{{ track.album_title || '未知专辑' }}</div>
       <div class="hidden md:block w-1/6 text-sm text-gray-500 truncate">{{ formatDate(track.added_at) }}</div>
+      <div class="hidden lg:block w-20 text-sm text-gray-500 text-center">{{ track.format || '-' }}</div>
       <div class="w-16 sm:w-24 text-sm text-gray-500 text-right pr-2 sm:pr-4">{{ formatDuration(track.duration) }}</div>
       <div class="relative">
         <button 
@@ -93,6 +120,8 @@ const loading = ref(false)
 const page = ref(1)
 const size = ref(50)
 const highlightedTrackId = ref(null)
+const sortBy = ref('added_at')
+const sortOrder = ref('desc')
 
 watch(() => player.currentTrack?.id, (newId) => {
   highlightedTrackId.value = newId
@@ -132,7 +161,8 @@ const fetchTracks = async () => {
   try {
     const params = {
       page: page.value,
-      size: size.value
+      size: size.value,
+      ordering: `${sortOrder.value === 'desc' ? '-' : ''}${sortBy.value}`
     }
     if (searchKeyword.value) {
       params.search = searchKeyword.value
@@ -201,6 +231,17 @@ const formatDuration = (seconds) => {
 const formatDate = (dateStr) => {
   if (!dateStr) return ''
   return dateStr.split('T')[0]
+}
+
+const toggleSort = (column) => {
+  if (sortBy.value === column) {
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortBy.value = column
+    sortOrder.value = 'asc'
+  }
+  page.value = 1
+  fetchTracks()
 }
 
 const setupObserver = () => {

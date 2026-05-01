@@ -117,13 +117,21 @@
       </div>
 
       <div 
-        class="absolute top-0 left-0 w-full h-[2px] bg-transparent cursor-pointer hover:h-1.5 transition-all duration-200 group/progress" 
+        class="absolute top-0 left-0 w-full h-[2px] bg-transparent cursor-pointer hover:h-1.5 transition-all duration-200 group/progress"
         @click="handleSeek"
         ref="progressBar"
+        @mousedown="startDrag"
+        @mousemove="onDrag"
+        @mouseup="endDrag"
+        @mouseleave="endDrag"
       >
-        <div class="absolute top-0 left-0 h-full bg-gray-200/50 w-full"></div>
-        <div class="h-full bg-[#0071e3] relative transition-all" :style="{ width: player.progress + '%' }">
-          <div class="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-[#0071e3] rounded-full opacity-0 group-hover/progress:opacity-100 shadow-sm transition-opacity"></div>
+        <div class="absolute top-0 left-0 h-full bg-gray-200/50 w-full rounded-full"></div>
+        <div class="h-full bg-[#0071e3] relative transition-all rounded-full" :style="{ width: player.progress + '%' }">
+          <div 
+            class="absolute w-3 h-3 bg-[#0071e3] rounded-full shadow-md transition-all duration-150"
+            :class="isDragging ? 'opacity-100 scale-125' : 'opacity-0 group-hover/progress:opacity-100 group-hover/progress:scale-110'"
+            :style="{ right: '-6px', top: '50%', transform: 'translateY(-50%)' }"
+          ></div>
         </div>
       </div>
     </footer>
@@ -158,6 +166,8 @@ const showSearch = ref(false)
 const showVolumeTooltip = ref(false)
 const searchInput = ref(null)
 const libraryRef = ref(null)
+const progressBar = ref(null)
+const isDragging = ref(false)
 const route = useRoute()
 const player = usePlayerStore()
 const audioRef = ref(null)
@@ -356,6 +366,23 @@ const handleSeek = (e) => {
   const rect = e.currentTarget.getBoundingClientRect()
   const percent = (e.clientX - rect.left) / rect.width
   audioRef.value.currentTime = percent * player.duration
+}
+
+const startDrag = (e) => {
+  if (!audioRef.value || !player.duration) return
+  isDragging.value = true
+  handleSeek(e)
+}
+
+const onDrag = (e) => {
+  if (!isDragging.value || !audioRef.value || !player.duration) return
+  const rect = progressBar.value.getBoundingClientRect()
+  const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+  audioRef.value.currentTime = percent * player.duration
+}
+
+const endDrag = () => {
+  isDragging.value = false
 }
 
 const prevTrack = () => {
