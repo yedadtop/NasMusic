@@ -15,7 +15,7 @@ from .models import Artist, Album, Track
 from .serializers import TrackListSerializer, TrackDetailSerializer, ArtistSerializer, AlbumSerializer
 from .utils import sync_cover_to_audio_file
 from scanner.models import SystemConfig
-from scanner.utils import extract_and_save_thumbnail, parse_artists
+from scanner.utils import extract_and_save_thumbnail, parse_artists, _get_tag_value
 import mutagen
 from pathlib import Path
 
@@ -294,9 +294,9 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
             if audio_easy is None:
                 audio_easy = mutagen.File(dest_path)
 
-            title = getattr(audio_easy, 'title', None) or Path(filename).stem
-            raw_artist_string = getattr(audio_easy, 'artist', None) or 'Unknown Artist'
-            album_title = getattr(audio_easy, 'album', None) or 'Unknown Album'
+            title = _get_tag_value(audio_easy, 'title', default=Path(filename).stem)
+            raw_artist_string = _get_tag_value(audio_easy, 'artist', default='Unknown Artist')
+            album_title = _get_tag_value(audio_easy, 'album', default='Unknown Album')
             duration = getattr(audio_easy.info, 'length', 0.0) if hasattr(audio_easy, 'info') else 0.0
             format_str = Path(dest_path).suffix.lower().lstrip('.')
 
