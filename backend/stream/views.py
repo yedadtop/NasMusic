@@ -63,13 +63,11 @@ def stream_audio(request, track_id):
         if last_byte >= file_size:
             last_byte = file_size - 1
 
-        # 起始字节超出文件大小，返回 416
-        if first_byte >= file_size:
+        if first_byte > last_byte or first_byte >= file_size:
             response = StreamingHttpResponse("Requested Range Not Satisfiable", status=416)
             response['Content-Range'] = f'bytes */{file_size}'
             return response
 
-        # 计算本次需要返回的字节长度
         length = last_byte - first_byte + 1
 
         # 使用 StreamingHttpResponse 和生成器返回数据
