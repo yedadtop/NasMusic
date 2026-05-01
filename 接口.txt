@@ -242,25 +242,54 @@
 ## 11. 查询扫描任务进度
 
 - **接口地址**：`GET /api/scanner/status/`
-- **功能描述**：前端用于定时拉取扫描进度的接口，用于渲染实时进度条。
+- **功能描述**：前端用于定时拉取扫描进度的接口，用于渲染实时进度条。**注意**：此接口不仅用于扫描任务，也可用于查询刮削任务的进度和结果。
 - **Query 参数**（可选）：
-  - `task_id` (int): 任务 ID。如果不传，默认返回最新的一条扫描任务。
+  - `task_id` (int): 任务 ID。如果不传，默认返回最新的一条任务。
 - **返回格式**：
   ```json
   {
     "task_id": 12,
-    "status": "running",
-    "progress": 45,
+    "status": "completed",
+    "progress": 100,
     "total_files": 200,
-    "processed_files": 90,
-    "current_file": "C:\\1D\\Mass\\my_music\\赵雷 - 我记得.mp3",
+    "processed_files": 200,
+    "current_file": "",
     "added_count": 10,
     "updated_count": 80,
     "deleted_count": 5,
-    "error_message": ""
+    "error_message": "",
+    "result_summary": null
   }
   ```
   - `status` 可能值：`pending`、`running`、`completed`、`error`
+  - `result_summary` (string): **刮削任务特有字段**，任务完成后的详细结果汇总（JSON 字符串），非刮削任务时为 `null`。格式见下方详细说明。
+  - `progress` (int): 计算得出的进度百分比（仅供参考）
+- **result_summary 字段详解**（刮削任务完成时包含的 JSON 数据）：
+  ```json
+  {
+    "mode": "incremental",
+    "total": 10,
+    "success_count": 8,
+    "failed_count": 2,
+    "skipped_cover": 5,
+    "skipped_file_not_exist": 1,
+    "success_list": [
+      {"track_id": 1, "title": "成都", "message": "成功通过接口 [iTunes API] 获取并原图嵌入高清封面！"}
+    ],
+    "failed_list": [
+      {"track_id": 3, "title": "xxx", "message": "所有可用接口均未匹配到封面或请求失败。"}
+    ]
+  }
+  ```
+  - `mode`: 刮削模式（`full` 或 `incremental`）
+  - `total`: 待刮削总数
+  - `success_count`: 成功数量
+  - `failed_count`: 失败数量
+  - `skipped_cover` / `skipped_lyrics`: 因已有封面/歌词而跳过的数量
+  - `skipped_file_not_exist`: 因文件不存在而跳过的数量
+  - `success_list`: 成功歌曲的详细信息列表（**先成功**）
+  - `failed_list`: 失败歌曲的详细信息列表（**后失败**）
+- **注意**：前端可通过轮询此接口，在 `status` 变为 `completed` 后解析 `result_summary` 字段获取刮削任务的详细结果。
 
 ---
 
@@ -541,23 +570,51 @@
 
 - **接口地址**：`POST /api/scraper/track/{track_id}/scrape/`
 - **功能描述**：手动触发单首歌曲的封面高清刮削。后端会按优先级尝试所有已启用的刮削接口，从搜索结果中提取 1000x1000 高清封面图，同时写入数据库和物理音频文件。
-- **注意**：此接口会覆盖原有的封面图片。
+- **注意**：如果歌曲已有封面（数据库 `cover_thumbnail` 字段不为空），则跳过刮削，不会覆盖原有封面。
+- **查询封面状态**：`GET /api/scraper/track/{track_id}/scrape/`
 - **返回格式**（HTTP 200 OK）：
   ```json
   {
-    "message": "成功通过接口 [iTunes API] 获取并原图嵌入高清封面！"
+    "track_id": 1,
+    "track_title": "成都",
+    "success": true,
+    "message": "成功通过接口 [iTunes API] 获取并原图嵌入高清封面！",
+    "had_cover_before": false,
+    "has_cover_after": true
+  }
+  ```
+- **返回格式**（HTTP 200 OK，歌曲已有封面时）：
+  ```json
+  {
+    "track_id": 1,
+    "track_title": "成都",
+    "success": false,
+    "message": "歌曲已有封面，已跳过刮削。",
+    "had_cover_before": true,
+    "has_cover_after": true
+  }
+  ```
+- **查询封面状态返回**（HTTP 200 OK）：
+  ```json
+  {
+    "track_id": 1,
+    "track_title": "成都",
+    "has_cover": true,
+    "cover_url": "/media/covers/tracks/track_1_cover.jpg"
   }
   ```
 - **错误返回**（HTTP 404 Not Found）：
   ```json
   {
-    "error": "系统中没有已启用的刮削接口，请先配置。"
+    "success": false,
+    "message": "系统中没有已启用的刮削接口，请先配置。"
   }
   ```
   或
   ```json
   {
-    "error": "所有可用接口均未匹配到封面或请求失败。"
+    "success": false,
+    "message": "所有可用接口均未匹配到封面或请求失败。"
   }
   ```
 
@@ -566,22 +623,27 @@
 ## 24. 批量刮削封面并嵌入（异步）
 
 - **接口地址**：`POST /api/scraper/batch/scrape/`
-- **功能描述**：批量补全所有物理文件中缺少封面的歌曲，并嵌入高清封面。后端会启动后台线程处理，遍历所有歌曲，通过检查物理文件是否含有嵌入封面来判断是否需要刮削（而非仅检查数据库字段）。刮削完成后会写入数据库和物理音频文件。
+- **功能描述**：批量刮削封面，支持全量和增量模式。后端会启动后台线程处理，遍历歌曲列表，按模式筛选需要刮削的歌曲，执行刮削后写入数据库和物理音频文件。
 - **前置条件**：
   1. 音乐路径必须已通过系统配置接口设置（`/api/scanner/config/`）
   2. 必须至少配置并启用一个刮削接口（`/api/scraper/apis/`）
 - **Body 参数**（JSON）：
   ```json
   {
-    "task_id": 12
+    "task_id": 12,
+    "mode": "incremental"
   }
   ```
   - `task_id` (int): **必填**。扫描任务 ID，需先调用 `POST /api/scanner/run/` 获取。
+  - `mode` (string): **可选**，默认为 `incremental`。刮削模式：
+    - `incremental`：增量模式，只刮削 `cover_thumbnail` 字段为空的歌曲
+    - `full`：全量模式，刮削所有歌曲（但会跳过已有封面的歌曲）
 - **返回格式**（HTTP 202 Accepted）：
   ```json
   {
-    "message": "批量刮削任务已在后台启动",
-    "task_id": 12
+    "message": "批量刮削任务已在后台启动 (模式: 增量)",
+    "task_id": 12,
+    "mode": "incremental"
   }
   ```
 - **错误返回**（HTTP 400 Bad Request）：
@@ -590,12 +652,40 @@
     "message": "缺少 task_id 参数"
   }
   ```
+  或
+  ```json
+  {
+    "message": "mode 参数必须是 'full' 或 'incremental'"
+  }
+  ```
 - **进度查询**：任务启动后，可通过 `GET /api/scanner/status/?task_id={task_id}` 查询进度
+- **结果查询**：任务完成后，可通过 `GET /api/scanner/status/?task_id={task_id}` 查询 `result_summary` 字段获取详细结果
 - **判断逻辑**：
-  1. 遍历数据库中所有歌曲
-  2. 检查物理文件是否存在
-  3. 使用 mutagen 检查物理音频文件是否已嵌入封面（MP3 检查 APIC 标签，FLAC/OGG 检查 pictures，M4A 检查 covr 字段）
-  4. 仅对物理文件没有封面的歌曲执行刮削
+  1. 根据 `mode` 筛选歌曲列表
+     - 增量模式：筛选 `cover_thumbnail` 为空或 `null` 的歌曲
+     - 全量模式：所有歌曲
+  2. 遍历筛选后的歌曲列表
+  3. 检查歌曲是否已有封面（数据库层面），如有则跳过
+  4. 检查物理文件是否存在，如不存在则跳过
+  5. 执行刮削：调用刮削接口获取封面
+  6. 写入数据库和物理音频文件
+- **结果汇总**：任务完成后，`result_summary` 字段包含：
+  ```json
+  {
+    "mode": "incremental",
+    "total": 10,
+    "success_count": 8,
+    "failed_count": 2,
+    "skipped_cover": 5,
+    "skipped_file_not_exist": 1,
+    "success_list": [
+      {"track_id": 1, "title": "成都", "message": "成功通过接口 [iTunes API] 获取并原图嵌入高清封面！"}
+    ],
+    "failed_list": [
+      {"track_id": 3, "title": "xxx", "message": "所有可用接口均未匹配到封面或请求失败。"}
+    ]
+  }
+  ```
 - **前端入口**：设置页面 → 批量操作 → 「补全缺失封面」按钮
 
 ---
@@ -604,29 +694,60 @@
 
 - **接口地址**：`POST /api/scraper/track/{track_id}/scrape_lyrics/`
 - **功能描述**：手动触发单首歌曲的歌词刮削。后端通过 LRCLIB 接口搜索并获取歌词（优先获取时间轴滚动歌词），自动进行简繁转换，同时写入数据库和物理音频文件。
-- **注意**：此接口会覆盖原有的歌词内容。
+- **注意**：如果歌曲已有歌词（数据库 `lyrics` 字段不为空），则跳过刮削，不会覆盖原有歌词。
+- **查询歌词状态**：`GET /api/scraper/track/{track_id}/scrape_lyrics/`
 - **返回格式**（HTTP 200 OK）：
   ```json
   {
-    "message": "成功刮削并嵌入歌词！"
+    "track_id": 1,
+    "track_title": "成都",
+    "success": true,
+    "message": "成功刮削并嵌入歌词！",
+    "had_lyrics_before": false,
+    "has_lyrics_after": true,
+    "lyrics_length": 1520
+  }
+  ```
+- **返回格式**（HTTP 200 OK，歌曲已有歌词时）：
+  ```json
+  {
+    "track_id": 1,
+    "track_title": "成都",
+    "success": false,
+    "message": "歌曲已有歌词，已跳过刮削。",
+    "had_lyrics_before": true,
+    "has_lyrics_after": true,
+    "lyrics_length": 1520
+  }
+  ```
+- **查询歌词状态返回**（HTTP 200 OK）：
+  ```json
+  {
+    "track_id": 1,
+    "track_title": "成都",
+    "has_lyrics": true,
+    "lyrics_length": 1520
   }
   ```
 - **错误返回**（HTTP 404 Not Found）：
   ```json
   {
-    "error": "歌曲缺少标题，无法进行搜索。"
+    "success": false,
+    "message": "歌曲缺少标题，无法进行搜索。"
   }
   ```
   或
   ```json
   {
-    "error": "未找到匹配的歌词。"
+    "success": false,
+    "message": "未找到匹配的歌词。"
   }
   ```
   或
   ```json
   {
-    "error": "该歌曲在曲库中暂无歌词内容。"
+    "success": false,
+    "message": "该歌曲在曲库中暂无歌词内容。"
   }
   ```
 - **歌词来源**：LRCLIB（https://lrclib.net），自动优先获取 `syncedLyrics`（时间轴歌词），若不存在则降级获取 `plainLyrics`（普通歌词）
@@ -637,21 +758,26 @@
 ## 26. 批量刮削歌词并嵌入（异步）
 
 - **接口地址**：`POST /api/scraper/batch/scrape_lyrics/`
-- **功能描述**：批量补全所有缺少歌词的歌曲。后端会启动后台线程处理，遍历数据库中 `lyrics` 字段为空的歌曲，通过 LRCLIB 接口搜索并获取歌词，同时写入数据库和物理音频文件。
+- **功能描述**：批量刮削歌词，支持全量和增量模式。后端会启动后台线程处理，遍历歌曲列表，按模式筛选需要刮削的歌曲，通过 LRCLIB 接口搜索并获取歌词，同时写入数据库和物理音频文件。
 - **前置条件**：
   1. 音乐路径必须已通过系统配置接口设置（`/api/scanner/config/`）
 - **Body 参数**（JSON）：
   ```json
   {
-    "task_id": 12
+    "task_id": 12,
+    "mode": "incremental"
   }
   ```
   - `task_id` (int): **必填**。扫描任务 ID，需先调用 `POST /api/scanner/run/` 获取。
+  - `mode` (string): **可选**，默认为 `incremental`。刮削模式：
+    - `incremental`：增量模式，只刮削 `lyrics` 字段为空的歌曲
+    - `full`：全量模式，刮削所有歌曲（但会跳过已有歌词的歌曲）
 - **返回格式**（HTTP 202 Accepted）：
   ```json
   {
-    "message": "批量歌词刮削任务已在后台启动",
-    "task_id": 12
+    "message": "批量歌词刮削任务已在后台启动 (模式: 增量)",
+    "task_id": 12,
+    "mode": "incremental"
   }
   ```
 - **错误返回**（HTTP 400 Bad Request）：
@@ -660,13 +786,41 @@
     "message": "缺少 task_id 参数"
   }
   ```
+  或
+  ```json
+  {
+    "message": "mode 参数必须是 'full' 或 'incremental'"
+  }
+  ```
 - **进度查询**：任务启动后，可通过 `GET /api/scanner/status/?task_id={task_id}` 查询进度
+- **结果查询**：任务完成后，可通过 `GET /api/scanner/status/?task_id={task_id}` 查询 `result_summary` 字段获取详细结果
 - **判断逻辑**：
-  1. 筛选数据库中 `lyrics` 为空或 `null` 的歌曲
-  2. 检查物理文件是否存在
-  3. 通过 LRCLIB 接口搜索歌词
-  4. 自动将繁体歌词转换为简体
-  5. 写入数据库和物理音频文件
+  1. 根据 `mode` 筛选歌曲列表
+     - 增量模式：筛选 `lyrics` 为空或 `null` 的歌曲
+     - 全量模式：所有歌曲
+  2. 遍历筛选后的歌曲列表
+  3. 检查歌曲是否已有歌词（数据库层面），如有则跳过
+  4. 检查物理文件是否存在，如不存在则跳过
+  5. 通过 LRCLIB 接口搜索歌词
+  6. 自动将繁体歌词转换为简体
+  7. 写入数据库和物理音频文件
+- **结果汇总**：任务完成后，`result_summary` 字段包含：
+  ```json
+  {
+    "mode": "incremental",
+    "total": 10,
+    "success_count": 8,
+    "failed_count": 2,
+    "skipped_lyrics": 5,
+    "skipped_file_not_exist": 1,
+    "success_list": [
+      {"track_id": 1, "title": "成都", "message": "成功刮削并嵌入歌词！"}
+    ],
+    "failed_list": [
+      {"track_id": 3, "title": "xxx", "message": "未找到匹配的歌词。"}
+    ]
+  }
+  ```
 - **歌词嵌入格式**：
   - MP3：写入 USLT 标签
   - FLAC/OGG：写入 `lyrics` 标签
