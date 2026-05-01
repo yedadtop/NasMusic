@@ -85,88 +85,92 @@ class BatchScrapeCoverView(APIView):
                 print(f"[批量刮削] 任务 {task_id} 不存在")
                 return
 
-            print(f"[批量刮削] =========================================")
-            print(f"[批量刮削] 开始批量刮削任务，模式: {'全量' if mode == 'full' else '增量'}")
-            print(f"[批量刮削] =========================================")
+            try:
+                print(f"[批量刮削] =========================================")
+                print(f"[批量刮削] 开始批量刮削任务，模式: {'全量' if mode == 'full' else '增量'}")
+                print(f"[批量刮削] =========================================")
 
-            if mode == 'incremental':
-                tracks = Track.objects.filter(
-                    models.Q(cover_thumbnail__isnull=True) | models.Q(cover_thumbnail__exact='')
-                )
-                print(f"[批量刮削] 增量模式：只刮削缺少封面的歌曲")
-            else:
-                tracks = Track.objects.all()
-                print(f"[批量刮削] 全量模式：刮削所有歌曲")
-
-            tracks_to_scrape = []
-            tracks_file_not_exist = []
-            tracks_already_has_cover = []
-
-            for track in tracks:
-                has_cover = bool(track.cover_thumbnail and str(track.cover_thumbnail).strip())
-                if has_cover:
-                    tracks_already_has_cover.append(track)
-                    print(f"[批量刮削] 已有封面，跳过: {track.title} - {track.file_path}")
-                    continue
-
-                if not os.path.exists(track.file_path):
-                    tracks_file_not_exist.append(track.file_path)
-                    print(f"[批量刮削] 文件不存在，跳过: {track.file_path}")
-                    continue
-                tracks_to_scrape.append(track)
-                print(f"[批量刮削] 待刮削: {track.title} - {track.file_path}")
-
-            print(f"[批量刮削] 检查完成: 待刮削 {len(tracks_to_scrape)} 首, 已有封面跳过 {len(tracks_already_has_cover)} 首, 文件不存在 {len(tracks_file_not_exist)} 首")
-
-            total = len(tracks_to_scrape)
-            task.total_files = len(tracks_to_scrape)
-            task.processed_files = 0
-            task.status = 'running'
-            task.save()
-
-            success_list = []
-            failed_list = []
-
-            for track in tracks_to_scrape:
-                task.current_file = track.file_path
-                task.save()
-
-                print(f"[批量刮削] 开始刮削: {track.title} - {track.file_path}")
-                success, message = fetch_and_embed_cover(track)
-                if success:
-                    success_list.append({
-                        "track_id": track.id,
-                        "title": track.title,
-                        "message": message
-                    })
-                    print(f"[批量刮削] ✅ 成功: {track.title} - {message}")
+                if mode == 'incremental':
+                    tracks = Track.objects.filter(
+                        models.Q(cover_thumbnail__isnull=True) | models.Q(cover_thumbnail__exact='')
+                    )
+                    print(f"[批量刮削] 增量模式：只刮削缺少封面的歌曲")
                 else:
-                    failed_list.append({
-                        "track_id": track.id,
-                        "title": track.title,
-                        "message": message
-                    })
-                    print(f"[批量刮削] ❌ 失败: {track.title} - {message}")
+                    tracks = Track.objects.all()
+                    print(f"[批量刮削] 全量模式：刮削所有歌曲")
 
-                task.processed_files = len(success_list) + len(failed_list)
+                tracks_to_scrape = []
+                tracks_file_not_exist = []
+                tracks_already_has_cover = []
+
+                for track in tracks:
+                    has_cover = bool(track.cover_thumbnail and str(track.cover_thumbnail).strip())
+                    if has_cover:
+                        tracks_already_has_cover.append(track)
+                        print(f"[批量刮削] 已有封面，跳过: {track.title} - {track.file_path}")
+                        continue
+
+                    if not os.path.exists(track.file_path):
+                        tracks_file_not_exist.append(track.file_path)
+                        print(f"[批量刮削] 文件不存在，跳过: {track.file_path}")
+                        continue
+                    tracks_to_scrape.append(track)
+                    print(f"[批量刮削] 待刮削: {track.title} - {track.file_path}")
+
+                print(f"[批量刮削] 检查完成: 待刮削 {len(tracks_to_scrape)} 首, 已有封面跳过 {len(tracks_already_has_cover)} 首, 文件不存在 {len(tracks_file_not_exist)} 首")
+
+                total = len(tracks_to_scrape)
+                task.total_files = len(tracks_to_scrape)
+                task.processed_files = 0
+                task.status = 'running'
                 task.save()
 
-            task.status = 'completed'
-            task.current_file = ''
-            task.result_summary = json.dumps({
-                "mode": mode,
-                "total": len(tracks_to_scrape),
-                "success_count": len(success_list),
-                "failed_count": len(failed_list),
-                "skipped_cover": len(tracks_already_has_cover),
-                "skipped_file_not_exist": len(tracks_file_not_exist),
-                "success_list": success_list,
-                "failed_list": failed_list
-            }, ensure_ascii=False)
-            task.save()
+                success_list = []
+                failed_list = []
 
-            print(f"[批量刮削] 任务完成: 成功 {len(success_list)} 首, 失败 {len(failed_list)} 首")
-            print(f"[批量刮削] 跳过: 已有封面 {len(tracks_already_has_cover)} 首, 文件不存在 {len(tracks_file_not_exist)} 首")
+                for track in tracks_to_scrape:
+                    task.current_file = track.file_path
+                    task.save()
+
+                    print(f"[批量刮削] 开始刮削: {track.title} - {track.file_path}")
+                    success, message = fetch_and_embed_cover(track)
+                    if success:
+                        success_list.append({
+                            "track_id": track.id,
+                            "title": track.title,
+                            "message": message
+                        })
+                        print(f"[批量刮削] ✅ 成功: {track.title} - {message}")
+                    else:
+                        failed_list.append({
+                            "track_id": track.id,
+                            "title": track.title,
+                            "message": message
+                        })
+                        print(f"[批量刮削] ❌ 失败: {track.title} - {message}")
+
+                    task.processed_files = len(success_list) + len(failed_list)
+                    task.save()
+
+                task.status = 'completed'
+                task.current_file = ''
+                task.result_summary = json.dumps({
+                    "mode": mode,
+                    "total": len(tracks_to_scrape),
+                    "success_count": len(success_list),
+                    "failed_count": len(failed_list),
+                    "skipped_cover": len(tracks_already_has_cover),
+                    "skipped_file_not_exist": len(tracks_file_not_exist),
+                    "success_list": success_list,
+                    "failed_list": failed_list
+                }, ensure_ascii=False)
+                task.save()
+
+                print(f"[批量刮削] 任务完成: 成功 {len(success_list)} 首, 失败 {len(failed_list)} 首")
+                print(f"[批量刮削] 跳过: 已有封面 {len(tracks_already_has_cover)} 首, 文件不存在 {len(tracks_file_not_exist)} 首")
+            finally:
+                from django.db import close_old_connections
+                close_old_connections()
 
         threading.Thread(target=run_batch_scrape, daemon=True).start()
 
@@ -242,84 +246,88 @@ class BatchScrapeLyricsView(APIView):
             task = ScanTask.objects.filter(id=task_id).first()
             if not task: return
 
-            print(f"[批量歌词刮削] =========================================")
-            print(f"[批量歌词刮削] 开始批量歌词刮削任务，模式: {'全量' if mode == 'full' else '增量'}")
-            print(f"[批量歌词刮削] =========================================")
+            try:
+                print(f"[批量歌词刮削] =========================================")
+                print(f"[批量歌词刮削] 开始批量歌词刮削任务，模式: {'全量' if mode == 'full' else '增量'}")
+                print(f"[批量歌词刮削] =========================================")
 
-            if mode == 'incremental':
-                tracks = Track.objects.filter(
-                    models.Q(lyrics__isnull=True) | models.Q(lyrics__exact='')
-                )
-                print(f"[批量歌词刮削] 增量模式：只刮削缺少歌词的歌曲")
-            else:
-                tracks = Track.objects.all()
-                print(f"[批量歌词刮削] 全量模式：刮削所有歌曲")
-
-            tracks_to_scrape = []
-            tracks_file_not_exist = []
-            tracks_already_has_lyrics = []
-
-            for track in tracks:
-                has_lyrics = bool(track.lyrics and track.lyrics.strip())
-                if has_lyrics:
-                    tracks_already_has_lyrics.append(track)
-                    print(f"[批量歌词刮削] 已有歌词，跳过: {track.title} (长度: {len(track.lyrics)} 字符)")
-                    continue
-
-                if not os.path.exists(track.file_path):
-                    tracks_file_not_exist.append(track.file_path)
-                    continue
-                tracks_to_scrape.append(track)
-
-            print(f"[批量歌词刮削] 检查完成: 待刮削 {len(tracks_to_scrape)} 首, 已有歌词跳过 {len(tracks_already_has_lyrics)} 首, 文件不存在 {len(tracks_file_not_exist)} 首")
-
-            task.total_files = len(tracks_to_scrape)
-            task.processed_files = 0
-            task.status = 'running'
-            task.save()
-
-            success_list = []
-            failed_list = []
-
-            for track in tracks_to_scrape:
-                task.current_file = track.file_path
-                task.save()
-
-                success, message = fetch_and_embed_lyrics(track)
-                if success:
-                    success_list.append({
-                        "track_id": track.id,
-                        "title": track.title,
-                        "message": message
-                    })
-                    print(f"[批量歌词刮削] ✅ 成功: {track.title} - {message}")
+                if mode == 'incremental':
+                    tracks = Track.objects.filter(
+                        models.Q(lyrics__isnull=True) | models.Q(lyrics__exact='')
+                    )
+                    print(f"[批量歌词刮削] 增量模式：只刮削缺少歌词的歌曲")
                 else:
-                    failed_list.append({
-                        "track_id": track.id,
-                        "title": track.title,
-                        "message": message
-                    })
-                    print(f"[批量歌词刮削] ❌ 失败: {track.title} - {message}")
+                    tracks = Track.objects.all()
+                    print(f"[批量歌词刮削] 全量模式：刮削所有歌曲")
 
-                task.processed_files = len(success_list) + len(failed_list)
+                tracks_to_scrape = []
+                tracks_file_not_exist = []
+                tracks_already_has_lyrics = []
+
+                for track in tracks:
+                    has_lyrics = bool(track.lyrics and track.lyrics.strip())
+                    if has_lyrics:
+                        tracks_already_has_lyrics.append(track)
+                        print(f"[批量歌词刮削] 已有歌词，跳过: {track.title} (长度: {len(track.lyrics)} 字符)")
+                        continue
+
+                    if not os.path.exists(track.file_path):
+                        tracks_file_not_exist.append(track.file_path)
+                        continue
+                    tracks_to_scrape.append(track)
+
+                print(f"[批量歌词刮削] 检查完成: 待刮削 {len(tracks_to_scrape)} 首, 已有歌词跳过 {len(tracks_already_has_lyrics)} 首, 文件不存在 {len(tracks_file_not_exist)} 首")
+
+                task.total_files = len(tracks_to_scrape)
+                task.processed_files = 0
+                task.status = 'running'
                 task.save()
 
-            task.status = 'completed'
-            task.current_file = ''
-            task.result_summary = json.dumps({
-                "mode": mode,
-                "total": len(tracks_to_scrape),
-                "success_count": len(success_list),
-                "failed_count": len(failed_list),
-                "skipped_lyrics": len(tracks_already_has_lyrics),
-                "skipped_file_not_exist": len(tracks_file_not_exist),
-                "success_list": success_list,
-                "failed_list": failed_list
-            }, ensure_ascii=False)
-            task.save()
+                success_list = []
+                failed_list = []
 
-            print(f"[批量歌词刮削] 完成: 成功 {len(success_list)} 首, 失败 {len(failed_list)} 首")
-            print(f"[批量歌词刮削] 跳过: 已有歌词 {len(tracks_already_has_lyrics)} 首, 文件不存在 {len(tracks_file_not_exist)} 首")
+                for track in tracks_to_scrape:
+                    task.current_file = track.file_path
+                    task.save()
+
+                    success, message = fetch_and_embed_lyrics(track)
+                    if success:
+                        success_list.append({
+                            "track_id": track.id,
+                            "title": track.title,
+                            "message": message
+                        })
+                        print(f"[批量歌词刮削] ✅ 成功: {track.title} - {message}")
+                    else:
+                        failed_list.append({
+                            "track_id": track.id,
+                            "title": track.title,
+                            "message": message
+                        })
+                        print(f"[批量歌词刮削] ❌ 失败: {track.title} - {message}")
+
+                    task.processed_files = len(success_list) + len(failed_list)
+                    task.save()
+
+                task.status = 'completed'
+                task.current_file = ''
+                task.result_summary = json.dumps({
+                    "mode": mode,
+                    "total": len(tracks_to_scrape),
+                    "success_count": len(success_list),
+                    "failed_count": len(failed_list),
+                    "skipped_lyrics": len(tracks_already_has_lyrics),
+                    "skipped_file_not_exist": len(tracks_file_not_exist),
+                    "success_list": success_list,
+                    "failed_list": failed_list
+                }, ensure_ascii=False)
+                task.save()
+
+                print(f"[批量歌词刮削] 完成: 成功 {len(success_list)} 首, 失败 {len(failed_list)} 首")
+                print(f"[批量歌词刮削] 跳过: 已有歌词 {len(tracks_already_has_lyrics)} 首, 文件不存在 {len(tracks_file_not_exist)} 首")
+            finally:
+                from django.db import close_old_connections
+                close_old_connections()
 
         threading.Thread(target=run_batch_scrape, daemon=True).start()
 

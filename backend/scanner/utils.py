@@ -321,6 +321,9 @@ def scan_local_directory(directory_path, task_id=None, force_reextract_cover=Fal
         task.current_file = '扫描完成'
         task.save()
 
+    from django.db import close_old_connections
+    close_old_connections()
+
 
 def _is_trash_path(path):
     norm = os.path.normpath(path)
