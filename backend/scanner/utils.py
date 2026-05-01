@@ -108,8 +108,10 @@ def extract_and_save_thumbnail(file_path, track_obj, force_reextract_cover=False
         elif hasattr(audio, 'tags') and audio.tags:
             for tag_key in audio.tags.keys():
                 if tag_key.startswith('APIC'):
-                    picture_data = audio.tags[tag_key].data
-                    break
+                    tag_value = audio.tags[tag_key]
+                    if hasattr(tag_value, 'data'):
+                        picture_data = tag_value.data
+                        break
 
         # 如果找到了图片，压缩并保存
         if picture_data:
