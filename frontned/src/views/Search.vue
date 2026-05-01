@@ -2,7 +2,7 @@
   <div class="relative w-full h-full overflow-hidden">
     <div class="absolute inset-0 bg-gradient-to-br from-gray-50 via-white to-blue-50"></div>
     
-    <div class="relative z-10 flex items-start justify-center pt-12 sm:pt-16 px-4">
+    <div class="relative z-10 flex items-start justify-center pt-2 sm:pt-8 px-4">
       <div class="w-full max-w-2xl">
         <div 
           class="bg-white/80 backdrop-blur-2xl rounded-2xl shadow-2xl border border-white/50 p-1.5"
