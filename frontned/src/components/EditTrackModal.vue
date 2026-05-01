@@ -148,10 +148,26 @@ const scrapeCover = async (trackId) => {
   return null
 }
 
+const scrapeLyrics = async (trackId) => {
+  try {
+    const res = await request.post(`/scraper/track/${trackId}/scrape_lyrics/`)
+    if (res.data.success && res.data.has_lyrics_after) {
+      const trackRes = await request.get(`/tracks/${trackId}/`)
+      if (trackRes.data.lyrics) {
+        return trackRes.data.lyrics
+      }
+    }
+  } catch (error) {
+    console.error('自动爬取歌词失败:', error)
+  }
+  return null
+}
+
 watch(() => props.modelValue, async (val) => {
   dialogVisible.value = val
   if (val && props.track) {
     let trackCover = ''
+    let trackLyrics = ''
     if (props.track.id === player.currentTrack?.id && player.currentTrackDetail) {
       form.value = {
         title: player.currentTrackDetail.title || props.track.title || '',
@@ -160,6 +176,7 @@ watch(() => props.modelValue, async (val) => {
         lyrics: player.currentTrackDetail.lyrics || ''
       }
       trackCover = player.currentTrackDetail.track_cover || props.track.track_cover || ''
+      trackLyrics = player.currentTrackDetail.lyrics || ''
     } else {
       form.value = {
         title: props.track.title || '',
@@ -168,10 +185,12 @@ watch(() => props.modelValue, async (val) => {
         lyrics: ''
       }
       trackCover = props.track.track_cover || ''
+      trackLyrics = ''
       if (props.track.id) {
         try {
           const res = await request.get(`/tracks/${props.track.id}/`)
           if (res.data.lyrics) {
+            trackLyrics = res.data.lyrics
             form.value.lyrics = res.data.lyrics
           }
           if (res.data.track_cover) {
@@ -196,6 +215,16 @@ watch(() => props.modelValue, async (val) => {
         const playlistIndex = player.playlist.findIndex(t => t.id === props.track.id)
         if (playlistIndex !== -1) {
           player.playlist[playlistIndex] = { ...player.playlist[playlistIndex], track_cover: scrapedCover }
+        }
+      }
+    }
+
+    if (!trackLyrics && props.track.id) {
+      const scrapedLyrics = await scrapeLyrics(props.track.id)
+      if (scrapedLyrics) {
+        form.value.lyrics = scrapedLyrics
+        if (player.currentTrack && player.currentTrack.id === props.track.id) {
+          player.currentTrack = { ...player.currentTrack, lyrics: scrapedLyrics }
         }
       }
     }
