@@ -10,6 +10,9 @@ from library.models import Track
 from .models import ScraperAPI
 from .serializers import ScraperAPISerializer
 from .utils import fetch_and_embed_cover, fetch_and_embed_lyrics
+from scanner.models import ScanTask
+import os
+from django.db import close_old_connections
 
 class ScraperAPIViewSet(viewsets.ModelViewSet):
     """
@@ -76,10 +79,15 @@ class BatchScrapeCoverView(APIView):
         if mode not in ['full', 'incremental']:
             return Response({"message": "mode 参数必须是 'full' 或 'incremental'"}, status=status.HTTP_400_BAD_REQUEST)
 
-        def run_batch_scrape():
-            from scanner.models import ScanTask
-            import os
+        
+        task = ScanTask.objects.filter(id=task_id).first()
+        if not task:
+            return Response({"message": "任务不存在"}, status=status.HTTP_404_NOT_FOUND)
 
+        if task.status == 'running':
+            return Response({"message": "该任务已经在运行中，请勿重复触发！"}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+        def run_batch_scrape():
             task = ScanTask.objects.filter(id=task_id).first()
             if not task:
                 print(f"[批量刮削] 任务 {task_id} 不存在")
@@ -169,7 +177,6 @@ class BatchScrapeCoverView(APIView):
                 print(f"[批量刮削] 任务完成: 成功 {len(success_list)} 首, 失败 {len(failed_list)} 首")
                 print(f"[批量刮削] 跳过: 已有封面 {len(tracks_already_has_cover)} 首, 文件不存在 {len(tracks_file_not_exist)} 首")
             finally:
-                from django.db import close_old_connections
                 close_old_connections()
 
         threading.Thread(target=run_batch_scrape, daemon=True).start()
@@ -239,10 +246,15 @@ class BatchScrapeLyricsView(APIView):
         if mode not in ['full', 'incremental']:
             return Response({"message": "mode 参数必须是 'full' 或 'incremental'"}, status=status.HTTP_400_BAD_REQUEST)
 
-        def run_batch_scrape():
-            from scanner.models import ScanTask
-            import os
 
+        task = ScanTask.objects.filter(id=task_id).first()
+        if not task:
+            return Response({"message": "任务不存在"}, status=status.HTTP_404_NOT_FOUND)
+
+        if task.status == 'running':
+            return Response({"message": "该任务已经在运行中，请勿重复触发！"}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+        def run_batch_scrape():
             task = ScanTask.objects.filter(id=task_id).first()
             if not task: return
 
@@ -326,7 +338,6 @@ class BatchScrapeLyricsView(APIView):
                 print(f"[批量歌词刮削] 完成: 成功 {len(success_list)} 首, 失败 {len(failed_list)} 首")
                 print(f"[批量歌词刮削] 跳过: 已有歌词 {len(tracks_already_has_lyrics)} 首, 文件不存在 {len(tracks_file_not_exist)} 首")
             finally:
-                from django.db import close_old_connections
                 close_old_connections()
 
         threading.Thread(target=run_batch_scrape, daemon=True).start()
