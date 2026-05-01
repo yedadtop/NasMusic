@@ -4,6 +4,7 @@ import uuid
 import hashlib
 from PIL import Image
 from django.core.files.base import ContentFile
+from django.utils.text import get_valid_filename
 from django.db import models, transaction
 from rest_framework import viewsets, status
 from rest_framework.pagination import PageNumberPagination
@@ -250,7 +251,7 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
         config = SystemConfig.objects.filter(key='music_path').first()
         music_path = config.value if config and config.value else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-        safe_filename = filename
+        safe_filename = get_valid_filename(os.path.basename(filename))
         dest_path = os.path.join(music_path, safe_filename)
         counter = 1
         while os.path.exists(dest_path):
