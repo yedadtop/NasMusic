@@ -1,4 +1,5 @@
 import io
+import json
 import os
 import uuid
 import hashlib
@@ -157,17 +158,12 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
             'filename': filename,
             'total_chunks': total_chunks,
             'file_size': file_size,
-            'file_hash': file_hash,
-            'uploaded_chunks': []
+            'file_hash': file_hash
         }
 
-        metadata_file = os.path.join(upload_dir, 'metadata.txt')
+        metadata_file = os.path.join(upload_dir, 'metadata.json')
         with open(metadata_file, 'w', encoding='utf-8') as f:
-            for key, value in metadata.items():
-                if key == 'uploaded_chunks':
-                    f.write(f"{key}={','.join(map(str, value))}\n")
-                else:
-                    f.write(f"{key}={value}\n")
+            json.dump(metadata, f)
 
         return Response({
             'upload_id': upload_id,
@@ -185,44 +181,22 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
 
         temp_dir = get_upload_temp_dir()
         upload_dir = os.path.join(temp_dir, upload_id)
-        metadata_file = os.path.join(upload_dir, 'metadata.txt')
+        metadata_file = os.path.join(upload_dir, 'metadata.json')
 
         if not os.path.exists(metadata_file):
             return Response({'error': 'upload not found or expired'}, status=status.HTTP_404_NOT_FOUND)
-
-        metadata = {}
-        with open(metadata_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if '=' in line:
-                    key, value = line.split('=', 1)
-                    if key == 'uploaded_chunks':
-                        metadata[key] = [int(x) for x in value.split(',') if x]
-                    elif key in ['total_chunks', 'file_size']:
-                        metadata[key] = int(value)
-                    else:
-                        metadata[key] = value
 
         chunk_file = os.path.join(upload_dir, f'chunk_{chunk_index:06d}')
         with open(chunk_file, 'wb') as f:
             for block in chunk.chunks():
                 f.write(block)
 
-        if 'uploaded_chunks' not in metadata:
-            metadata['uploaded_chunks'] = []
-        metadata['uploaded_chunks'].append(chunk_index)
-
-        with open(metadata_file, 'w', encoding='utf-8') as f:
-            for key, value in metadata.items():
-                if key == 'uploaded_chunks':
-                    f.write(f"{key}={','.join(map(str, sorted(value)))}\n")
-                else:
-                    f.write(f"{key}={value}\n")
+        uploaded_count = len([name for name in os.listdir(upload_dir) if name.startswith('chunk_')])
 
         return Response({
             'upload_id': upload_id,
             'chunk_index': chunk_index,
-            'uploaded_chunks': len(metadata['uploaded_chunks'])
+            'uploaded_chunks': uploaded_count
         }, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['post'])
@@ -234,28 +208,18 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
 
         temp_dir = get_upload_temp_dir()
         upload_dir = os.path.join(temp_dir, upload_id)
-        metadata_file = os.path.join(upload_dir, 'metadata.txt')
+        metadata_file = os.path.join(upload_dir, 'metadata.json')
 
         if not os.path.exists(metadata_file):
             return Response({'error': 'upload not found or expired'}, status=status.HTTP_404_NOT_FOUND)
 
-        metadata = {}
         with open(metadata_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if '=' in line:
-                    key, value = line.split('=', 1)
-                    if key == 'uploaded_chunks':
-                        metadata[key] = [int(x) for x in value.split(',') if x]
-                    elif key in ['total_chunks', 'file_size']:
-                        metadata[key] = int(value)
-                    else:
-                        metadata[key] = value
+            metadata = json.load(f)
 
         filename = metadata.get('filename', 'unknown')
         total_chunks = metadata.get('total_chunks', 0)
-        uploaded_chunks = metadata.get('uploaded_chunks', [])
 
+        uploaded_chunks = [name for name in os.listdir(upload_dir) if name.startswith('chunk_')]
         if len(uploaded_chunks) != total_chunks:
             return Response({
                 'error': f'missing chunks, expected {total_chunks}, got {len(uploaded_chunks)}',
@@ -374,24 +338,16 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
 
         temp_dir = get_upload_temp_dir()
         upload_dir = os.path.join(temp_dir, upload_id)
-        metadata_file = os.path.join(upload_dir, 'metadata.txt')
+        metadata_file = os.path.join(upload_dir, 'metadata.json')
 
         if not os.path.exists(metadata_file):
             return Response({'error': 'upload not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        metadata = {}
         with open(metadata_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if '=' in line:
-                    key, value = line.split('=', 1)
-                    if key == 'uploaded_chunks':
-                        metadata[key] = [int(x) for x in value.split(',') if x]
-                    elif key in ['total_chunks']:
-                        metadata[key] = int(value)
+            metadata = json.load(f)
 
-        uploaded_chunks = metadata.get('uploaded_chunks', [])
-        for i in uploaded_chunks:
+        total_chunks = metadata.get('total_chunks', 0)
+        for i in range(total_chunks):
             chunk_file = os.path.join(upload_dir, f'chunk_{i:06d}')
             if os.path.exists(chunk_file):
                 os.remove(chunk_file)
@@ -415,27 +371,19 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
 
         temp_dir = get_upload_temp_dir()
         upload_dir = os.path.join(temp_dir, upload_id)
-        metadata_file = os.path.join(upload_dir, 'metadata.txt')
+        metadata_file = os.path.join(upload_dir, 'metadata.json')
 
         if not os.path.exists(metadata_file):
             return Response({'error': 'upload not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        metadata = {}
         with open(metadata_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if '=' in line:
-                    key, value = line.split('=', 1)
-                    if key == 'uploaded_chunks':
-                        metadata[key] = [int(x) for x in value.split(',') if x]
-                    elif key in ['total_chunks', 'file_size']:
-                        metadata[key] = int(value)
-                    else:
-                        metadata[key] = value
+            metadata = json.load(f)
+
+        uploaded_count = len([name for name in os.listdir(upload_dir) if name.startswith('chunk_')])
 
         return Response({
             'filename': metadata.get('filename'),
             'total_chunks': metadata.get('total_chunks', 0),
-            'uploaded_chunks': len(metadata.get('uploaded_chunks', [])),
+            'uploaded_chunks': uploaded_count,
             'file_size': metadata.get('file_size', 0)
         }, status=status.HTTP_200_OK)
