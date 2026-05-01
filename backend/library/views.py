@@ -33,6 +33,14 @@ class TrackViewSet(viewsets.ModelViewSet):
         cover_upload = serializer.validated_data.pop('cover_upload', None)
         track_instance = serializer.save()
 
+        # 【新增】如果没有封面，自动提取音频内嵌封面
+        if not track_instance.cover_thumbnail:
+            from scanner.utils import extract_and_save_thumbnail
+            try:
+                extract_and_save_thumbnail(track_instance.file_path, track_instance)
+            except Exception as e:
+                print(f"自动提取封面失败: {e}")
+
         if cover_upload:
             try:
                 image = Image.open(cover_upload)

@@ -133,9 +133,25 @@ const goToLrcEditor = () => {
   }
 }
 
+const scrapeCover = async (trackId) => {
+  try {
+    const res = await request.post(`/scraper/track/${trackId}/scrape/`)
+    if (res.data.success && res.data.has_cover_after) {
+      const trackRes = await request.get(`/tracks/${trackId}/`)
+      if (trackRes.data.track_cover) {
+        return trackRes.data.track_cover
+      }
+    }
+  } catch (error) {
+    console.error('自动爬取封面失败:', error)
+  }
+  return null
+}
+
 watch(() => props.modelValue, async (val) => {
   dialogVisible.value = val
   if (val && props.track) {
+    let trackCover = ''
     if (props.track.id === player.currentTrack?.id && player.currentTrackDetail) {
       form.value = {
         title: player.currentTrackDetail.title || props.track.title || '',
@@ -143,7 +159,7 @@ watch(() => props.modelValue, async (val) => {
         album_title: player.currentTrackDetail.album_title || props.track.album_title || '',
         lyrics: player.currentTrackDetail.lyrics || ''
       }
-      coverPreview.value = player.currentTrackDetail.track_cover || props.track.track_cover || ''
+      trackCover = player.currentTrackDetail.track_cover || props.track.track_cover || ''
     } else {
       form.value = {
         title: props.track.title || '',
@@ -151,7 +167,7 @@ watch(() => props.modelValue, async (val) => {
         album_title: props.track.album_title || '',
         lyrics: ''
       }
-      coverPreview.value = props.track.track_cover || ''
+      trackCover = props.track.track_cover || ''
       if (props.track.id) {
         try {
           const res = await request.get(`/tracks/${props.track.id}/`)
@@ -159,14 +175,30 @@ watch(() => props.modelValue, async (val) => {
             form.value.lyrics = res.data.lyrics
           }
           if (res.data.track_cover) {
-            coverPreview.value = res.data.track_cover
+            trackCover = res.data.track_cover
           }
         } catch (error) {
           console.error('获取歌曲详情失败:', error)
         }
       }
     }
+
+    coverPreview.value = trackCover
     coverFile.value = null
+
+    if (!trackCover && props.track.id) {
+      const scrapedCover = await scrapeCover(props.track.id)
+      if (scrapedCover) {
+        coverPreview.value = scrapedCover
+        if (player.currentTrack && player.currentTrack.id === props.track.id) {
+          player.currentTrack = { ...player.currentTrack, track_cover: scrapedCover }
+        }
+        const playlistIndex = player.playlist.findIndex(t => t.id === props.track.id)
+        if (playlistIndex !== -1) {
+          player.playlist[playlistIndex] = { ...player.playlist[playlistIndex], track_cover: scrapedCover }
+        }
+      }
+    }
   }
 })
 
