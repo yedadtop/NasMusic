@@ -396,6 +396,14 @@ const adjustVolume = (delta) => {
     showVolumeTooltip.value = false
   }, 1500)
 }
+
+watch(() => player.currentTrack, (track) => {
+  if (track) {
+    document.title = `${track.title} - ${track.artist_name || '未知歌手'}`
+  } else {
+    document.title = 'NasMusic'
+  }
+}, { immediate: true })
 </script>
 
 <style>

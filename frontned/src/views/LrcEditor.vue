@@ -676,6 +676,14 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  document.title = 'NasMusic'
+})
+
+watch(track, (newTrack) => {
+  if (newTrack) {
+    const artistName = (newTrack.all_artists || []).join('/') || newTrack.artist_name || '未知歌手'
+    document.title = `编辑：${newTrack.title} - ${artistName}`
+  }
 })
 </script>
 
