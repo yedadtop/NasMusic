@@ -16,7 +16,7 @@
 
       <div class="flex flex-col sm:flex-row items-center sm:items-start gap-6 mb-8">
         <div class="w-40 h-40 rounded-full overflow-hidden shadow-lg bg-gray-100 shrink-0">
-          <img v-if="artist.avatar_url" :src="artist.avatar_url" class="w-full h-full object-cover">
+          <img v-if="artist.cover" :src="artist.cover" class="w-full h-full object-cover">
           <img v-else src="https://picsum.photos/200" class="w-full h-full object-cover">
         </div>
         <div class="flex flex-col items-center sm:items-start justify-center text-center sm:text-left">

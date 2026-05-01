@@ -91,8 +91,8 @@ const playAll = () => {
 }
 
 const getCoverUrl = () => {
-  if (album.value.cover_url) {
-    return album.value.cover_url
+  if (album.value.cover) {
+    return album.value.cover
   }
   return `https://picsum.photos/seed/${album.value.id}/300/300`
 }

@@ -118,11 +118,13 @@
         "id": 1,
         "name": "赵雷",
         "track_count": 5,
-        "album_count": 3
+        "album_count": 3,
+        "cover": "http://127.0.0.1:8000/media/covers/tracks/track_56_thumb.jpg"
       }
     ]
   }
   ```
+  - `cover` (string): 艺人封面图，使用该艺人第一首歌的封面图 URL，无封面时为 `null`。
 
 ---
 
@@ -137,6 +139,7 @@
     "name": "赵雷",
     "track_count": 5,
     "album_count": 3,
+    "cover": "http://127.0.0.1:8000/media/covers/tracks/track_56_thumb.jpg",
     "tracks": [
       {
         "id": 56,
@@ -152,6 +155,7 @@
     ]
   }
   ```
+  - `cover` (string): 艺人封面图，使用该艺人第一首歌的封面图 URL，无封面时为 `null`。
 
 ---
 
@@ -174,11 +178,13 @@
         "id": 1,
         "title": "无法长大",
         "artist_name": "赵雷",
-        "track_count": 8
+        "track_count": 8,
+        "cover": "http://127.0.0.1:8000/media/covers/tracks/track_56_thumb.jpg"
       }
     ]
   }
   ```
+  - `cover` (string): 专辑封面图，使用该专辑第一首歌的封面图 URL，无封面时为 `null`。
 
 ---
 
@@ -193,6 +199,7 @@
     "title": "无法长大",
     "artist_name": "赵雷",
     "track_count": 8,
+    "cover": "http://127.0.0.1:8000/media/covers/tracks/track_56_thumb.jpg",
     "tracks": [
       {
         "id": 56,
@@ -208,6 +215,7 @@
     ]
   }
   ```
+  - `cover` (string): 专辑封面图，使用该专辑第一首歌的封面图 URL，无封面时为 `null`。
 
 ---
 

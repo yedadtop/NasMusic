@@ -111,8 +111,8 @@ const setupObserver = () => {
 }
 
 const getCoverUrl = (album) => {
-  if (album.cover_url) {
-    return album.cover_url
+  if (album.cover) {
+    return album.cover
   }
   return `https://picsum.photos/seed/${album.id}/300/300`
 }

@@ -29,20 +29,40 @@ class ArtistSerializer(serializers.ModelSerializer):
     track_count = serializers.IntegerField(source='collaborated_tracks.count', read_only=True)
     album_count = serializers.IntegerField(source='albums.count', read_only=True)
     tracks = TrackMinimalSerializer(source='collaborated_tracks', many=True, read_only=True)
+    cover = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Artist
-        fields = ['id', 'name', 'track_count', 'album_count', 'tracks']
+        fields = ['id', 'name', 'track_count', 'album_count', 'cover', 'tracks']
+
+    def get_cover(self, obj):
+        first_track = obj.collaborated_tracks.first()
+        if first_track and first_track.cover_thumbnail:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(first_track.cover_thumbnail.url)
+            return first_track.cover_thumbnail.url
+        return None
 
 
 class AlbumSerializer(serializers.ModelSerializer):
     artist_name = serializers.CharField(source='artist.name', read_only=True)
     track_count = serializers.IntegerField(source='tracks.count', read_only=True)
     tracks = TrackMinimalSerializer(many=True, read_only=True)
+    cover = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Album
-        fields = ['id', 'title', 'artist_name', 'track_count', 'tracks']
+        fields = ['id', 'title', 'artist_name', 'track_count', 'cover', 'tracks']
+
+    def get_cover(self, obj):
+        first_track = obj.tracks.first()
+        if first_track and first_track.cover_thumbnail:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(first_track.cover_thumbnail.url)
+            return first_track.cover_thumbnail.url
+        return None
 
 # --- 核心修复：定义 TrackListSerializer ---
 class TrackListSerializer(serializers.ModelSerializer):

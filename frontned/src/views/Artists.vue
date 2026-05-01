@@ -111,8 +111,8 @@ const setupObserver = () => {
 }
 
 const getAvatarUrl = (artist) => {
-  if (artist.avatar_url) {
-    return artist.avatar_url
+  if (artist.cover) {
+    return artist.cover
   }
   return `https://picsum.photos/seed/${artist.id}/200/200`
 }
