@@ -1,130 +1,3 @@
-import io
-import json
-import os
-import uuid
-import hashlib
-import time
-import shutil
-from PIL import Image
-from django.core.files.base import ContentFile
-from django.utils.text import get_valid_filename
-from django.db import models, transaction
-from rest_framework import viewsets, status
-from rest_framework.pagination import PageNumberPagination
-from rest_framework.filters import SearchFilter
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from .models import Artist, Album, Track
-from .serializers import TrackListSerializer, TrackDetailSerializer, ArtistSerializer, AlbumSerializer
-from .utils import sync_cover_to_audio_file
-from scanner.models import SystemConfig
-from scanner.utils import extract_and_save_thumbnail, parse_artists, _get_tag_value
-import mutagen
-from pathlib import Path
-from scanner.utils import extract_and_save_thumbnail
-from mutagen.id3 import USLT
-
-
-
-class StandardResultsSetPagination(PageNumberPagination):
-    page_size = 50
-    page_size_query_param = 'size'
-    max_page_size = 1000
-
-
-class TrackViewSet(viewsets.ModelViewSet):
-    queryset = Track.objects.prefetch_related('artists').select_related('artist', 'album').order_by('-added_at')
-    serializer_class = TrackListSerializer
-    pagination_class = StandardResultsSetPagination
-    filter_backends = [SearchFilter]
-    search_fields = ['title', 'artists__name', 'album__title']
-
-    def get_serializer_class(self):
-        if self.action == 'list':
-            return TrackListSerializer
-        return TrackDetailSerializer
-
-    def perform_update(self, serializer):
-        cover_upload = serializer.validated_data.pop('cover_upload', None)
-        track_instance = serializer.save()
-
-        # 【新增】如果没有封面，自动提取音频内嵌封面
-        if not track_instance.cover_thumbnail:
-            try:
-                extract_and_save_thumbnail(track_instance.file_path, track_instance)
-            except Exception as e:
-                print(f"自动提取封面失败: {e}")
-
-        if cover_upload:
-            try:
-                image = Image.open(cover_upload)
-                if image.mode != 'RGB': image = image.convert('RGB')
-                image.thumbnail((300, 300))
-                thumb_io = io.BytesIO()
-                image.save(thumb_io, format='JPEG', quality=85)
-                image_bytes = thumb_io.getvalue()
-                filename = f"track_{track_instance.id}_thumb.jpg"
-                track_instance.cover_thumbnail.save(filename, ContentFile(image_bytes), save=True)
-                sync_cover_to_audio_file(track_instance.file_path, track_instance.format, image_bytes)
-            except Exception as e:
-                print(f"API图片上传处理失败: {e}")
-
-        try:
-            audio_easy = mutagen.File(track_instance.file_path, easy=True)
-            if audio_easy is not None:
-                audio_easy['title'] = track_instance.title or ''
-                audio_easy['artist'] = track_instance.artist.name if track_instance.artist else 'Unknown Artist'
-                audio_easy['album'] = track_instance.album.title if track_instance.album else ''
-                audio_easy.save()
-
-            audio_raw = mutagen.File(track_instance.file_path)
-            if audio_raw is not None and track_instance.lyrics:
-                ext = track_instance.format.lower()
-                if ext == 'mp3':
-                    if getattr(audio_raw, 'tags', None) is None:
-                        audio_raw.add_tags()
-                    audio_raw.tags.setall("USLT", [USLT(encoding=3, lang='eng', desc='', text=track_instance.lyrics)])
-                elif ext in ['flac', 'ogg']:
-                    audio_raw["lyrics"] = track_instance.lyrics
-                elif ext == 'm4a':
-                    audio_raw['\xa9lyr'] = track_instance.lyrics
-                audio_raw.save()
-        except Exception as e:
-            print(f"物理文件标签写入失败: {e}")
-
-
-class ArtistViewSet(viewsets.ModelViewSet):
-    queryset = Artist.objects.annotate(
-        track_count=models.Count('collaborated_tracks')
-    ).filter(track_count__gt=0).prefetch_related('collaborated_tracks__artists', 'collaborated_tracks__album').order_by('-track_count', 'id')
-
-    serializer_class = ArtistSerializer
-    pagination_class = StandardResultsSetPagination
-    filter_backends = [SearchFilter]
-    search_fields = ['name']
-
-
-class AlbumViewSet(viewsets.ModelViewSet):
-    queryset = Album.objects.prefetch_related('tracks__artists', 'artist').all().annotate(
-        track_count=models.Count('tracks')
-    ).order_by('-track_count', 'id')
-    serializer_class = AlbumSerializer
-    pagination_class = StandardResultsSetPagination
-    filter_backends = [SearchFilter]
-    search_fields = ['title', 'artist__name']
-
-
-def get_upload_temp_dir():
-    config = SystemConfig.objects.filter(key='music_path').first()
-    if config and config.value:
-        temp_dir = os.path.join(config.value, '.upload_temp')
-    else:
-        temp_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'media', '.upload_temp')
-    os.makedirs(temp_dir, exist_ok=True)
-    return temp_dir
-
-
 class ChunkedUploadViewSet(viewsets.ViewSet):
     CHUNK_SIZE = 1024 * 1024
 
@@ -132,14 +5,12 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
     def init(self, request):
         temp_dir = get_upload_temp_dir()
         current_time = time.time()
+        # 清理超过 24 小时的过期临时文件夹
         for dirname in os.listdir(temp_dir):
             dir_path = os.path.join(temp_dir, dirname)
             if os.path.isdir(dir_path):
                 if current_time - os.path.getmtime(dir_path) > 86400:
-                    try:
-                        shutil.rmtree(dir_path)
-                    except Exception:
-                        pass
+                    shutil.rmtree(dir_path, ignore_errors=True)
 
         filename = request.data.get('filename')
         total_chunks = int(request.data.get('total_chunks', 1))
@@ -150,7 +21,6 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
             return Response({'error': 'filename is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         upload_id = str(uuid.uuid4())
-        temp_dir = get_upload_temp_dir()
         upload_dir = os.path.join(temp_dir, upload_id)
         os.makedirs(upload_dir, exist_ok=True)
 
@@ -186,11 +56,13 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
         if not os.path.exists(metadata_file):
             return Response({'error': 'upload not found or expired'}, status=status.HTTP_404_NOT_FOUND)
 
+        # 直接写入独立的物理分片文件
         chunk_file = os.path.join(upload_dir, f'chunk_{chunk_index:06d}')
         with open(chunk_file, 'wb') as f:
             for block in chunk.chunks():
                 f.write(block)
 
+        # 通过统计目录下的分片文件数量来计算进度，绝对安全
         uploaded_count = len([name for name in os.listdir(upload_dir) if name.startswith('chunk_')])
 
         return Response({
@@ -219,6 +91,7 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
         filename = metadata.get('filename', 'unknown')
         total_chunks = metadata.get('total_chunks', 0)
 
+        # 合并前强制进行物理校验
         uploaded_chunks = [name for name in os.listdir(upload_dir) if name.startswith('chunk_')]
         if len(uploaded_chunks) != total_chunks:
             return Response({
@@ -231,6 +104,8 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
 
         safe_filename = get_valid_filename(os.path.basename(filename))
         dest_path = os.path.join(music_path, safe_filename)
+        
+        # 处理重名文件
         counter = 1
         while os.path.exists(dest_path):
             name, ext = os.path.splitext(safe_filename)
@@ -238,6 +113,7 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
             dest_path = os.path.join(music_path, safe_filename)
             counter += 1
 
+        # 开始合并文件
         try:
             with open(dest_path, 'wb') as dest_file:
                 for i in range(total_chunks):
@@ -256,13 +132,10 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
                     pass
             return Response({'error': f'failed to merge chunks: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        for i in range(total_chunks):
-            chunk_file = os.path.join(upload_dir, f'chunk_{i:06d}')
-            if os.path.exists(chunk_file):
-                os.remove(chunk_file)
-        os.remove(metadata_file)
-        os.rmdir(upload_dir)
+        # ✅ 核心优化：合并成功后，暴力清空整个临时上传目录
+        shutil.rmtree(upload_dir, ignore_errors=True)
 
+        # 合并完成后的 Mutagen 标签解析与入库逻辑
         try:
             audio_easy = mutagen.File(dest_path, easy=True)
             if audio_easy is None:
@@ -338,27 +211,12 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
 
         temp_dir = get_upload_temp_dir()
         upload_dir = os.path.join(temp_dir, upload_id)
-        metadata_file = os.path.join(upload_dir, 'metadata.json')
-
-        if not os.path.exists(metadata_file):
+        
+        if not os.path.exists(upload_dir):
             return Response({'error': 'upload not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        with open(metadata_file, 'r', encoding='utf-8') as f:
-            metadata = json.load(f)
-
-        total_chunks = metadata.get('total_chunks', 0)
-        for i in range(total_chunks):
-            chunk_file = os.path.join(upload_dir, f'chunk_{i:06d}')
-            if os.path.exists(chunk_file):
-                os.remove(chunk_file)
-
-        if os.path.exists(metadata_file):
-            os.remove(metadata_file)
-        if os.path.exists(upload_dir):
-            try:
-                os.rmdir(upload_dir)
-            except Exception:
-                pass
+        # ✅ 核心优化：取消上传时，暴力连根拔起整个文件夹，无视隐藏文件和分片数量
+        shutil.rmtree(upload_dir, ignore_errors=True)
 
         return Response({'success': True}, status=status.HTTP_200_OK)
 
