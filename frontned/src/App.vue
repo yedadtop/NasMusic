@@ -1,8 +1,31 @@
 <template>
   <div class="flex flex-col h-screen w-screen bg-white text-gray-800 overflow-hidden font-sans">
     <div class="flex flex-1 overflow-hidden" v-show="!isFullScreen">
+      <aside class="hidden md:flex flex-col w-16 bg-gray-100 rounded-2xl m-2 ml-1 shrink-0 items-center py-4 gap-1">
+        <router-link to="/" class="sidebar-icon group" active-class="sidebar-icon-active" exact-active-class="sidebar-icon-active">
+          <Icon icon="mdi:music-box-multiple" class="w-6 h-6" />
+          <span class="sidebar-tooltip">本地音乐</span>
+        </router-link>
+        <router-link to="/artists" class="sidebar-icon group" active-class="sidebar-icon-active">
+          <Icon icon="mdi:account-music" class="w-6 h-6" />
+          <span class="sidebar-tooltip">艺人</span>
+        </router-link>
+        <router-link to="/albums" class="sidebar-icon group" active-class="sidebar-icon-active">
+          <Icon icon="mdi:album" class="w-6 h-6" />
+          <span class="sidebar-tooltip">专辑</span>
+        </router-link>
+        <button @click="showSearch = true" class="sidebar-icon group" :class="{ 'sidebar-icon-active': showSearch }">
+          <Icon icon="mdi:magnify" class="w-6 h-6" />
+          <span class="sidebar-tooltip">搜索</span>
+        </button>
+        <router-link to="/settings" class="sidebar-icon group" active-class="sidebar-icon-active">
+          <Icon icon="mdi:cog" class="w-6 h-6" />
+          <span class="sidebar-tooltip">设置</span>
+        </router-link>
+      </aside>
+
       <main class="flex-1 flex flex-col min-w-0 bg-white relative">
-        <header class="h-14 sm:h-16 flex items-center justify-between px-4 sm:px-6 md:px-8 shrink-0">
+        <header class="h-14 sm:h-16 flex items-center justify-between px-4 sm:px-6 md:px-8 shrink-0 md:hidden">
           <div class="flex items-center space-x-3 sm:space-x-4 md:space-x-6 text-base md:text-lg font-medium text-gray-500 shrink-0">
             <router-link to="/" class="tab-link whitespace-nowrap" active-class="tab-active">本地歌曲</router-link>
             <router-link to="/artists" class="tab-link whitespace-nowrap" active-class="tab-active">艺人</router-link>
@@ -436,7 +459,16 @@ watch(() => player.currentTrack, (track) => {
 <style>
 @reference "tailwindcss";
 
-/* 保持扁平化滚动条样式 */
+.sidebar-icon {
+  @apply w-11 h-11 flex items-center justify-center rounded-xl text-gray-500 hover:bg-gray-200 hover:text-gray-700 transition-all relative;
+}
+.sidebar-icon-active {
+  @apply bg-blue-500 text-white hover:bg-blue-600 hover:text-white;
+}
+.sidebar-tooltip {
+  @apply absolute left-full ml-3 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap;
+}
+
 .custom-scrollbar::-webkit-scrollbar { width: 6px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(0, 0, 0, 0.1); border-radius: 20px; }
