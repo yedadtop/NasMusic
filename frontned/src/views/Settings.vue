@@ -52,28 +52,30 @@
           配置服务器扫描音乐文件的本地物理路径。支持多级目录递归扫描。
         </p>
 
-        <div class="flex flex-col sm:flex-row gap-4">
+        <div class="flex flex-col gap-4">
           <el-input
             v-model="musicPath"
             placeholder="例如: /home/music 或 C:\Music"
             class="flex-1 custom-apple-input"
           />
-          <el-button
-            type="primary"
-            :loading="saving"
-            @click="saveConfig"
-            class="w-full sm:w-auto custom-apple-button"
-          >
-            保存路径
-          </el-button>
-          <el-button
-            type="primary"
-            :loading="scanning"
-            @click="startScan"
-            class="w-full sm:w-auto custom-apple-button"
-          >
-            立即扫描
-          </el-button>
+          <div class="flex flex-col sm:flex-row gap-4">
+            <el-button
+              type="primary"
+              :loading="saving"
+              @click="saveConfig"
+              class="w-full sm:w-auto custom-apple-button"
+            >
+              保存路径
+            </el-button>
+            <el-button
+              type="primary"
+              :loading="scanning"
+              @click="startScan"
+              class="w-full sm:w-auto custom-apple-button"
+            >
+              立即扫描
+            </el-button>
+          </div>
         </div>
       </section>
 
