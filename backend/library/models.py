@@ -3,6 +3,7 @@ import os
 import time
 import threading
 import uuid
+import shutil
 from datetime import datetime
 from django.db import models, transaction
 from django.db.models.signals import pre_delete, post_delete
@@ -13,7 +14,7 @@ def _async_move(src, dst, max_retries=30, retry_delay=2.0):
     """后台守护线程：异步重试移动文件到回收站"""
     for attempt in range(max_retries):
         try:
-            os.rename(src, dst)
+            shutil.move(src, dst)
             print(f"✅ 文件已移动到回收站（后台重试成功）: {dst}")
             return
         except OSError:
@@ -56,7 +57,7 @@ def move_to_trash(file_path):
         trash_path = os.path.join(trash_dir, f"{base}_{timestamp}_{unique_id}{ext}")
 
     try:
-        os.rename(file_path, trash_path)
+        shutil.move(file_path, trash_path)
         print(f"✅ 文件已移动到回收站: {trash_path}")
     except OSError:
         print(f"⚠️ 文件正在被占用，已启动后台守护线程")
