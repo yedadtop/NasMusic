@@ -21,6 +21,9 @@ from scanner.models import SystemConfig
 from scanner.utils import extract_and_save_thumbnail, parse_artists, _get_tag_value
 import mutagen
 from pathlib import Path
+from scanner.utils import extract_and_save_thumbnail
+from mutagen.id3 import USLT
+
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -47,7 +50,6 @@ class TrackViewSet(viewsets.ModelViewSet):
 
         # 【新增】如果没有封面，自动提取音频内嵌封面
         if not track_instance.cover_thumbnail:
-            from scanner.utils import extract_and_save_thumbnail
             try:
                 extract_and_save_thumbnail(track_instance.file_path, track_instance)
             except Exception as e:
@@ -79,7 +81,6 @@ class TrackViewSet(viewsets.ModelViewSet):
             if audio_raw is not None and track_instance.lyrics:
                 ext = track_instance.format.lower()
                 if ext == 'mp3':
-                    from mutagen.id3 import USLT
                     if getattr(audio_raw, 'tags', None) is None:
                         audio_raw.add_tags()
                     audio_raw.tags.setall("USLT", [USLT(encoding=3, lang='eng', desc='', text=track_instance.lyrics)])
