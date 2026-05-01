@@ -147,6 +147,83 @@ python cleanup_db.py
 
 ---
 
+## Nginx 部署配置
+
+生产环境推荐使用 Nginx 作为反向代理，配合 Django 的 X-Accel-Redirect 实现高效音频流媒体服务。
+
+```nginx
+server {
+    listen 80;
+    server_name your_intranet_ip; # 替换为你的内网 IP 或域名，例如 192.168.1.100
+
+    # 优化点 1：开启高效文件传输（流媒体必备）
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+
+    # 优化点 2：设置足够大的 body 大小，防止分片上传大文件时被 Nginx 拦截报 413 错误
+    client_max_body_size 50M;
+
+    # =========================================
+    # 核心区块 A：普通的 Django API 流量代理
+    # =========================================
+    location / {
+        # 假设你的 Gunicorn 运行在本地 8000 端口
+        proxy_pass http://127.0.0.1:8000;
+        
+        # 传递真实的客户端信息给 Django
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # =========================================
+    # 核心区块 B：专门处理 X-Accel-Redirect 的流媒体通道
+    # =========================================
+    location /protected_music/ {
+        # 【极其重要】internal 指令确保这个路由对外是封闭的！
+        # 外部用户直接访问 `http://ip/protected_music/a.mp3`  会收到 404 错误。
+        # 它只接受来自 Nginx 内部或后端 Django 返回的 X-Accel-Redirect 重定向。
+        internal;
+
+        # 【极其重要】alias 映射物理路径
+        # 将前端请求的 /protected_music/... 映射到服务器真实的物理文件夹。
+        # 注意：alias 后面的路径**必须**以斜杠 (/) 结尾！
+        # 假设你的 SystemConfig 里配置的音乐库根目录是 /mnt/nas/music/
+        alias /mnt/nas/music/;
+
+        # 优化点 3：让 Nginx 自动处理断点续传（HTTP 206）和 MIME 类型
+        # 强制 Nginx 根据文件后缀名（如 .mp3, .flac）自动推断 Content-Type
+        default_type application/octet-stream;
+    }
+
+    # =========================================
+    # 可选区块 C：处理普通的公开静态文件 (JS, CSS, 封面图等)
+    # =========================================
+    location /media/ {
+        alias /path/to/your/django/media/; # 指向你的 Django media 目录
+        expires 30d; # 封面图等缓存 30 天
+    }
+
+    location /static/ {
+        alias /path/to/your/django/static/; # 指向你的 Django static 目录
+        expires 30d;
+    }
+}
+```
+
+### 关键配置说明
+
+| 配置项 | 说明 |
+|--------|------|
+| `internal` | 确保 `/protected_music/` 只接受内部重定向，外部直接访问返回 404 |
+| `alias /mnt/nas/music/;` | 路径必须以 `/` 结尾，将 URL 路径映射到实际音乐库目录 |
+| `sendfile on` | 开启高效文件传输，减少用户态/内核态切换 |
+| `default_type application/octet-stream` | 让 Nginx 自动根据文件扩展名设置 Content-Type |
+
+---
+
 ## 技术栈
 
 - **后端**：Django 6 + Django REST Framework
