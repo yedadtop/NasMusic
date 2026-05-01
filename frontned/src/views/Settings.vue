@@ -48,6 +48,84 @@
 
       <section class="mb-8 bg-white rounded-[20px] p-6 sm:p-8 shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100/50 transition-all">
         <div class="flex items-center mb-3">
+          <div class="w-10 h-10 bg-[#fdf2e9] text-[#ff9500] rounded-[10px] flex items-center justify-center mr-4">
+            <Upload class="w-5 h-5" />
+          </div>
+          <h2 class="text-xl font-semibold tracking-tight">上传歌曲</h2>
+        </div>
+
+        <p class="text-[15px] text-[#86868b] mb-6 leading-relaxed">
+          将本地音乐文件分片上传到服务器，支持大文件（>100MB）传输，上传后自动入库。
+        </p>
+
+        <div
+          class="border-2 border-dashed border-[#d2d2d7] rounded-[16px] p-8 text-center transition-all cursor-pointer"
+          :class="isDragging ? 'border-[#0071e3] bg-[#f5f5f7]' : 'hover:border-[#0071e3] hover:bg-[#fafafa]'"
+          @dragover.prevent="isDragging = true"
+          @dragleave.prevent="isDragging = false"
+          @drop.prevent="handleDrop"
+          @click="triggerFileInput"
+        >
+          <input
+            ref="fileInputRef"
+            type="file"
+            multiple
+            accept=".mp3,.flac,.ogg,.m4a"
+            class="hidden"
+            @change="handleFileSelect"
+          />
+          <Upload class="w-12 h-12 text-[#86868b] mx-auto mb-4" />
+          <p class="text-[15px] font-medium text-[#1d1d1f] mb-2">
+            拖拽文件到此处，或<span class="text-[#0071e3]">点击选择</span>
+          </p>
+          <p class="text-[13px] text-[#86868b]">
+            支持 MP3、FLAC、OGG、M4A 格式
+          </p>
+        </div>
+
+        <div v-if="uploadQueue.length > 0" class="mt-6 space-y-3">
+          <div
+            v-for="item in uploadQueue"
+            :key="item.id"
+            class="bg-[#f5f5f7] rounded-[12px] p-4"
+          >
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-3 min-w-0">
+                <span class="text-[14px] font-medium truncate">{{ item.filename }}</span>
+              </div>
+              <button
+                v-if="item.status === 'pending' || item.status === 'uploading'"
+                @click.stop="cancelUpload(item)"
+                class="text-[#86868b] hover:text-[#ff3b30] transition-colors ml-2 flex-shrink-0"
+              >
+                <Close class="w-4 h-4" />
+              </button>
+              <span v-else-if="item.status === 'completed'" class="text-[#34c759]">
+                <CircleCheck class="w-5 h-5" />
+              </span>
+              <span v-else-if="item.status === 'error'" class="text-[#ff3b30]">
+                <Close class="w-5 h-5" />
+              </span>
+            </div>
+            <div class="flex items-center gap-3">
+              <el-progress
+                :percentage="item.progress"
+                :status="item.status === 'completed' ? 'success' : item.status === 'error' ? 'exception' : ''"
+                :stroke-width="6"
+                :show-text="false"
+                color="#0071e3"
+              />
+              <span class="text-[12px] text-[#86868b] w-12 text-right flex-shrink-0">
+                {{ item.progress }}%
+              </span>
+            </div>
+            <p v-if="item.error" class="text-[12px] text-[#ff3b30] mt-1">{{ item.error }}</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="mb-8 bg-white rounded-[20px] p-6 sm:p-8 shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100/50 transition-all">
+        <div class="flex items-center mb-3">
           <div class="w-10 h-10 bg-[#e8f2ff] text-[#0071e3] rounded-[10px] flex items-center justify-center mr-4">
             <FolderOpened class="w-5 h-5" />
           </div>
@@ -213,7 +291,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, defineAsyncComponent } from 'vue'
 import axios from 'axios'
-import { FolderOpened, Loading, CircleCheck } from '@element-plus/icons-vue'
+import { FolderOpened, Loading, CircleCheck, Upload, Close } from '@element-plus/icons-vue'
 import AppleToast from '../components/AppleToast.vue'
 import AppleConfirmModal from '../components/AppleConfirmModal.vue'
 
@@ -227,6 +305,117 @@ const musicPath = ref('')
 const scanning = ref(false)
 const saving = ref(false)
 let timer = null
+
+const isDragging = ref(false)
+const fileInputRef = ref(null)
+const uploadQueue = ref([])
+let uploadIdCounter = 0
+
+const triggerFileInput = () => {
+  fileInputRef.value?.click()
+}
+
+const handleDrop = (e) => {
+  isDragging.value = false
+  const files = Array.from(e.dataTransfer.files).filter(f =>
+    /\.(mp3|flac|ogg|m4a)$/i.test(f.name)
+  )
+  if (files.length === 0) {
+    showToast('请上传 MP3、FLAC、OGG 或 M4A 格式的文件', 'error')
+    return
+  }
+  files.forEach(file => addToQueue(file))
+}
+
+const handleFileSelect = (e) => {
+  const files = Array.from(e.target.files)
+  files.forEach(file => addToQueue(file))
+  e.target.value = ''
+}
+
+const addToQueue = (file) => {
+  const item = {
+    id: ++uploadIdCounter,
+    filename: file.name,
+    file: file,
+    status: 'pending',
+    progress: 0,
+    error: null,
+    uploadId: null
+  }
+  uploadQueue.value.push(item)
+  processQueue()
+}
+
+const processQueue = async () => {
+  const pending = uploadQueue.value.find(u => u.status === 'pending')
+  if (!pending) return
+
+  pending.status = 'uploading'
+  await uploadFile(pending)
+}
+
+const uploadFile = async (item) => {
+  const CHUNK_SIZE = 1024 * 1024
+  const file = item.file
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+
+  try {
+    const initRes = await axios.post('/api/upload/init/', {
+      filename: file.name,
+      total_chunks: totalChunks,
+      file_size: file.size
+    })
+
+    item.uploadId = initRes.data.upload_id
+    const chunkSize = initRes.data.chunk_size
+
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * chunkSize
+      const end = Math.min(start + chunkSize, file.size)
+      const chunk = file.slice(start, end)
+
+      const formData = new FormData()
+      formData.append('upload_id', item.uploadId)
+      formData.append('chunk_index', i)
+      formData.append('chunk', chunk)
+
+      await axios.post('/api/upload/upload_chunk/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+
+      item.progress = Math.round(((i + 1) / totalChunks) * 100)
+    }
+
+    await axios.post('/api/upload/complete/', {
+      upload_id: item.uploadId
+    })
+
+    item.status = 'completed'
+    item.progress = 100
+    showToast(`${item.filename} 上传成功`, 'success')
+
+  } catch (err) {
+    item.status = 'error'
+    item.error = err.response?.data?.error || err.message || '上传失败'
+    showToast(`${item.filename} 上传失败: ${item.error}`, 'error')
+  }
+
+  processQueue()
+}
+
+const cancelUpload = async (item) => {
+  if (item.uploadId) {
+    try {
+      await axios.delete('/api/upload/cancel/', {
+        params: { upload_id: item.uploadId }
+      })
+    } catch (e) {
+      console.error('取消上传失败', e)
+    }
+  }
+  uploadQueue.value = uploadQueue.value.filter(u => u.id !== item.id)
+}
 
 const toastVisible = ref(false)
 const toastMessage = ref('')

@@ -829,6 +829,130 @@
 
 ---
 
+## 27. 初始化分片上传
+
+- **接口地址**：`POST /api/upload/init/`
+- **功能描述**：初始化一个分片上传任务，返回上传 ID 和分片大小。支持大文件（>100MB）上传。
+- **特性**：
+  - 自动上传到配置目录（`SystemConfig.music_path`）
+  - 默认分片大小 1MB，减少内存占用
+  - 临时文件存放在音乐目录的 `.upload_temp` 文件夹下
+- **Body 参数**（`multipart/form-data` 或 `application/json`）：
+  - `filename` (string): **必填**。原始文件名（含扩展名）
+  - `total_chunks` (int): **必填**。总分片数
+  - `file_size` (int): 可选。文件总大小（字节）
+  - `file_hash` (string): 可选。文件 MD5 哈希（用于断点续传校验）
+- **返回格式**（HTTP 200 OK）：
+  ```json
+  {
+    "upload_id": "550e8400-e29b-41d4-a716-446655440000",
+    "chunk_size": 1048576
+  }
+  ```
+- **错误返回**（HTTP 400 Bad Request）：
+  ```json
+  {
+    "error": "filename is required"
+  }
+  ```
+
+---
+
+## 28. 上传分片
+
+- **接口地址**：`POST /api/upload/upload_chunk/`
+- **功能描述**：上传单个分片。每个分片直接写入磁盘，不占用服务器内存。
+- **Body 参数**（`multipart/form-data`）：
+  - `upload_id` (string): **必填**。初始化时返回的上传 ID
+  - `chunk_index` (int): **必填**。分片序号（从 0 开始）
+  - `chunk` (File): **必填**。分片二进制数据
+- **返回格式**（HTTP 200 OK）：
+  ```json
+  {
+    "upload_id": "550e8400-e29b-41d4-a716-446655440000",
+    "chunk_index": 0,
+    "uploaded_chunks": 1
+  }
+  ```
+- **错误返回**（HTTP 404 Not Found）：
+  ```json
+  {
+    "error": "upload not found or expired"
+  }
+  ```
+
+---
+
+## 29. 完成分片上传
+
+- **接口地址**：`POST /api/upload/complete/`
+- **功能描述**：合并所有分片，完成上传。自动提取音频元数据（标题、艺术家、专辑、时长、歌词、封面）并创建 Track 记录。
+- **Body 参数**（`application/json` 或 `multipart/form-data`）：
+  - `upload_id` (string): **必填**。初始化时返回的上传 ID
+- **返回格式**（HTTP 200 OK）：
+  ```json
+  {
+    "success": true,
+    "track_id": 100,
+    "title": "成都",
+    "file_path": "C:\\1D\\Mass\\my_music\\成都.mp3"
+  }
+  ```
+- **错误返回**（HTTP 400 Bad Request）：
+  ```json
+  {
+    "error": "missing chunks, expected 10, got 5",
+    "uploaded_chunks": 5
+  }
+  ```
+
+---
+
+## 30. 取消分片上传
+
+- **接口地址**：`DELETE /api/upload/cancel/`
+- **功能描述**：取消上传任务，清理所有已上传的分片和临时文件。
+- **Query 参数**：
+  - `upload_id` (string): **必填**。要取消的上传 ID
+- **返回格式**（HTTP 200 OK）：
+  ```json
+  {
+    "success": true
+  }
+  ```
+- **错误返回**（HTTP 404 Not Found）：
+  ```json
+  {
+    "error": "upload not found"
+  }
+  ```
+
+---
+
+## 31. 查询分片上传状态
+
+- **接口地址**：`GET /api/upload/status/`
+- **功能描述**：查询上传进度，支持断点续传。
+- **Query 参数**：
+  - `upload_id` (string): **必填**。要查询的上传 ID
+- **返回格式**（HTTP 200 OK）：
+  ```json
+  {
+    "filename": "成都.mp3",
+    "total_chunks": 10,
+    "uploaded_chunks": 5,
+    "file_size": 10485760
+  }
+  ```
+- **错误返回**（HTTP 404 Not Found）：
+  ```json
+  {
+    "error": "upload not found"
+  }
+  ```
+
+---
+
 ## 多歌手支持说明
 
 ### 数据模型

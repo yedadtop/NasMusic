@@ -3,13 +3,13 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from library.views import TrackViewSet, ArtistViewSet, AlbumViewSet
+from library.views import TrackViewSet, ArtistViewSet, AlbumViewSet, ChunkedUploadViewSet
 
-# 自动生成 RESTful 路由
 router = DefaultRouter()
 router.register(r'tracks', TrackViewSet)
 router.register(r'artists', ArtistViewSet)
 router.register(r'albums', AlbumViewSet)
+router.register(r'upload', ChunkedUploadViewSet, basename='chunked-upload')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

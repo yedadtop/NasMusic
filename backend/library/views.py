@@ -1,14 +1,23 @@
 import io
+import os
+import uuid
+import hashlib
 from PIL import Image
 from django.core.files.base import ContentFile
-from django.db import models
-from rest_framework import viewsets
+from django.db import models, transaction
+from rest_framework import viewsets, status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.filters import SearchFilter
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from .models import Artist, Album, Track
 from .serializers import TrackListSerializer, TrackDetailSerializer, ArtistSerializer, AlbumSerializer
 from .utils import sync_cover_to_audio_file
+from scanner.models import SystemConfig
+from scanner.utils import extract_and_save_thumbnail, parse_artists
 import mutagen
+from pathlib import Path
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -109,3 +118,314 @@ class AlbumViewSet(viewsets.ModelViewSet):
     pagination_class = StandardResultsSetPagination
     filter_backends = [SearchFilter]
     search_fields = ['title', 'artist__name']
+
+
+def get_upload_temp_dir():
+    config = SystemConfig.objects.filter(key='music_path').first()
+    if config and config.value:
+        temp_dir = os.path.join(config.value, '.upload_temp')
+    else:
+        temp_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'media', '.upload_temp')
+    os.makedirs(temp_dir, exist_ok=True)
+    return temp_dir
+
+
+class ChunkedUploadViewSet(viewsets.ViewSet):
+    CHUNK_SIZE = 1024 * 1024
+
+    @action(detail=False, methods=['post'])
+    def init(self, request):
+        filename = request.data.get('filename')
+        total_chunks = int(request.data.get('total_chunks', 1))
+        file_size = int(request.data.get('file_size', 0))
+        file_hash = request.data.get('file_hash', '')
+
+        if not filename:
+            return Response({'error': 'filename is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        upload_id = str(uuid.uuid4())
+        temp_dir = get_upload_temp_dir()
+        upload_dir = os.path.join(temp_dir, upload_id)
+        os.makedirs(upload_dir, exist_ok=True)
+
+        metadata = {
+            'filename': filename,
+            'total_chunks': total_chunks,
+            'file_size': file_size,
+            'file_hash': file_hash,
+            'uploaded_chunks': []
+        }
+
+        metadata_file = os.path.join(upload_dir, 'metadata.txt')
+        with open(metadata_file, 'w', encoding='utf-8') as f:
+            for key, value in metadata.items():
+                if key == 'uploaded_chunks':
+                    f.write(f"{key}={','.join(map(str, value))}\n")
+                else:
+                    f.write(f"{key}={value}\n")
+
+        return Response({
+            'upload_id': upload_id,
+            'chunk_size': self.CHUNK_SIZE
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'])
+    def upload_chunk(self, request):
+        upload_id = request.data.get('upload_id')
+        chunk_index = int(request.data.get('chunk_index', 0))
+        chunk = request.data.get('chunk')
+
+        if not upload_id or chunk_index < 0 or not chunk:
+            return Response({'error': 'upload_id, chunk_index and chunk are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        temp_dir = get_upload_temp_dir()
+        upload_dir = os.path.join(temp_dir, upload_id)
+        metadata_file = os.path.join(upload_dir, 'metadata.txt')
+
+        if not os.path.exists(metadata_file):
+            return Response({'error': 'upload not found or expired'}, status=status.HTTP_404_NOT_FOUND)
+
+        metadata = {}
+        with open(metadata_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if '=' in line:
+                    key, value = line.split('=', 1)
+                    if key == 'uploaded_chunks':
+                        metadata[key] = [int(x) for x in value.split(',') if x]
+                    elif key in ['total_chunks', 'file_size']:
+                        metadata[key] = int(value)
+                    else:
+                        metadata[key] = value
+
+        chunk_file = os.path.join(upload_dir, f'chunk_{chunk_index:06d}')
+        with open(chunk_file, 'wb') as f:
+            for block in chunk.chunks():
+                f.write(block)
+
+        if 'uploaded_chunks' not in metadata:
+            metadata['uploaded_chunks'] = []
+        metadata['uploaded_chunks'].append(chunk_index)
+
+        with open(metadata_file, 'w', encoding='utf-8') as f:
+            for key, value in metadata.items():
+                if key == 'uploaded_chunks':
+                    f.write(f"{key}={','.join(map(str, sorted(value)))}\n")
+                else:
+                    f.write(f"{key}={value}\n")
+
+        return Response({
+            'upload_id': upload_id,
+            'chunk_index': chunk_index,
+            'uploaded_chunks': len(metadata['uploaded_chunks'])
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'])
+    def complete(self, request):
+        upload_id = request.data.get('upload_id')
+
+        if not upload_id:
+            return Response({'error': 'upload_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        temp_dir = get_upload_temp_dir()
+        upload_dir = os.path.join(temp_dir, upload_id)
+        metadata_file = os.path.join(upload_dir, 'metadata.txt')
+
+        if not os.path.exists(metadata_file):
+            return Response({'error': 'upload not found or expired'}, status=status.HTTP_404_NOT_FOUND)
+
+        metadata = {}
+        with open(metadata_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if '=' in line:
+                    key, value = line.split('=', 1)
+                    if key == 'uploaded_chunks':
+                        metadata[key] = [int(x) for x in value.split(',') if x]
+                    elif key in ['total_chunks', 'file_size']:
+                        metadata[key] = int(value)
+                    else:
+                        metadata[key] = value
+
+        filename = metadata.get('filename', 'unknown')
+        total_chunks = metadata.get('total_chunks', 0)
+        uploaded_chunks = metadata.get('uploaded_chunks', [])
+
+        if len(uploaded_chunks) != total_chunks:
+            return Response({
+                'error': f'missing chunks, expected {total_chunks}, got {len(uploaded_chunks)}',
+                'uploaded_chunks': len(uploaded_chunks)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        config = SystemConfig.objects.filter(key='music_path').first()
+        music_path = config.value if config and config.value else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+        safe_filename = filename
+        dest_path = os.path.join(music_path, safe_filename)
+        counter = 1
+        while os.path.exists(dest_path):
+            name, ext = os.path.splitext(filename)
+            safe_filename = f"{name}_{counter}{ext}"
+            dest_path = os.path.join(music_path, safe_filename)
+            counter += 1
+
+        try:
+            with open(dest_path, 'wb') as dest_file:
+                for i in range(total_chunks):
+                    chunk_file = os.path.join(upload_dir, f'chunk_{i:06d}')
+                    with open(chunk_file, 'rb') as chunk_file_obj:
+                        while True:
+                            block = chunk_file_obj.read(self.CHUNK_SIZE)
+                            if not block:
+                                break
+                            dest_file.write(block)
+        except Exception as e:
+            return Response({'error': f'failed to merge chunks: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        for i in range(total_chunks):
+            chunk_file = os.path.join(upload_dir, f'chunk_{i:06d}')
+            if os.path.exists(chunk_file):
+                os.remove(chunk_file)
+        os.remove(metadata_file)
+        os.rmdir(upload_dir)
+
+        try:
+            audio_easy = mutagen.File(dest_path, easy=True)
+            if audio_easy is None:
+                audio_easy = mutagen.File(dest_path)
+
+            title = getattr(audio_easy, 'title', None) or Path(filename).stem
+            raw_artist_string = getattr(audio_easy, 'artist', None) or 'Unknown Artist'
+            album_title = getattr(audio_easy, 'album', None) or 'Unknown Album'
+            duration = getattr(audio_easy.info, 'length', 0.0) if hasattr(audio_easy, 'info') else 0.0
+            format_str = Path(dest_path).suffix.lower().lstrip('.')
+
+            audio_raw = mutagen.File(dest_path)
+            lyrics_text = ''
+            if audio_raw and hasattr(audio_raw, 'tags') and audio_raw.tags:
+                for key in audio_raw.tags.keys():
+                    if key.startswith('USLT'):
+                        lyrics_text = audio_raw.tags[key].text
+                        break
+                if not lyrics_text:
+                    if 'lyrics' in audio_raw:
+                        lyrics_text = str(audio_raw['lyrics'][0])
+                    elif '\xa9lyr' in audio_raw:
+                        lyrics_text = str(audio_raw['\xa9lyr'][0])
+
+            primary_artist_obj, _ = Artist.objects.get_or_create(name=raw_artist_string)
+
+            album_obj = Album.objects.filter(title=album_title).first()
+            if not album_obj:
+                if album_title == 'Unknown Album':
+                    unknown_artist, _ = Artist.objects.get_or_create(name='Unknown Artist')
+                    album_obj = Album.objects.create(title=album_title, artist=unknown_artist)
+                else:
+                    album_obj = Album.objects.create(title=album_title, artist=primary_artist_obj)
+
+            track_obj = Track.objects.create(
+                title=title,
+                artist=primary_artist_obj,
+                album=album_obj,
+                file_path=dest_path,
+                lyrics=lyrics_text,
+                duration=duration,
+                format=format_str
+            )
+
+            artist_names = parse_artists(raw_artist_string)
+            all_artist_objs = [Artist.objects.get_or_create(name=n)[0] for n in artist_names]
+            track_obj.artists.set(all_artist_objs)
+            track_obj.save()
+
+            extract_and_save_thumbnail(dest_path, track_obj)
+
+            return Response({
+                'success': True,
+                'track_id': track_obj.id,
+                'title': title,
+                'file_path': dest_path
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            if os.path.exists(dest_path):
+                try:
+                    os.remove(dest_path)
+                except Exception:
+                    pass
+            return Response({'error': f'failed to process file: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['delete'])
+    def cancel(self, request):
+        upload_id = request.query_params.get('upload_id')
+
+        if not upload_id:
+            return Response({'error': 'upload_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        temp_dir = get_upload_temp_dir()
+        upload_dir = os.path.join(temp_dir, upload_id)
+        metadata_file = os.path.join(upload_dir, 'metadata.txt')
+
+        if not os.path.exists(metadata_file):
+            return Response({'error': 'upload not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        metadata = {}
+        with open(metadata_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if '=' in line:
+                    key, value = line.split('=', 1)
+                    if key == 'uploaded_chunks':
+                        metadata[key] = [int(x) for x in value.split(',') if x]
+                    elif key in ['total_chunks']:
+                        metadata[key] = int(value)
+
+        uploaded_chunks = metadata.get('uploaded_chunks', [])
+        for i in uploaded_chunks:
+            chunk_file = os.path.join(upload_dir, f'chunk_{i:06d}')
+            if os.path.exists(chunk_file):
+                os.remove(chunk_file)
+
+        if os.path.exists(metadata_file):
+            os.remove(metadata_file)
+        if os.path.exists(upload_dir):
+            try:
+                os.rmdir(upload_dir)
+            except Exception:
+                pass
+
+        return Response({'success': True}, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'])
+    def status(self, request):
+        upload_id = request.query_params.get('upload_id')
+
+        if not upload_id:
+            return Response({'error': 'upload_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        temp_dir = get_upload_temp_dir()
+        upload_dir = os.path.join(temp_dir, upload_id)
+        metadata_file = os.path.join(upload_dir, 'metadata.txt')
+
+        if not os.path.exists(metadata_file):
+            return Response({'error': 'upload not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        metadata = {}
+        with open(metadata_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if '=' in line:
+                    key, value = line.split('=', 1)
+                    if key == 'uploaded_chunks':
+                        metadata[key] = [int(x) for x in value.split(',') if x]
+                    elif key in ['total_chunks', 'file_size']:
+                        metadata[key] = int(value)
+                    else:
+                        metadata[key] = value
+
+        return Response({
+            'filename': metadata.get('filename'),
+            'total_chunks': metadata.get('total_chunks', 0),
+            'uploaded_chunks': len(metadata.get('uploaded_chunks', [])),
+            'file_size': metadata.get('file_size', 0)
+        }, status=status.HTTP_200_OK)
