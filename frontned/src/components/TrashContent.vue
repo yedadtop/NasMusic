@@ -1,6 +1,5 @@
 <template>
   <div class="apple-font text-[#1d1d1f]">
-    <h1 class="text-[32px] md:text-[40px] font-bold mb-8 md:mb-12 tracking-tight">回收站</h1>
 
     <AppleToast v-if="toastVisible" v-model="toastVisible" :message="toastMessage" :type="toastType" />
     <AppleConfirmModal

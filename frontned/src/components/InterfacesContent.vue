@@ -1,7 +1,6 @@
 <template>
   <div class="apple-font text-[#1d1d1f]">
     <AppleToast v-if="toastVisible" v-model="toastVisible" :message="toastMessage" :type="toastType" />
-    <h1 class="text-[32px] md:text-[40px] font-bold mb-8 md:mb-12 tracking-tight">接口管理</h1>
 
     <section class="mb-10 bg-white rounded-[20px] p-6 sm:p-8 shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100/50 transition-all">
       <div class="flex items-center mb-3">
