@@ -10,6 +10,13 @@
           设置
         </button>
         <button
+          @click="activeTab = 'scraper'"
+          class="pb-3 px-1 text-[17px] font-semibold border-b-2 transition-colors mr-6"
+          :class="activeTab === 'scraper' ? 'border-[#0071e3] text-[#0071e3]' : 'border-transparent text-[#86868b] hover:text-[#1d1d1f]'"
+        >
+          刮削
+        </button>
+        <button
           @click="activeTab = 'interfaces'"
           class="pb-3 px-1 text-[17px] font-semibold border-b-2 transition-colors mr-6"
           :class="activeTab === 'interfaces' ? 'border-[#0071e3] text-[#0071e3]' : 'border-transparent text-[#86868b] hover:text-[#1d1d1f]'"
@@ -37,7 +44,7 @@
       @confirm="handleConfirm"
     />
 
-    <template v-if="activeTab === 'settings'">
+    <div v-show="activeTab === 'settings'" class="min-h-[600px]">
 
       <section class="mb-8 bg-white rounded-[20px] p-6 sm:p-8 shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100/50 transition-all">
         <div class="flex items-center mb-3">
@@ -136,55 +143,6 @@
         </div>
       </section>
 
-      <section class="mb-10 bg-white rounded-[20px] p-6 sm:p-8 shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100/50">
-        <div class="flex items-center mb-3">
-          <div class="w-10 h-10 bg-[#f3e5f5] text-[#af52de] rounded-[10px] flex items-center justify-center mr-4">
-            <Icon icon="mdi:image-multiple" class="w-5 h-5" />
-          </div>
-          <h2 class="text-xl font-semibold tracking-tight">批量操作</h2>
-        </div>
-
-        <p class="text-[15px] text-[#86868b] mb-6 leading-relaxed">
-          对音乐库中的封面、标签等信息进行批量管理和更新操作。
-        </p>
-
-        <div class="flex flex-col sm:flex-row gap-4">
-          <div class="w-full sm:w-auto">
-            <el-button
-              type="warning"
-              :loading="scanning"
-              @click="openRescanCoversConfirm"
-              class="w-full custom-apple-button !bg-[#ff9500] !border-[#ff9500]"
-            >
-              <Icon icon="mdi:image-refresh" class="w-4 h-4 mr-2" />
-              更新所有封面
-            </el-button>
-          </div>
-          <div class="w-full sm:w-auto">
-            <el-button
-              type="primary"
-              :loading="scraping"
-              @click="openScrapeCoversConfirm"
-              class="w-full custom-apple-button"
-            >
-              <Icon icon="mdi:cloud-download" class="w-4 h-4 mr-2" />
-              补全缺失封面
-            </el-button>
-          </div>
-          <div class="w-full sm:w-auto">
-            <el-button
-              type="success"
-              :loading="scrapingLyrics"
-              @click="openScrapeLyricsConfirm"
-              class="w-full custom-apple-button !bg-[#34c759] !border-[#34c759]"
-            >
-              <Icon icon="mdi:music-note" class="w-4 h-4 mr-2" />
-              补全缺失歌词
-            </el-button>
-          </div>
-        </div>
-      </section>
-
       <section class="mt-12">
         <h2 class="text-[13px] font-semibold text-[#86868b] uppercase tracking-widest mb-4 ml-2">快捷键说明</h2>
         <div class="bg-white rounded-[20px] shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100/50 overflow-hidden">
@@ -236,15 +194,19 @@
           </div>
         </div>
       </section>
-    </template>
+    </div>
 
-    <template v-else-if="activeTab === 'interfaces'">
+    <div v-show="activeTab === 'interfaces'" class="min-h-[600px]">
       <InterfacesContent />
-    </template>
+    </div>
 
-    <template v-else-if="activeTab === 'trash'">
+    <div v-show="activeTab === 'trash'" class="min-h-[600px]">
       <TrashContent />
-    </template>
+    </div>
+
+    <div v-show="activeTab === 'scraper'" class="min-h-[600px]">
+      <ScraperContent @task-started="handleTaskStarted" />
+    </div>
   </div>
 </template>
 
@@ -252,19 +214,17 @@
 import { ref, onMounted, onUnmounted, computed, defineAsyncComponent } from 'vue'
 import axios from 'axios'
 import { FolderOpened, Loading, CircleCheck } from '@element-plus/icons-vue'
-import { Icon } from '@iconify/vue'
 import AppleToast from '../components/AppleToast.vue'
 import AppleConfirmModal from '../components/AppleConfirmModal.vue'
 
 const InterfacesContent = defineAsyncComponent(() => import('../components/InterfacesContent.vue'))
 const TrashContent = defineAsyncComponent(() => import('../components/TrashContent.vue'))
+const ScraperContent = defineAsyncComponent(() => import('../components/ScraperContent.vue'))
 
 const activeTab = ref('settings')
 
 const musicPath = ref('')
 const scanning = ref(false)
-const scraping = ref(false)
-const scrapingLyrics = ref(false)
 const saving = ref(false)
 let timer = null
 
@@ -285,42 +245,8 @@ const confirmConfirmText = ref('')
 const confirmAction = ref(null)
 const confirmFile = ref(null)
 
-const openRescanCoversConfirm = () => {
-  confirmTitle.value = '更新所有封面'
-  confirmMessage.value = '确定要更新所有歌曲的内嵌封面吗？这将删除并重新提取所有封面图片，可能需要较长时间。'
-  confirmConfirmText.value = '确定'
-  confirmAction.value = 'rescanCovers'
-  confirmFile.value = null
-  showConfirmModal.value = true
-}
-
-const openScrapeCoversConfirm = () => {
-  confirmTitle.value = '补全缺失封面'
-  confirmMessage.value = '确定要通过网络爬取所有缺失封面的歌曲封面吗？系统会自动检测物理文件中没有封面的歌曲，然后通过API接口获取并嵌入高清封面。'
-  confirmConfirmText.value = '确定'
-  confirmAction.value = 'scrapeCovers'
-  confirmFile.value = null
-  showConfirmModal.value = true
-}
-
-const openScrapeLyricsConfirm = () => {
-  confirmTitle.value = '补全缺失歌词'
-  confirmMessage.value = '确定要通过网络爬取所有缺失歌词的歌曲吗？系统会自动检测数据库中没有歌词的歌曲，然后通过LRCLIB接口获取并嵌入歌词。'
-  confirmConfirmText.value = '确定'
-  confirmAction.value = 'scrapeLyrics'
-  confirmFile.value = null
-  showConfirmModal.value = true
-}
-
 const handleConfirm = async () => {
   showConfirmModal.value = false
-  if (confirmAction.value === 'rescanCovers') {
-    await rescanCovers()
-  } else if (confirmAction.value === 'scrapeCovers') {
-    await scrapeCovers()
-  } else if (confirmAction.value === 'scrapeLyrics') {
-    await scrapeLyrics()
-  }
 }
 
 const scanTask = ref({
@@ -379,54 +305,9 @@ const startScan = async () => {
   }
 }
 
-const rescanCovers = async () => {
-  try {
-    scanning.value = true
-    const res = await axios.post('/api/scanner/run/', {
-      force_reextract_cover: true
-    })
-    scanTask.value.id = res.data.task_id
-    showToast('封面重提取任务已在后台启动', 'success')
-    startPolling()
-  } catch (error) {
-    const msg = error.response?.data?.message || '启动失败，请检查后端服务'
-    showToast(msg, 'error')
-    scanning.value = false
-  }
-}
-
-const scrapeCovers = async () => {
-  try {
-    scraping.value = true
-    const res = await axios.post('/api/scanner/run/')
-    scanTask.value.id = res.data.task_id
-    await axios.post('/api/scraper/batch/scrape/', {
-      task_id: res.data.task_id
-    })
-    showToast('补全封面任务已在后台启动', 'success')
-    startPolling()
-  } catch (error) {
-    const msg = error.response?.data?.message || '启动失败，请检查后端服务'
-    showToast(msg, 'error')
-    scraping.value = false
-  }
-}
-
-const scrapeLyrics = async () => {
-  try {
-    scrapingLyrics.value = true
-    const res = await axios.post('/api/scanner/run/')
-    scanTask.value.id = res.data.task_id
-    await axios.post('/api/scraper/batch/scrape_lyrics/', {
-      task_id: res.data.task_id
-    })
-    showToast('补全歌词任务已在后台启动', 'success')
-    startPolling()
-  } catch (error) {
-    const msg = error.response?.data?.message || '启动失败，请检查后端服务'
-    showToast(msg, 'error')
-    scrapingLyrics.value = false
-  }
+const handleTaskStarted = (taskId) => {
+  scanTask.value.id = taskId
+  startPolling()
 }
 
 const fetchStatus = async () => {
@@ -435,7 +316,7 @@ const fetchStatus = async () => {
     const res = await axios.get('/api/scanner/status/', {
       params: { task_id: scanTask.value.id }
     })
-    
+
     const data = res.data
     scanTask.value.status = data.status
     scanTask.value.progress = data.progress
@@ -449,21 +330,9 @@ const fetchStatus = async () => {
     if (data.status === 'completed') {
       stopPolling()
       scanning.value = false
-      if (scraping.value) {
-        scraping.value = false
-      }
-      if (scrapingLyrics.value) {
-        scrapingLyrics.value = false
-      }
     } else if (data.status === 'error') {
       stopPolling()
       scanning.value = false
-      if (scraping.value) {
-        scraping.value = false
-      }
-      if (scrapingLyrics.value) {
-        scrapingLyrics.value = false
-      }
       const errMsg = data.error_message || '扫描发生未知错误'
       showToast(errMsg, 'error')
     }
