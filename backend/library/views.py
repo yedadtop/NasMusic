@@ -65,36 +65,26 @@ class TrackViewSet(viewsets.ModelViewSet):
                 print(f"API图片上传处理失败: {e}")
 
         try:
-            audio = mutagen.File(track_instance.file_path)
-            if audio is not None:
+            audio_easy = mutagen.File(track_instance.file_path, easy=True)
+            if audio_easy is not None:
+                audio_easy['title'] = track_instance.title or ''
+                audio_easy['artist'] = track_instance.artist.name if track_instance.artist else 'Unknown Artist'
+                audio_easy['album'] = track_instance.album.title if track_instance.album else ''
+                audio_easy.save()
+
+            audio_raw = mutagen.File(track_instance.file_path)
+            if audio_raw is not None and track_instance.lyrics:
                 ext = track_instance.format.lower()
-
                 if ext == 'mp3':
-                    from mutagen.id3 import ID3, TIT2, TPE1, TALB, USLT
-                    if audio.tags is None:
-                        audio.add_tags()
-                    audio.tags['title'] = TIT2(encoding=3, text=track_instance.title or '')
-                    artist_name = track_instance.artist.name if track_instance.artist else 'Unknown Artist'
-                    audio.tags['artist'] = TPE1(encoding=3, text=artist_name)
-                    album_name = track_instance.album.title if track_instance.album else ''
-                    audio.tags['album'] = TALB(encoding=3, text=album_name)
-                else:
-                    audio['title'] = track_instance.title or ''
-                    audio['artist'] = track_instance.artist.name if track_instance.artist else 'Unknown Artist'
-                    audio['album'] = track_instance.album.title if track_instance.album else ''
-
-                if track_instance.lyrics is not None:
-                    lyrics_text = track_instance.lyrics
-                    if ext == 'mp3':
-                        if audio.tags is None:
-                            audio.add_tags()
-                        audio.tags.setall("USLT", [USLT(encoding=3, lang='eng', desc='', text=lyrics_text)])
-                    elif ext in ['flac', 'ogg']:
-                        audio["lyrics"] = lyrics_text
-                    elif ext == 'm4a':
-                        audio['\xa9lyr'] = lyrics_text
-
-                audio.save()
+                    from mutagen.id3 import USLT
+                    if getattr(audio_raw, 'tags', None) is None:
+                        audio_raw.add_tags()
+                    audio_raw.tags.setall("USLT", [USLT(encoding=3, lang='eng', desc='', text=track_instance.lyrics)])
+                elif ext in ['flac', 'ogg']:
+                    audio_raw["lyrics"] = track_instance.lyrics
+                elif ext == 'm4a':
+                    audio_raw['\xa9lyr'] = track_instance.lyrics
+                audio_raw.save()
         except Exception as e:
             print(f"物理文件标签写入失败: {e}")
 
