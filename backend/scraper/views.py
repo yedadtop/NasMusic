@@ -176,6 +176,16 @@ class BatchScrapeCoverView(APIView):
 
                 print(f"[批量刮削] 任务完成: 成功 {len(success_list)} 首, 失败 {len(failed_list)} 首")
                 print(f"[批量刮削] 跳过: 已有封面 {len(tracks_already_has_cover)} 首, 文件不存在 {len(tracks_file_not_exist)} 首")
+            except Exception as e:
+                print(f"[批量刮削] 任务异常中断: {e}")
+                task.status = 'failed'
+                task.current_file = ''
+                task.result_summary = json.dumps({
+                    "error": str(e),
+                    "success_count": len(success_list) if 'success_list' in dir() else 0,
+                    "failed_count": len(failed_list) if 'failed_list' in dir() else 0
+                }, ensure_ascii=False)
+                task.save()
             finally:
                 close_old_connections()
 
@@ -337,6 +347,16 @@ class BatchScrapeLyricsView(APIView):
 
                 print(f"[批量歌词刮削] 完成: 成功 {len(success_list)} 首, 失败 {len(failed_list)} 首")
                 print(f"[批量歌词刮削] 跳过: 已有歌词 {len(tracks_already_has_lyrics)} 首, 文件不存在 {len(tracks_file_not_exist)} 首")
+            except Exception as e:
+                print(f"[批量歌词刮削] 任务异常中断: {e}")
+                task.status = 'failed'
+                task.current_file = ''
+                task.result_summary = json.dumps({
+                    "error": str(e),
+                    "success_count": len(success_list) if 'success_list' in dir() else 0,
+                    "failed_count": len(failed_list) if 'failed_list' in dir() else 0
+                }, ensure_ascii=False)
+                task.save()
             finally:
                 close_old_connections()
 

@@ -94,7 +94,8 @@ class Track(models.Model):
                 new_cover = self.cover_thumbnail
 
                 old_cover_cleared = old_cover and not new_cover
-                if old_cover_cleared:
+                old_cover_replaced = old_cover and new_cover and new_cover != old_cover
+                if old_cover_cleared or old_cover_replaced:
                     old_cover_path = old_cover.path
                     self._old_cover_path_to_delete = old_cover_path
             except Track.DoesNotExist:
