@@ -52,7 +52,26 @@
               </div>
             </div>
             <div class="flex items-center space-x-3 md:space-x-4 text-white/70 shrink-0">
-              <button class="hover:text-white transition" @click="showEditModal = true"><Icon icon="mdi:dots-vertical" class="w-4 h-4 md:w-5 md:h-5" /></button>
+              <div class="relative">
+                <button class="hover:text-white transition" @click="showOptionsMenu = !showOptionsMenu"><Icon icon="mdi:dots-vertical" class="w-4 h-4 md:w-5 md:h-5" /></button>
+                <div 
+                  v-if="showOptionsMenu"
+                  class="absolute right-0 top-full mt-2 bg-gray-800/90 backdrop-blur-sm rounded-lg shadow-xl py-2 min-w-[120px] z-50"
+                >
+                  <button 
+                    class="flex items-center w-full px-4 py-2 text-sm text-white/80 hover:text-white hover:bg-white/10 transition"
+                    @click="showEditModal = true; showOptionsMenu = false"
+                  >
+                    <Icon icon="mdi:pencil" class="w-4 h-4 mr-2" />
+                    修改
+                  </button>
+                </div>
+                <div 
+                  v-if="showOptionsMenu"
+                  class="fixed inset-0 z-40"
+                  @click="showOptionsMenu = false"
+                ></div>
+              </div>
             </div>
           </div>
 
@@ -137,6 +156,7 @@ const emit = defineEmits(['close', 'trackUpdated'])
 const player = usePlayerStore()
 const lyricsContainer = ref(null)
 const showEditModal = ref(false)
+const showOptionsMenu = ref(false)
 const lyricRefs = ref({})
 
 onBeforeUpdate(() => {
