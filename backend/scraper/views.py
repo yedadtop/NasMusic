@@ -27,9 +27,12 @@ class TrackScrapeView(APIView):
     def post(self, request, track_id):
         track = get_object_or_404(Track, id=track_id)
 
-        has_cover = track.cover_thumbnail and str(track.cover_thumbnail) != ''
+        has_cover = bool(track.cover_thumbnail and str(track.cover_thumbnail).strip())
 
         success, message = fetch_and_embed_cover(track)
+
+        track.refresh_from_db()
+        has_cover_after = bool(track.cover_thumbnail and str(track.cover_thumbnail).strip())
 
         response_data = {
             "track_id": track.id,
@@ -37,7 +40,7 @@ class TrackScrapeView(APIView):
             "success": success,
             "message": message,
             "had_cover_before": has_cover,
-            "has_cover_after": track.cover_thumbnail and str(track.cover_thumbnail) != ''
+            "has_cover_after": has_cover_after
         }
 
         if success:
@@ -47,7 +50,7 @@ class TrackScrapeView(APIView):
 
     def get(self, request, track_id):
         track = get_object_or_404(Track, id=track_id)
-        has_cover = track.cover_thumbnail and str(track.cover_thumbnail) != ''
+        has_cover = bool(track.cover_thumbnail and str(track.cover_thumbnail).strip())
 
         return Response({
             "track_id": track.id,
@@ -100,7 +103,7 @@ class BatchScrapeCoverView(APIView):
             tracks_already_has_cover = []
 
             for track in tracks:
-                has_cover = track.cover_thumbnail and str(track.cover_thumbnail).strip() != ''
+                has_cover = bool(track.cover_thumbnail and str(track.cover_thumbnail).strip())
                 if has_cover:
                     tracks_already_has_cover.append(track)
                     print(f"[批量刮削] 已有封面，跳过: {track.title} - {track.file_path}")
@@ -186,13 +189,16 @@ class TrackScrapeLyricsView(APIView):
 
         success, message = fetch_and_embed_lyrics(track)
 
+        track.refresh_from_db()
+        has_lyrics_after = bool(track.lyrics and track.lyrics.strip())
+
         response_data = {
             "track_id": track.id,
             "track_title": track.title,
             "success": success,
             "message": message,
             "had_lyrics_before": has_lyrics_before,
-            "has_lyrics_after": bool(track.lyrics and track.lyrics.strip()),
+            "has_lyrics_after": has_lyrics_after,
             "lyrics_length": len(track.lyrics) if track.lyrics else 0
         }
 
