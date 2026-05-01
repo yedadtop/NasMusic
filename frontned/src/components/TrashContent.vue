@@ -25,34 +25,38 @@
       </p>
 
       <div class="flex flex-col sm:flex-row gap-4 mb-6">
-        <el-button
-          type="primary"
-          :loading="loadingTrash"
-          @click="fetchTrashFiles"
-          class="w-full sm:w-auto custom-apple-button"
-        >
-          <Icon icon="mdi:refresh" class="w-4 h-4 mr-2" />
-          查看垃圾箱
-        </el-button>
-        <el-button
-          v-if="trashFiles.length > 0"
-          type="warning"
-          :loading="restoringAll"
-          @click="openRestoreAllConfirm"
-          class="w-full sm:w-auto custom-apple-button"
-        >
-          恢复全部
-        </el-button>
-        <el-button
-          v-if="trashFiles.length > 0"
-          type="danger"
-          :loading="deletingAll"
-          @click="openDeleteAllConfirm"
-          class="w-full sm:w-auto custom-apple-button !bg-[#ff3b30]"
-        >
-          <Icon icon="mdi:delete" class="w-4 h-4 mr-2" />
-          清空回收站
-        </el-button>
+        <div class="w-full sm:w-auto">
+          <el-button
+            type="primary"
+            :loading="loadingTrash"
+            @click="fetchTrashFiles"
+            class="w-full custom-apple-button"
+          >
+            <Icon icon="mdi:refresh" class="w-4 h-4 mr-2" />
+            查看垃圾箱
+          </el-button>
+        </div>
+        <div v-if="trashFiles.length > 0" class="w-full sm:w-auto">
+          <el-button
+            type="warning"
+            :loading="restoringAll"
+            @click="openRestoreAllConfirm"
+            class="w-full custom-apple-button"
+          >
+            恢复全部
+          </el-button>
+        </div>
+        <div v-if="trashFiles.length > 0" class="w-full sm:w-auto">
+          <el-button
+            type="danger"
+            :loading="deletingAll"
+            @click="openDeleteAllConfirm"
+            class="w-full custom-apple-button !bg-[#ff3b30]"
+          >
+            <Icon icon="mdi:delete" class="w-4 h-4 mr-2" />
+            清空回收站
+          </el-button>
+        </div>
       </div>
 
       <div v-if="trashFiles.length === 0 && showTrashList" class="text-center py-8 text-[#86868b]">

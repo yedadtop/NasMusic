@@ -16,23 +16,27 @@
       </p>
 
       <div class="flex flex-col sm:flex-row gap-4 mb-6">
-        <el-button
-          type="primary"
-          :loading="loadingInterfaces"
-          @click="fetchInterfaces"
-          class="w-full sm:w-auto custom-apple-button"
-        >
-          <Icon icon="mdi:refresh" class="w-4 h-4 mr-2" />
-          刷新接口列表
-        </el-button>
-        <el-button
-          type="success"
-          @click="openAddDialog"
-          class="w-full sm:w-auto custom-apple-button !bg-[#34c759] !border-[#34c759]"
-        >
-          <Icon icon="mdi:add" class="w-4 h-4 mr-2" />
-          添加接口
-        </el-button>
+        <div class="w-full sm:w-auto">
+          <el-button
+            type="primary"
+            :loading="loadingInterfaces"
+            @click="fetchInterfaces"
+            class="w-full custom-apple-button"
+          >
+            <Icon icon="mdi:refresh" class="w-4 h-4 mr-2" />
+            刷新接口列表
+          </el-button>
+        </div>
+        <div class="w-full sm:w-auto">
+          <el-button
+            type="success"
+            @click="openAddDialog"
+            class="w-full custom-apple-button !bg-[#34c759] !border-[#34c759]"
+          >
+            <Icon icon="mdi:add" class="w-4 h-4 mr-2" />
+            添加接口
+          </el-button>
+        </div>
       </div>
 
       <div v-if="loadingInterfaces" class="text-center py-12">

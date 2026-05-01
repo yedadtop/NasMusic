@@ -59,22 +59,26 @@
             class="flex-1 custom-apple-input"
           />
           <div class="flex flex-col sm:flex-row gap-4">
-            <el-button
-              type="primary"
-              :loading="saving"
-              @click="saveConfig"
-              class="w-full sm:w-auto custom-apple-button"
-            >
-              保存路径
-            </el-button>
-            <el-button
-              type="primary"
-              :loading="scanning"
-              @click="startScan"
-              class="w-full sm:w-auto custom-apple-button"
-            >
-              立即扫描
-            </el-button>
+            <div class="w-full sm:w-auto">
+              <el-button
+                type="primary"
+                :loading="saving"
+                @click="saveConfig"
+                class="w-full custom-apple-button"
+              >
+                保存路径
+              </el-button>
+            </div>
+            <div class="w-full sm:w-auto">
+              <el-button
+                type="primary"
+                :loading="scanning"
+                @click="startScan"
+                class="w-full custom-apple-button"
+              >
+                立即扫描
+              </el-button>
+            </div>
           </div>
         </div>
       </section>
@@ -146,33 +150,39 @@
         </p>
 
         <div class="flex flex-col sm:flex-row gap-4">
-          <el-button
-            type="warning"
-            :loading="scanning"
-            @click="openRescanCoversConfirm"
-            class="w-full sm:w-auto custom-apple-button !bg-[#ff9500] !border-[#ff9500]"
-          >
-            <Icon icon="mdi:image-refresh" class="w-4 h-4 mr-2" />
-            更新所有封面
-          </el-button>
-          <el-button
-            type="primary"
-            :loading="scraping"
-            @click="openScrapeCoversConfirm"
-            class="w-full sm:w-auto custom-apple-button"
-          >
-            <Icon icon="mdi:cloud-download" class="w-4 h-4 mr-2" />
-            补全缺失封面
-          </el-button>
-          <el-button
-            type="success"
-            :loading="scrapingLyrics"
-            @click="openScrapeLyricsConfirm"
-            class="w-full sm:w-auto custom-apple-button !bg-[#34c759] !border-[#34c759]"
-          >
-            <Icon icon="mdi:music-note" class="w-4 h-4 mr-2" />
-            补全缺失歌词
-          </el-button>
+          <div class="w-full sm:w-auto">
+            <el-button
+              type="warning"
+              :loading="scanning"
+              @click="openRescanCoversConfirm"
+              class="w-full custom-apple-button !bg-[#ff9500] !border-[#ff9500]"
+            >
+              <Icon icon="mdi:image-refresh" class="w-4 h-4 mr-2" />
+              更新所有封面
+            </el-button>
+          </div>
+          <div class="w-full sm:w-auto">
+            <el-button
+              type="primary"
+              :loading="scraping"
+              @click="openScrapeCoversConfirm"
+              class="w-full custom-apple-button"
+            >
+              <Icon icon="mdi:cloud-download" class="w-4 h-4 mr-2" />
+              补全缺失封面
+            </el-button>
+          </div>
+          <div class="w-full sm:w-auto">
+            <el-button
+              type="success"
+              :loading="scrapingLyrics"
+              @click="openScrapeLyricsConfirm"
+              class="w-full custom-apple-button !bg-[#34c759] !border-[#34c759]"
+            >
+              <Icon icon="mdi:music-note" class="w-4 h-4 mr-2" />
+              补全缺失歌词
+            </el-button>
+          </div>
         </div>
       </section>
 
