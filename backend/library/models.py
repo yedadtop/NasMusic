@@ -2,6 +2,7 @@
 import os
 import time
 import threading
+import uuid
 from datetime import datetime
 from django.db import models, transaction
 from django.db.models.signals import pre_delete, post_delete
@@ -51,7 +52,8 @@ def move_to_trash(file_path):
     if os.path.exists(trash_path):
         base, ext = os.path.splitext(filename)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        trash_path = os.path.join(trash_dir, f"{base}_{timestamp}{ext}")
+        unique_id = uuid.uuid4().hex[:6]
+        trash_path = os.path.join(trash_dir, f"{base}_{timestamp}_{unique_id}{ext}")
 
     try:
         os.rename(file_path, trash_path)
