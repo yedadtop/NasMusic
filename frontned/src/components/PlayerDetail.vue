@@ -131,6 +131,7 @@ import { computed, ref, watch, nextTick, onBeforeUpdate, onMounted, onUnmounted 
 import { Icon } from '@iconify/vue'
 import { usePlayerStore } from '../stores/player'
 import EditTrackModal from './EditTrackModal.vue'
+import { STREAM_BASE_URL } from '../api'
 
 const emit = defineEmits(['close', 'trackUpdated'])
 const player = usePlayerStore()
@@ -301,14 +302,14 @@ const handleSeek = (e) => {
 
 const prevTrack = () => {
   if (player.prevTrack() && player.audioElement) {
-    player.audioElement.src = `http://127.0.0.1:8000/stream/${player.currentTrack.id}/`
+    player.audioElement.src = `${STREAM_BASE_URL}/stream/${player.currentTrack.id}/`
     player.audioElement.play().catch(() => {})
   }
 }
 
 const nextTrack = () => {
   if (player.nextTrack() && player.audioElement) {
-    player.audioElement.src = `http://127.0.0.1:8000/stream/${player.currentTrack.id}/`
+    player.audioElement.src = `${STREAM_BASE_URL}/stream/${player.currentTrack.id}/`
     player.audioElement.play().catch(() => {})
   }
 }

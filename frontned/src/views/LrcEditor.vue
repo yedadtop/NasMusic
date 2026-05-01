@@ -295,7 +295,7 @@ import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppleToast from '../components/AppleToast.vue'
 import { Back, Check, VideoPlay, VideoPause, RefreshLeft, Document, Plus, Minus, Delete, Refresh, QuestionFilled } from '@element-plus/icons-vue'
-import request from '../api'
+import request, { STREAM_BASE_URL } from '../api'
 import { usePlayerStore } from '../stores/player'
 
 const route = useRoute()
@@ -343,7 +343,7 @@ const lrcListRef = ref(null)
 const lineRefs = ref([])
 
 const audioStreamUrl = computed(() => {
-  return track.value ? `http://127.0.0.1:8000/stream/${track.value.id}/` : ''
+  return track.value ? `${STREAM_BASE_URL}/stream/${track.value.id}/` : ''
 })
 
 const loadTrackData = async () => {

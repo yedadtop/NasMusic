@@ -182,6 +182,7 @@ import PlayerDetail from './components/PlayerDetail.vue'
 import VolumeTooltip from './components/VolumeTooltip.vue'
 import { usePlayerStore } from './stores/player'
 import { Headset, Position, Setting, Search, Star, DArrowLeft, CaretRight, DArrowRight, Document, Operation, Refresh, Switch, Collection, VideoPause } from '@element-plus/icons-vue'
+import { STREAM_BASE_URL } from './api'
 
 const showPlayerDetail = ref(false)
 const searchKeyword = ref('')
@@ -333,7 +334,7 @@ const handlePlayTrack = ({ track, index, tracks }) => {
   
   player.playTrack(track, index, tracks)
   if (audioRef.value) {
-    audioRef.value.src = `http://127.0.0.1:8000/stream/${track.id}/`
+    audioRef.value.src = `${STREAM_BASE_URL}/stream/${track.id}/`
     audioRef.value.play()
   }
   
@@ -379,7 +380,7 @@ const handleEnded = () => {
   if (!player.nextTrack()) {
     player.isPlaying = false
   } else if (audioRef.value) {
-    audioRef.value.src = `http://127.0.0.1:8000/stream/${player.currentTrack.id}/`
+    audioRef.value.src = `${STREAM_BASE_URL}/stream/${player.currentTrack.id}/`
     audioRef.value.play()
   }
 }
@@ -410,14 +411,14 @@ const endDrag = () => {
 
 const prevTrack = () => {
   if (player.prevTrack() && audioRef.value) {
-    audioRef.value.src = `http://127.0.0.1:8000/stream/${player.currentTrack.id}/`
+    audioRef.value.src = `${STREAM_BASE_URL}/stream/${player.currentTrack.id}/`
     audioRef.value.play()
   }
 }
 
 const nextTrack = () => {
   if (player.nextTrack() && audioRef.value) {
-    audioRef.value.src = `http://127.0.0.1:8000/stream/${player.currentTrack.id}/`
+    audioRef.value.src = `${STREAM_BASE_URL}/stream/${player.currentTrack.id}/`
     audioRef.value.play()
   }
 }
