@@ -269,7 +269,7 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
         dest_path = os.path.join(music_path, safe_filename)
         counter = 1
         while os.path.exists(dest_path):
-            name, ext = os.path.splitext(filename)
+            name, ext = os.path.splitext(safe_filename)
             safe_filename = f"{name}_{counter}{ext}"
             dest_path = os.path.join(music_path, safe_filename)
             counter += 1
@@ -285,6 +285,11 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
                                 break
                             dest_file.write(block)
         except Exception as e:
+            if os.path.exists(dest_path):
+                try:
+                    os.remove(dest_path)
+                except Exception:
+                    pass
             return Response({'error': f'failed to merge chunks: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         for i in range(total_chunks):
