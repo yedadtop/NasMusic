@@ -59,7 +59,7 @@
       <div class="mt-6 p-4 bg-[#f5f5f7] rounded-[12px] text-[13px] text-[#86868b] leading-relaxed">
         <div class="mb-3">
           <span class="font-semibold text-[#1d1d1f]">更新封面数据库：</span>
-          扫描音乐库中所有歌曲的封面信息，提取物理文件的封面数据并保存到后端和数据库。
+          扫描提取歌曲的封面并保存到后端和数据库。适合手动添加的歌曲。
         </div>
         <div class="mb-3">
           <span class="font-semibold text-[#1d1d1f]">补全缺失封面：</span>

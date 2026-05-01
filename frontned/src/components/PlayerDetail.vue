@@ -65,16 +65,7 @@
                     <Icon icon="mdi:pencil" class="w-4 h-4 mr-2" />
                     修改
                   </button>
-                  <button 
-                    class="flex items-center w-full px-4 py-2 text-sm text-white/80 hover:text-white hover:bg-white/10 transition"
-                    :class="{ 'opacity-50 cursor-not-allowed': isScraping }"
-                    :disabled="isScraping"
-                    @click="scrapeTrack"
-                  >
-                    <Icon v-if="isScraping" icon="eos-icons:loading" class="w-4 h-4 mr-2 animate-spin" />
-                    <Icon v-else icon="mdi:cloud-download" class="w-4 h-4 mr-2" />
-                    刮削
-                  </button>
+
                 </div>
                 <div 
                   v-if="showOptionsMenu"
@@ -385,47 +376,7 @@ const showToast = (message, type = 'success') => {
   toastVisible.value = true
 }
 
-const scrapeTrack = async () => {
-  if (!player.currentTrack?.id || isScraping.value) return
 
-  isScraping.value = true
-  showOptionsMenu.value = false
-
-  try {
-    const coverRes = await request.post(`/scraper/track/${player.currentTrack.id}/scrape/`)
-    const lyricsRes = await request.post(`/scraper/track/${player.currentTrack.id}/scrape_lyrics/`)
-
-    let message = ''
-    if (coverRes.data.success && lyricsRes.data.success) {
-      message = `刮削成功！封面和歌词已更新`
-    } else if (coverRes.data.success) {
-      message = `封面刮削成功，歌词刮削失败`
-    } else if (lyricsRes.data.success) {
-      message = `歌词刮削成功，封面刮削失败`
-    } else {
-      message = coverRes.data.message || lyricsRes.data.message || '刮削失败'
-    }
-
-    showToast(message, coverRes.data.success && lyricsRes.data.success ? 'success' : 'info')
-
-    if (coverRes.data.success || lyricsRes.data.success) {
-      const detailRes = await request.get(`/tracks/${player.currentTrack.id}/`)
-      if (player.currentTrack && player.currentTrack.id === player.currentTrack.id) {
-        player.currentTrack = { ...player.currentTrack, ...detailRes.data }
-        player.currentTrackDetail = { ...player.currentTrackDetail, ...detailRes.data }
-      }
-      const index = player.playlist.findIndex(t => t.id === player.currentTrack.id)
-      if (index !== -1) {
-        player.playlist[index] = { ...player.playlist[index], ...detailRes.data }
-      }
-    }
-  } catch (error) {
-    console.error('刮削失败:', error)
-    showToast(error.response?.data?.message || '刮削失败，请重试', 'error')
-  } finally {
-    isScraping.value = false
-  }
-}
 </script>
 
 <style scoped>
