@@ -8,11 +8,15 @@
 
 - **音乐扫描入库**：自动扫描本地音乐文件夹，读取音频文件标签（ID3、Vorbis）并提取封面
 - **多歌手支持**：一首歌曲支持多个艺人演唱（通过 ManyToMany 关系实现）
-- **智能歌手拆分**：自动拆分多艺人标签，支持 `/`, `,`, `&`, `-`, `feat.`, `ft.` 以及中文空格分隔
+- **智能歌手拆分**：自动拆分多艺人标签，支持 `/`, `,`, `&`, `-`, `feat.`, `ft.`, `;`, `|`, `+`, `_` 以及中文分隔符（空格、顿号、间隔号）
 - **分页与搜索**：支持歌曲、艺人、专辑的模糊搜索和分页浏览
 - **音频流媒体**：支持 HTTP 206 Partial Content，完美支持 HTML5 audio 标签拖拽
 - **标签同步**：修改歌曲信息后自动同步写入物理音频文件的 ID3/Vorbis 标签
+- **歌词同步**：支持歌词写入 MP3（USLT）、FLAC、OGG、M4A 格式
 - **自动清理**：删除歌曲时自动清理孤立的艺人和专辑记录
+- **回收站功能**：删除的文件自动移入 `.trash` 目录，支持恢复和彻底删除
+- **分片上传**：支持大文件分片上传，断点续传，适合内网传输大音频文件
+- **系统配置**：提供 API 配置音乐库路径等系统参数
 
 ---
 
@@ -20,20 +24,23 @@
 
 ```
 NasMusic/
-├── library/           # 核心音乐库管理
-│   ├── models.py      # Track, Artist, Album 模型
-│   ├── views.py       # REST API ViewSet
-│   ├── serializers.py # DRF 序列化器
-│   ├── admin.py       # Django 后台管理
-│   └── utils.py       # 封面同步工具
-├── scanner/           # 音乐扫描入库
-│   ├── views.py       # 扫描任务 API
-│   ├── tasks.py       # 异步扫描任务
-│   └── utils.py       # 音频标签解析
-├── stream/            # 音频流媒体服务
-│   └── views.py       # 分段流媒体支持
-├── frontend/          # Vue 前端项目
-└── cleanup_db.py      # 数据库清理脚本
+├── backend/
+│   ├── NasMusic/         # Django 项目配置
+│   ├── library/          # 核心音乐库管理
+│   │   ├── models.py     # Track, Artist, Album 模型
+│   │   ├── views.py      # REST API ViewSet
+│   │   ├── serializers.py# DRF 序列化器
+│   │   ├── admin.py      # Django 后台管理
+│   │   └── utils.py      # 封面同步工具
+│   ├── scanner/          # 音乐扫描入库
+│   │   ├── views.py      # 扫描任务 API
+│   │   ├── tasks.py      # 异步扫描任务
+│   │   └── utils.py      # 音频标签解析
+│   ├── stream/           # 音频流媒体服务
+│   │   └── views.py      # 分段流媒体支持
+│   ├── scraper/          # 音乐信息刮削器
+│   └── frontend/         # Vue 前端项目
+└── cleanup_db.py         # 数据库清理脚本（已废弃，由回收站功能替代）
 ```
 
 ---
@@ -105,6 +112,37 @@ POST /api/scanner/run/
 | `/api/scanner/run/` | POST | 触发音乐扫描 |
 | `/api/scanner/status/` | GET | 查询扫描进度 |
 
+### 流媒体接口
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/stream/{track_id}/` | GET | 音频流播放（支持断点续传） |
+
+### 分片上传接口
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/api/upload/init/` | POST | 初始化分片上传 |
+| `/api/upload/upload_chunk/` | POST | 上传分片 |
+| `/api/upload/complete/` | POST | 合并分片完成 |
+| `/api/upload/cancel/` | DELETE | 取消上传 |
+| `/api/upload/status/` | GET | 查询上传状态 |
+
+### 回收站接口
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/api/scanner/trash/` | GET | 获取回收站文件列表 |
+| `/api/scanner/trash/restore/` | POST | 恢复文件（支持批量） |
+| `/api/scanner/trash/empty/` | DELETE | 清空回收站（支持批量） |
+
+### 系统配置接口
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/api/scanner/config/` | GET | 获取所有配置 |
+| `/api/scanner/config/` | PUT | 更新配置项 |
+
 ---
 
 ## 多歌手支持
@@ -123,27 +161,46 @@ POST /api/scanner/run/
 | `&` | `A & B` | `["A", "B"]` |
 | `-` | `A - B` | `["A", "B"]` |
 | `feat./ft.` | `A feat. B` | `["A", "B"]` |
-| 中文空格 | `歌手1 歌手2` | `["歌手1", "歌手2"]` |
+| `;` `\|` `+` `_` | `A;B\|C+D_E` | `["A", "B", "C", "D", "E"]` |
+| 中文分隔符 | `歌手1、歌手2・歌手3` | `["歌手1", "歌手2", "歌手3"]` |
+| 混合分隔 | `A feat. B / C & D` | `["A", "B", "C", "D"]` |
 
-### 更新多歌手
+> 代码会自动检测日文（平假名、片假名）和韩文，优先使用对应语言的分隔符规则。
+
+### 更新歌曲信息
 
 ```json
 PUT /api/tracks/{id}/
 {
+    "title": "新歌曲名",
     "artist_name": "主歌手",
-    "all_artists_names": ["主歌手", "合作歌手1", "合作歌手2"]
+    "album_title": "专辑名",
+    "lyrics": "歌词内容"
 }
 ```
 
+> 注意：更新时系统会自动从 `artist_name` 中拆分为多个歌手，并绑定到歌曲的合作歌手列表。
+
 ---
 
-## 数据库清理
+## 回收站与数据清理
 
-当删除歌曲后，孤立的艺人和专辑会自动清理。如需手动清理：
+删除歌曲时，文件会自动移动到音乐库下的 `.trash` 文件夹，而不是直接删除。可以通过回收站接口恢复或彻底删除文件：
 
 ```bash
-python cleanup_db.py
+# 获取回收站文件列表
+GET /api/scanner/trash/
+
+# 恢复所有文件
+POST /api/scanner/trash/restore/
+{"restore_all": true}
+
+# 清空回收站
+DELETE /api/scanner/trash/empty/
+{"delete_all": true}
 ```
+
+> 注意：`cleanup_db.py` 脚本已废弃，由回收站功能替代。
 
 ---
 
