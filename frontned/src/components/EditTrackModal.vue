@@ -205,10 +205,20 @@ watch(() => props.modelValue, async (val) => {
     coverPreview.value = trackCover
     coverFile.value = null
 
+    const scrapeResults = {
+      coverSuccess: false,
+      lyricsSuccess: false,
+      coverScraped: false,
+      lyricsScraped: false
+    }
+
     if (!trackCover && props.track.id) {
+      scrapeResults.coverScraped = true
+      showToast('正在刮削...', 'info')
       const scrapedCover = await scrapeCover(props.track.id)
       if (scrapedCover) {
         coverPreview.value = scrapedCover
+        scrapeResults.coverSuccess = true
         if (player.currentTrack && player.currentTrack.id === props.track.id) {
           player.currentTrack = { ...player.currentTrack, track_cover: scrapedCover }
         }
@@ -216,16 +226,34 @@ watch(() => props.modelValue, async (val) => {
         if (playlistIndex !== -1) {
           player.playlist[playlistIndex] = { ...player.playlist[playlistIndex], track_cover: scrapedCover }
         }
+      } else {
+        showToast('封面刮削失败', 'error')
       }
     }
 
     if (!trackLyrics && props.track.id) {
+      scrapeResults.lyricsScraped = true
+      showToast('正在刮削...', 'info')
       const scrapedLyrics = await scrapeLyrics(props.track.id)
       if (scrapedLyrics) {
         form.value.lyrics = scrapedLyrics
+        scrapeResults.lyricsSuccess = true
         if (player.currentTrack && player.currentTrack.id === props.track.id) {
           player.currentTrack = { ...player.currentTrack, lyrics: scrapedLyrics }
         }
+      } else {
+        showToast('歌词刮削失败', 'error')
+      }
+    }
+
+    if (scrapeResults.coverScraped || scrapeResults.lyricsScraped) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      if (scrapeResults.coverSuccess && scrapeResults.lyricsSuccess) {
+        showToast('封面和歌词刮削成功', 'success')
+      } else if (scrapeResults.coverSuccess) {
+        showToast('封面刮削成功', 'success')
+      } else if (scrapeResults.lyricsSuccess) {
+        showToast('歌词刮削成功', 'success')
       }
     }
   }
