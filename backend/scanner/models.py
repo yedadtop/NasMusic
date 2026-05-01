@@ -1,5 +1,6 @@
 # scanner/models.py
 from django.db import models
+import json
 
 
 class SystemConfig(models.Model):
@@ -40,6 +41,7 @@ class ScanTask(models.Model):
 
     current_file = models.CharField(max_length=1024, blank=True, null=True, verbose_name="当前正在处理的文件")
     error_message = models.TextField(blank=True, null=True, verbose_name="错误信息")
+    result_summary = models.TextField(blank=True, null=True, verbose_name="任务结果摘要(JSON)")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

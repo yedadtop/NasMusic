@@ -16,10 +16,13 @@ def fetch_and_embed_cover(track):
         print(f"[刮削] 歌曲 '{track.title}' 失败: 系统中没有已启用的刮削接口")
         return False, "系统中没有已启用的刮削接口，请先配置。"
 
-    # 构造搜索词：歌名 + 主歌手
     artist_name = track.artist.name if track.artist and hasattr(track.artist, 'name') and track.artist.name else ''
     search_term = f"{track.title} {artist_name}".strip()
     print(f"[刮削] 歌曲 '{track.title}' 搜索词: '{search_term}'")
+
+    if track.cover_thumbnail and str(track.cover_thumbnail).strip() != '':
+        print(f"[刮削] 歌曲 '{track.title}' 已有封面，跳过刮削: {track.cover_thumbnail.url}")
+        return False, "歌曲已有封面，已跳过刮削。"
 
     for api in apis:
         try:
@@ -89,10 +92,8 @@ def fetch_and_embed_lyrics(track):
     通过 LRCLIB 接口抓取歌词（优先取时间轴滚动歌词），自动简繁转换，并嵌入物理文件与数据库。
     返回: (布尔值是否成功, 提示信息)
     """
-    # 初始化简繁转换器 (t2s 代表繁体转简体)
     cc = OpenCC('t2s')
 
-    # 获取歌手名和歌名，确保有搜索关键词
     artist_name = track.artist.name if track.artist and hasattr(track.artist, 'name') else ''
     title = track.title or ''
 
@@ -100,7 +101,11 @@ def fetch_and_embed_lyrics(track):
         print(f"[歌词刮削] 失败: 歌曲 (ID:{track.id}) 缺少标题")
         return False, "歌曲缺少标题，无法进行搜索。"
 
-    # LRCLIB 的固定 API URL
+    has_existing_lyrics = bool(track.lyrics and track.lyrics.strip())
+    if has_existing_lyrics:
+        print(f"[歌词刮削] 歌曲 '{track.title}' 已有歌词 (长度: {len(track.lyrics)} 字符)，跳过刮削")
+        return False, "歌曲已有歌词，已跳过刮削。"
+
     api_url = "https://lrclib.net/api/search"
     params = {
         'track_name': title,
