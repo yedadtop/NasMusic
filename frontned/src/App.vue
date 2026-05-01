@@ -14,10 +14,10 @@
           <Icon icon="mdi:album" class="w-6 h-6" />
           <span class="sidebar-tooltip">专辑</span>
         </router-link>
-        <button @click="showSearch = true" class="sidebar-icon group" :class="{ 'sidebar-icon-active': showSearch }">
+        <router-link to="/search" class="sidebar-icon group" active-class="sidebar-icon-active">
           <Icon icon="mdi:magnify" class="w-6 h-6" />
           <span class="sidebar-tooltip">搜索</span>
-        </button>
+        </router-link>
         <router-link to="/settings" class="sidebar-icon group" active-class="sidebar-icon-active">
           <Icon icon="mdi:cog" class="w-6 h-6" />
           <span class="sidebar-tooltip">设置</span>
@@ -32,13 +32,13 @@
             <router-link to="/albums" class="hidden sm:block tab-link whitespace-nowrap" active-class="tab-active">专辑</router-link>
           </div>
           <div class="flex items-center space-x-2 sm:space-x-4">
-            <button 
+            <router-link 
               v-if="!showSearch"
-              @click.stop="showSearch = true"
+              to="/search"
               class="p-2 hover:bg-gray-100 rounded-lg transition shrink-0"
             >
               <Icon icon="mdi:magnify" class="w-5 h-5 text-gray-500" />
-            </button>
+            </router-link>
             <div v-else class="absolute right-16 sm:right-24 md:right-32 top-2 sm:top-3 z-50" ref="searchContainer">
               <div class="bg-gray-100 rounded-full px-4 py-2 flex items-center shadow-lg">
                 <Search class="w-4 h-4 text-gray-400 mr-2" />
