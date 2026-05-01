@@ -2,6 +2,8 @@ import io
 import os
 import uuid
 import hashlib
+import time
+import shutil
 from PIL import Image
 from django.core.files.base import ContentFile
 from django.utils.text import get_valid_filename
@@ -126,6 +128,17 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['post'])
     def init(self, request):
+        temp_dir = get_upload_temp_dir()
+        current_time = time.time()
+        for dirname in os.listdir(temp_dir):
+            dir_path = os.path.join(temp_dir, dirname)
+            if os.path.isdir(dir_path):
+                if current_time - os.path.getmtime(dir_path) > 86400:
+                    try:
+                        shutil.rmtree(dir_path)
+                    except Exception:
+                        pass
+
         filename = request.data.get('filename')
         total_chunks = int(request.data.get('total_chunks', 1))
         file_size = int(request.data.get('file_size', 0))
