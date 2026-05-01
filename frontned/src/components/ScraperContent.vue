@@ -2,13 +2,12 @@
   <div class="apple-font text-[#1d1d1f]">
 
     <AppleToast v-if="toastVisible" v-model="toastVisible" :message="toastMessage" :type="toastType" />
-    <AppleConfirmModal
-      v-model="showConfirmModal"
-      :title="confirmTitle"
-      :message="confirmMessage"
-      :confirm-text="confirmConfirmText"
-      cancel-text="取消"
-      @confirm="handleConfirm"
+    <AppleProgressModal
+      v-model="showProgressModal"
+      :title="progressModalTitle"
+      :message="progressModalMessage"
+      :action-type="progressModalAction"
+      @started="handleTaskStarted"
     />
 
     <section class="mb-10 bg-white rounded-[20px] p-6 sm:p-8 shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100/50">
@@ -32,14 +31,13 @@
             class="w-full custom-apple-button !bg-[#ff9500] !border-[#ff9500]"
           >
             <Icon icon="mdi:image-refresh" class="w-4 h-4 mr-2" />
-            更新所有封面
+            更新封面数据库
           </el-button>
         </div>
         <div class="w-full sm:w-auto">
           <el-button
             type="primary"
-            :loading="scraping"
-            @click="openScrapeCoversConfirm"
+            @click="openScrapeCoversModal"
             class="w-full custom-apple-button"
           >
             <Icon icon="mdi:cloud-download" class="w-4 h-4 mr-2" />
@@ -49,8 +47,7 @@
         <div class="w-full sm:w-auto">
           <el-button
             type="success"
-            :loading="scrapingLyrics"
-            @click="openScrapeLyricsConfirm"
+            @click="openScrapeLyricsModal"
             class="w-full custom-apple-button !bg-[#34c759] !border-[#34c759]"
           >
             <Icon icon="mdi:music-note" class="w-4 h-4 mr-2" />
@@ -67,7 +64,7 @@ import { ref } from 'vue'
 import axios from 'axios'
 import { Icon } from '@iconify/vue'
 import AppleToast from './AppleToast.vue'
-import AppleConfirmModal from './AppleConfirmModal.vue'
+import AppleProgressModal from './AppleProgressModal.vue'
 
 const emit = defineEmits(['task-started'])
 
@@ -81,52 +78,32 @@ const showToast = (message, type = 'success') => {
   toastVisible.value = true
 }
 
-const scraping = ref(false)
-const scrapingLyrics = ref(false)
 const scanning = ref(false)
 
-const showConfirmModal = ref(false)
-const confirmTitle = ref('')
-const confirmMessage = ref('')
-const confirmConfirmText = ref('')
-const confirmAction = ref(null)
+const showProgressModal = ref(false)
+const progressModalTitle = ref('')
+const progressModalMessage = ref('')
+const progressModalAction = ref('scrapeCovers')
 
-const openRescanCoversConfirm = () => {
-  confirmTitle.value = '更新所有封面'
-  confirmMessage.value = '确定要更新所有歌曲的内嵌封面吗？这将删除并重新提取所有封面图片，可能需要较长时间。'
-  confirmConfirmText.value = '确定'
-  confirmAction.value = 'rescanCovers'
-  showConfirmModal.value = true
+const openScrapeCoversModal = () => {
+  progressModalTitle.value = '补全缺失封面'
+  progressModalMessage.value = '通过网络爬取缺失封面的歌曲封面，系统会自动检测并通过API接口获取高清封面。'
+  progressModalAction.value = 'scrapeCovers'
+  showProgressModal.value = true
 }
 
-const openScrapeCoversConfirm = () => {
-  confirmTitle.value = '补全缺失封面'
-  confirmMessage.value = '确定要通过网络爬取所有缺失封面的歌曲封面吗？系统会自动检测物理文件中没有封面的歌曲，然后通过API接口获取并嵌入高清封面。'
-  confirmConfirmText.value = '确定'
-  confirmAction.value = 'scrapeCovers'
-  showConfirmModal.value = true
+const openScrapeLyricsModal = () => {
+  progressModalTitle.value = '补全缺失歌词'
+  progressModalMessage.value = '通过网络爬取缺失歌词的歌曲，系统会自动检测并通过LRCLIB接口获取歌词。'
+  progressModalAction.value = 'scrapeLyrics'
+  showProgressModal.value = true
 }
 
-const openScrapeLyricsConfirm = () => {
-  confirmTitle.value = '补全缺失歌词'
-  confirmMessage.value = '确定要通过网络爬取所有缺失歌词的歌曲吗？系统会自动检测数据库中没有歌词的歌曲，然后通过LRCLIB接口获取并嵌入歌词。'
-  confirmConfirmText.value = '确定'
-  confirmAction.value = 'scrapeLyrics'
-  showConfirmModal.value = true
+const handleTaskStarted = (taskId) => {
+  emit('task-started', taskId)
 }
 
-const handleConfirm = async () => {
-  showConfirmModal.value = false
-  if (confirmAction.value === 'rescanCovers') {
-    await rescanCovers()
-  } else if (confirmAction.value === 'scrapeCovers') {
-    await scrapeCovers()
-  } else if (confirmAction.value === 'scrapeLyrics') {
-    await scrapeLyrics()
-  }
-}
-
-const rescanCovers = async () => {
+const openRescanCoversConfirm = async () => {
   try {
     scanning.value = true
     const res = await axios.post('/api/scanner/run/', {
@@ -138,38 +115,6 @@ const rescanCovers = async () => {
     const msg = error.response?.data?.message || '启动失败，请检查后端服务'
     showToast(msg, 'error')
     scanning.value = false
-  }
-}
-
-const scrapeCovers = async () => {
-  try {
-    scraping.value = true
-    const res = await axios.post('/api/scanner/run/')
-    emit('task-started', res.data.task_id)
-    await axios.post('/api/scraper/batch/scrape/', {
-      task_id: res.data.task_id
-    })
-    showToast('补全封面任务已在后台启动', 'success')
-  } catch (error) {
-    const msg = error.response?.data?.message || '启动失败，请检查后端服务'
-    showToast(msg, 'error')
-    scraping.value = false
-  }
-}
-
-const scrapeLyrics = async () => {
-  try {
-    scrapingLyrics.value = true
-    const res = await axios.post('/api/scanner/run/')
-    emit('task-started', res.data.task_id)
-    await axios.post('/api/scraper/batch/scrape_lyrics/', {
-      task_id: res.data.task_id
-    })
-    showToast('补全歌词任务已在后台启动', 'success')
-  } catch (error) {
-    const msg = error.response?.data?.message || '启动失败，请检查后端服务'
-    showToast(msg, 'error')
-    scrapingLyrics.value = false
   }
 }
 </script>

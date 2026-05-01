@@ -1,4 +1,5 @@
 # scanner/views.py
+import json
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -74,7 +75,8 @@ class ScanStatusView(APIView):
             "added_count": task.added_count,
             "updated_count": task.updated_count,
             "deleted_count": getattr(task, 'deleted_count', 0),
-            "error_message": task.error_message
+            "error_message": task.error_message,
+            "result_summary": json.loads(task.result_summary) if task.result_summary else None
         }, status=status.HTTP_200_OK)
 
 
