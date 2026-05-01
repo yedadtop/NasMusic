@@ -1,18 +1,6 @@
 <template>
-  <div class="max-w-3xl mx-auto px-6 py-10 pb-32 apple-font text-[#1d1d1f]">
-    <div class="mb-8">
-      <div class="flex items-center border-b border-gray-200/60">
-        <router-link to="/settings" class="pb-3 px-1 text-[17px] font-semibold border-b-2 transition-colors mr-6" :class="isSettingsActive ? 'border-transparent text-[#86868b] hover:text-[#1d1d1f]' : 'border-[#0071e3] text-[#0071e3]'">
-          设置
-        </router-link>
-        <router-link to="/interfaces" class="pb-3 px-1 text-[17px] font-semibold border-b-2 transition-colors" :class="!isSettingsActive ? 'border-[#0071e3] text-[#0071e3]' : 'border-transparent text-[#86868b] hover:text-[#1d1d1f]'">
-          接口
-        </router-link>
-      </div>
-    </div>
-
+  <div class="apple-font text-[#1d1d1f]">
     <AppleToast v-if="toastVisible" v-model="toastVisible" :message="toastMessage" :type="toastType" />
-
     <h1 class="text-[32px] md:text-[40px] font-bold mb-8 md:mb-12 tracking-tight">接口管理</h1>
 
     <section class="mb-10 bg-white rounded-[20px] p-6 sm:p-8 shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100/50 transition-all">
@@ -202,13 +190,9 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
 import axios from 'axios'
 import { Icon } from '@iconify/vue'
-import AppleToast from '../components/AppleToast.vue'
-
-const route = useRoute()
-const isSettingsActive = computed(() => route.path === '/settings')
+import AppleToast from './AppleToast.vue'
 
 const toastVisible = ref(false)
 const toastMessage = ref('')
