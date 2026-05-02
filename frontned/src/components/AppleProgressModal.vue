@@ -22,7 +22,7 @@
             <p class="apple-modal-message">{{ message }}</p>
           </div>
 
-          <div v-if="status === 'idle'" class="apple-modal-mode">
+          <div v-if="status === 'idle' && actionType !== 'rescanCovers'" class="apple-modal-mode">
             <label class="apple-radio-label">
               <input type="radio" v-model="selectedMode" value="incremental" class="apple-radio-input" />
               <span class="apple-radio-custom"></span>
@@ -123,7 +123,7 @@ const props = defineProps({
   actionType: {
     type: String,
     default: 'scrapeCovers',
-    validator: (val) => ['scrapeCovers', 'scrapeLyrics'].includes(val)
+    validator: (val) => ['scrapeCovers', 'scrapeLyrics', 'rescanCovers'].includes(val)
   }
 })
 
@@ -173,19 +173,26 @@ const handleStart = async () => {
   progressText.value = '正在启动任务...'
 
   try {
-    const scannerRes = await axios.post('/api/scanner/run/')
-    const scannerTaskId = scannerRes.data.task_id
-    emit('started', scannerTaskId)
+    if (props.actionType === 'rescanCovers') {
+      const scannerRes = await axios.post('/api/scanner/run/', {
+        force_reextract_cover: true
+      })
+      currentTaskId.value = scannerRes.data.task_id
+    } else {
+      const scannerRes = await axios.post('/api/scanner/run/')
+      const scannerTaskId = scannerRes.data.task_id
+      emit('started', scannerTaskId)
 
-    const endpoint = props.actionType === 'scrapeCovers'
-      ? '/api/scraper/batch/scrape/'
-      : '/api/scraper/batch/scrape_lyrics/'
+      const endpoint = props.actionType === 'scrapeCovers'
+        ? '/api/scraper/batch/scrape/'
+        : '/api/scraper/batch/scrape_lyrics/'
 
-    const scrapeRes = await axios.post(endpoint, {
-      task_id: scannerTaskId,
-      mode: selectedMode.value
-    })
-    currentTaskId.value = scrapeRes.data.task_id
+      const scrapeRes = await axios.post(endpoint, {
+        task_id: scannerTaskId,
+        mode: selectedMode.value
+      })
+      currentTaskId.value = scrapeRes.data.task_id
+    }
 
     progressText.value = '任务运行中...'
     startPolling()
@@ -217,14 +224,24 @@ const startPolling = () => {
         resultSummary.value = data.result_summary
         status.value = 'success'
         loading.value = false
-      } else if (data.status === 'failed') {
+      } else if (data.status === 'completed') {
+        clearInterval(pollTimer)
+        pollTimer = null
+        resultSummary.value = {
+          success_count: data.added_count + data.updated_count || 0,
+          failed_count: 0,
+          skipped_cover: 0
+        }
+        status.value = 'success'
+        loading.value = false
+      } else if (data.status === 'failed' || data.status === 'error') {
         clearInterval(pollTimer)
         pollTimer = null
         status.value = 'error'
         resultSummary.value = {
           success_count: 0,
           failed_count: 1,
-          failed_list: [{ title: '任务失败', message: data.message || '未知错误' }]
+          failed_list: [{ title: '任务失败', message: data.error_message || data.message || '未知错误' }]
         }
         loading.value = false
       }

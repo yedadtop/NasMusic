@@ -7,7 +7,6 @@
       :title="progressModalTitle"
       :message="progressModalMessage"
       :action-type="progressModalAction"
-      @started="handleTaskStarted"
     />
 
     <section class="mb-10 bg-white rounded-[20px] p-6 sm:p-8 shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100/50">
@@ -26,8 +25,7 @@
         <div class="w-full sm:w-auto">
           <el-button
             type="warning"
-            :loading="scanning"
-            @click="openRescanCoversConfirm"
+            @click="openRescanCoversModal"
             class="w-full custom-apple-button !bg-[#ff9500] !border-[#ff9500]"
           >
             <Icon icon="mdi:image-refresh" class="w-4 h-4 mr-2" />
@@ -76,12 +74,9 @@
 
 <script setup>
 import { ref } from 'vue'
-import axios from 'axios'
 import { Icon } from '@iconify/vue'
 import AppleToast from './AppleToast.vue'
 import AppleProgressModal from './AppleProgressModal.vue'
-
-const emit = defineEmits(['task-started'])
 
 const toastVisible = ref(false)
 const toastMessage = ref('')
@@ -92,8 +87,6 @@ const showToast = (message, type = 'success') => {
   toastType.value = type
   toastVisible.value = true
 }
-
-const scanning = ref(false)
 
 const showProgressModal = ref(false)
 const progressModalTitle = ref('')
@@ -114,24 +107,11 @@ const openScrapeLyricsModal = () => {
   showProgressModal.value = true
 }
 
-const handleTaskStarted = (taskId) => {
-  emit('task-started', taskId)
-}
-
-const openRescanCoversConfirm = async () => {
-  try {
-    scanning.value = true
-    const res = await axios.post('/api/scanner/run/', {
-      force_reextract_cover: true
-    })
-    scanning.value = false
-    emit('task-started', res.data.task_id)
-    showToast('封面重提取任务已在后台启动', 'success')
-  } catch (error) {
-    const msg = error.response?.data?.message || '启动失败，请检查后端服务'
-    showToast(msg, 'error')
-    scanning.value = false
-  }
+const openRescanCoversModal = () => {
+  progressModalTitle.value = '更新封面数据库'
+  progressModalMessage.value = '扫描提取音乐库中所有歌曲的封面并保存到后端和数据库。适合手动添加的歌曲。'
+  progressModalAction.value = 'rescanCovers'
+  showProgressModal.value = true
 }
 </script>
 
