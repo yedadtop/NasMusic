@@ -49,13 +49,22 @@ def parse_artists(artist_string):
 
     return artists if artists else ["Unknown Artist"]
 
+
 def _get_tag_value(tags, key, default="Unknown"):
     if not tags or key not in tags: return default
     value = tags[key]
-    # 【核心修复】：如果 mutagen 解析出的是列表 (常见于 FLAC/APE)，
-    # 先用 '/' 拼接成字符串，再交由 parse_artists 统一且彻底地进行拆分
+
     if isinstance(value, list):
-        return " / ".join(str(v) for v in value)
+        if not value:
+            return default
+
+        # 如果是解析歌手，才用 "/" 拼接以便后续拆分
+        if key == 'artist':
+            return " / ".join(str(v) for v in value)
+
+        # 核心修复：如果是解析标题(title)或专辑(album)等，只取第一个值，防止出现 "歌名 / 歌名-歌手" 的情况
+        return str(value[0])
+
     return value
 
 def _get_lyrics(audio):
