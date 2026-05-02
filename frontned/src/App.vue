@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col h-screen w-screen bg-white text-gray-800 overflow-hidden font-sans">
+  <div class="flex flex-col h-screen w-screen bg-white text-gray-800 overflow-hidden font-sans overscroll-contain">
     <div class="flex flex-1 overflow-hidden" v-show="!isFullScreen">
       <aside class="hidden md:flex flex-col w-16 bg-gray-100 rounded-2xl m-2 ml-1 shrink-0 items-center py-4 gap-1">
         <router-link to="/" class="sidebar-icon group" active-class="sidebar-icon-active" exact-active-class="sidebar-icon-active">
@@ -465,6 +465,10 @@ watch(() => player.currentTrack, (track) => {
 
 <style>
 @reference "tailwindcss";
+
+.overscroll-contain {
+  overscroll-behavior: contain;
+}
 
 .sidebar-icon {
   @apply w-11 h-11 flex items-center justify-center rounded-xl text-gray-500 hover:bg-gray-200 hover:text-gray-700 transition-all relative;
