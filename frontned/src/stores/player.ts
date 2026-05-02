@@ -5,16 +5,16 @@ import request from '../api'
 export const usePlayerStore = defineStore('player', () => {
   const currentTrack = ref(null)
   const currentTrackDetail = ref(null)
-  const playlist = ref([])
+  const playlist = ref<any[]>([])
   const currentIndex = ref(-1)
   const isPlaying = ref(false)
   const currentTime = ref(0)
   const duration = ref(0)
   const volume = ref(1)
-  const audioElement = ref(null)
+  const audioElement = ref<HTMLAudioElement | null>(null)
   const playMode = ref('sequential')
-  const shuffleOrder = ref([])
-  const shuffleHistory = ref([])
+  const shuffleOrder = ref<number[]>([])
+  const shuffleHistory = ref<number[]>([])
 
   const progress = computed(() => {
     if (!duration.value) return 0
@@ -45,7 +45,9 @@ export const usePlayerStore = defineStore('player', () => {
     const indices = playlist.value.map((_, i) => i).filter(i => i !== excludeIndex)
     for (let i = indices.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [indices[i], indices[j]] = [indices[j], indices[i]]
+      const temp = indices[i]!
+      indices[i] = indices[j]!
+      indices[j] = temp
     }
     return indices
   }
@@ -64,7 +66,7 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
-  async function fetchTrackDetail(id) {
+  async function fetchTrackDetail(id: string | number) {
     try {
       const res = await request.get(`/tracks/${id}/`)
       currentTrackDetail.value = res.data
@@ -73,7 +75,7 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
-  function playTrack(track, index = -1, tracks = []) {
+  function playTrack(track: any, index = -1, tracks: any[] = []) {
     if (tracks.length > 0) {
       playlist.value = tracks
       currentIndex.value = index
@@ -99,6 +101,7 @@ export const usePlayerStore = defineStore('player', () => {
     if (playMode.value === 'shuffle') {
       if (shuffleHistory.value.length > 0) {
         const prevIndex = shuffleHistory.value.pop()
+        if (prevIndex === undefined) return false
         const track = playlist.value[prevIndex]
         currentIndex.value = prevIndex
         playTrack(track)
@@ -120,6 +123,7 @@ export const usePlayerStore = defineStore('player', () => {
       if (shuffleOrder.value.length > 0) {
         shuffleHistory.value.push(currentIndex.value)
         const nextIndex = shuffleOrder.value.shift()
+        if (nextIndex === undefined) return false
         const track = playlist.value[nextIndex]
         currentIndex.value = nextIndex
         playTrack(track)
@@ -152,19 +156,19 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
-  function setCurrentTime(time) {
+  function setCurrentTime(time: number) {
     currentTime.value = time
   }
 
-  function setDuration(dur) {
+  function setDuration(dur: number) {
     duration.value = dur
   }
 
-  function setVolume(vol) {
+  function setVolume(vol: number) {
     volume.value = vol
   }
 
-  function setAudioElement(el) {
+  function setAudioElement(el: HTMLAudioElement) {
     audioElement.value = el
   }
 
