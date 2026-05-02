@@ -1,276 +1,287 @@
 <template>
   <div class="h-screen w-full flex flex-col bg-gray-50 overflow-hidden font-sans">
-    <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0 z-10 shadow-sm">
-      <div class="flex items-center space-x-4">
-        <span v-if="track" class="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full border border-gray-200">
-          当前编辑: {{ track.title }} - {{ (track.all_artists || []).join('/') || track.artist_name || '未知歌手' }}
+    
+    <!-- Header 响应式导航栏 -->
+    <header class="h-14 md:h-16 bg-white border-b border-gray-200 flex items-center justify-between px-3 md:px-6 shrink-0 z-20 shadow-sm gap-2">
+      <div class="flex items-center flex-1 min-w-0 mr-2">
+        <!-- 移动端：显示呼出侧边栏的按钮 -->
+        <el-button 
+          class="md:hidden mr-2 md:mr-3 shadow-sm shrink-0" 
+          :icon="Operation" 
+          circle 
+          @click="sidebarDrawer = true"
+        />
+        <!-- 恢复歌名歌手，全尺寸显示并防溢出截断 -->
+        <span v-if="track" class="inline-flex items-center text-[11px] md:text-sm text-gray-500 bg-gray-100 px-2 md:px-3 py-1 md:py-1.5 rounded-full border border-gray-200 truncate max-w-full">
+          <span class="hidden sm:inline font-bold mr-1 shrink-0">当前编辑:</span>
+          <span class="truncate">{{ track.title }} - {{ (track.all_artists || []).join('/') || track.artist_name || '未知歌手' }}</span>
         </span>
       </div>
       
-      <div class="flex items-center space-x-6">
-        <div class="hidden md:flex items-center space-x-3 text-sm text-gray-500 bg-gray-100/80 px-4 py-1.5 rounded-lg border border-gray-200 shadow-inner">
+      <div class="flex items-center space-x-2 md:space-x-4 shrink-0">
+        
+        <!-- PC端：恢复快捷键提示说明 -->
+        <div class="hidden lg:flex items-center space-x-3 text-sm text-gray-500 bg-gray-100/80 px-4 py-1.5 rounded-lg border border-gray-200 shadow-inner mr-2">
           <span class="flex items-center">
             <kbd class="bg-white border border-gray-300 shadow-sm px-2 py-0.5 rounded text-xs text-gray-700 mr-2 font-mono font-bold">Space</kbd>
-            播放 / 暂停
+            播放/暂停
           </span>
           <span class="w-px h-4 bg-gray-300"></span>
           <span class="flex items-center">
             <kbd class="bg-white border border-gray-300 shadow-sm px-2 py-0.5 rounded text-xs text-blue-600 mr-2 font-mono font-bold">Enter</kbd>
-            打点并跳至下行
+            打点跳下行
           </span>
-          <el-popover
-            placement="bottom"
-            :width="280"
-            trigger="click"
-          >
+          <el-popover placement="bottom" :width="280" trigger="click">
             <template #reference>
               <el-icon class="ml-2 cursor-pointer text-gray-400 hover:text-gray-600 transition-colors"><QuestionFilled /></el-icon>
             </template>
             <div class="text-sm">
               <div class="font-bold text-gray-700 mb-3 border-b pb-2">键盘快捷键</div>
               <div class="space-y-2.5">
-                <div class="flex items-center justify-between">
-                  <span class="flex items-center">
-                    <kbd class="bg-gray-100 border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-600 mr-2 font-mono">Space</kbd>
-                    播放 / 暂停
-                  </span>
-                </div>
-                <div class="flex items-center justify-between">
-                  <span class="flex items-center">
-                    <kbd class="bg-blue-50 border border-blue-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-blue-600 mr-2 font-mono">Enter</kbd>
-                    打点并跳转下一行
-                  </span>
-                </div>
-                <div class="flex items-center justify-between">
-                  <span class="flex items-center">
-                    <kbd class="bg-gray-100 border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-600 mr-2 font-mono">1</kbd>
-                    快退 5 秒
-                  </span>
-                </div>
-                <div class="flex items-center justify-between">
-                  <span class="flex items-center">
-                    <kbd class="bg-gray-100 border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-600 mr-2 font-mono">2</kbd>
-                    快退 1 秒
-                  </span>
-                </div>
-                <div class="flex items-center justify-between">
-                  <span class="flex items-center">
-                    <kbd class="bg-gray-100 border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-600 mr-2 font-mono">3</kbd>
-                    快进 1 秒
-                  </span>
-                </div>
-                <div class="flex items-center justify-between">
-                  <span class="flex items-center">
-                    <kbd class="bg-gray-100 border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-600 mr-2 font-mono">4</kbd>
-                    快进 5 秒
-                  </span>
-                </div>
-                <div class="flex items-center justify-between">
-                  <span class="flex items-center">
-                    <kbd class="bg-gray-100 border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-600 mr-2 font-mono">Q</kbd>
-                    0.5x 倍速
-                  </span>
-                </div>
-                <div class="flex items-center justify-between">
-                  <span class="flex items-center">
-                    <kbd class="bg-gray-100 border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-600 mr-2 font-mono">W</kbd>
-                    1.0x 倍速
-                  </span>
-                </div>
-                <div class="flex items-center justify-between">
-                  <span class="flex items-center">
-                    <kbd class="bg-gray-100 border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-600 mr-2 font-mono">E</kbd>
-                    1.5x 倍速
-                  </span>
-                </div>
-                <div class="flex items-center justify-between">
-                  <span class="flex items-center">
-                    <kbd class="bg-gray-100 border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-600 mr-2 font-mono">R</kbd>
-                    2.0x 倍速
-                  </span>
-                </div>
+                <div class="flex items-center justify-between"><span class="flex items-center"><kbd class="bg-gray-100 border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-600 mr-2 font-mono">Space</kbd>播放 / 暂停</span></div>
+                <div class="flex items-center justify-between"><span class="flex items-center"><kbd class="bg-blue-50 border border-blue-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-blue-600 mr-2 font-mono">Enter</kbd>打点并跳转下一行</span></div>
+                <div class="flex items-center justify-between"><span class="flex items-center"><kbd class="bg-gray-100 border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-600 mr-2 font-mono">1/2/3/4</kbd>快退/快进</span></div>
+                <div class="flex items-center justify-between"><span class="flex items-center"><kbd class="bg-gray-100 border border-gray-300 shadow-sm px-1.5 py-0.5 rounded text-xs text-gray-600 mr-2 font-mono">Q/W/E/R</kbd>0.5x ~ 2.0x 倍速</span></div>
               </div>
             </div>
           </el-popover>
         </div>
-        <div class="flex items-center space-x-2 text-sm text-gray-500">
-          <span class="shrink-0">偏移量</span>
-          <el-input-number
-            v-model="timeOffsetMs"
-            :min="0"
-            :max="5000"
-            :step="10"
-            size="small"
-            controls-position="right"
-            class="w-28"
-          />
-          <span class="text-gray-400">ms</span>
+
+        <!-- PC端保留头部偏移量 -->
+        <div class="hidden md:flex items-center space-x-2 text-sm text-gray-500 mr-2">
+          <span class="shrink-0 text-xs font-bold">偏移</span>
+          <el-input-number v-model="timeOffsetMs" :min="0" :max="5000" :step="10" size="small" controls-position="right" class="w-24" />
+          <span class="text-xs text-gray-400">ms</span>
         </div>
-        <el-button type="primary" size="large" :icon="Check" :loading="saving" @click="saveLyrics" round class="px-6 font-bold shadow-md">
-          保存并同步
+
+        <el-button type="primary" :size="isMobile ? 'small' : 'default'" :icon="Check" :loading="saving" @click="saveLyrics" round class="font-bold shadow-md px-4 md:px-6">
+          {{ isMobile ? '保存' : '保存并同步' }}
         </el-button>
       </div>
     </header>
 
-    <main class="flex-1 flex overflow-hidden">
+    <main class="flex-1 flex overflow-hidden relative">
       
-      <aside class="shrink-0 bg-white border-r border-gray-200 flex flex-col z-0 shadow-[4px_0_15px_rgba(0,0,0,0.02)]">
-        <div class="p-8 border-b border-gray-100 flex flex-col items-center bg-gray-50/50">
-          <div class="w-full px-4 mb-4">
-            <el-slider 
-              v-model="currentTime" 
-              :max="duration" 
-              :format-tooltip="formatTime"
-              @change="seekAudio"
-              class="w-full"
-            />
-            <div class="flex justify-between items-center mt-2">
-              <span class="text-sm text-gray-500 font-mono font-bold">{{ formatTime(currentTime) }}</span>
-              <span class="text-sm text-gray-400 font-mono">{{ formatTime(duration) }}</span>
+      <!-- 移动端抽屉遮罩层 -->
+      <div 
+        v-if="isMobile && sidebarDrawer" 
+        @click="sidebarDrawer = false" 
+        class="fixed inset-0 bg-black/40 z-20 backdrop-blur-sm transition-opacity"
+      ></div>
+
+      <!-- 侧边栏：PC端为固定Aside，移动端通过CSS转化为滑动抽屉 -->
+      <aside 
+        :class="[
+          'bg-white flex flex-col shrink-0 transition-transform duration-300 z-30',
+          isMobile 
+            ? 'fixed inset-y-0 left-0 w-[85%] max-w-[340px] shadow-2xl transform ' + (sidebarDrawer ? 'translate-x-0' : '-translate-x-full')
+            : 'w-80 lg:w-96 border-r border-gray-200 relative translate-x-0 shadow-[4px_0_15px_rgba(0,0,0,0.02)]'
+        ]"
+      >
+        <!-- 移动端抽屉专属 Header -->
+        <div v-if="isMobile" class="flex justify-between items-center p-4 border-b border-gray-100 bg-gray-50/50 shrink-0">
+          <span class="font-bold text-gray-700 flex items-center">
+            <el-icon class="mr-2 text-blue-500"><Operation /></el-icon>工具与设置
+          </span>
+          <el-button :icon="Close" circle size="small" @click="sidebarDrawer = false" />
+        </div>
+
+        <!-- 移动端专属：抽屉里的时间偏移量设置 -->
+        <div v-if="isMobile" class="p-4 border-b border-gray-100 bg-white flex items-center justify-between shrink-0">
+          <span class="text-sm font-bold text-gray-700">时间偏移量</span>
+          <div class="flex items-center">
+            <el-input-number v-model="timeOffsetMs" :min="0" :max="5000" :step="10" size="small" controls-position="right" class="w-24" />
+            <span class="text-xs text-gray-400 ml-2">ms</span>
+          </div>
+        </div>
+
+        <!-- 播放控制区：移动端隐藏（移到底部打点栏），PC端保留 -->
+        <div v-if="!isMobile" class="p-4 md:p-6 lg:p-8 border-b border-gray-100 flex flex-col items-center bg-gray-50/30 shrink-0">
+          <div class="w-full mb-3 md:mb-4">
+            <el-slider v-model="currentTime" :max="duration" :format-tooltip="formatTime" @change="seekAudio" size="small" class="w-full" />
+            <div class="flex justify-between items-center mt-1 md:mt-2">
+              <span class="text-xs md:text-sm text-gray-500 font-mono font-bold">{{ formatTime(currentTime) }}</span>
+              <span class="text-xs md:text-sm text-gray-400 font-mono">{{ formatTime(duration) }}</span>
             </div>
           </div>
 
-          <div class="flex items-center justify-center space-x-3">
-            <el-button size="small" @click="seekRelative(-5)" title="快退5秒" class="rounded-lg hover:border-blue-300 hover:text-blue-500 font-bold px-3">-5s</el-button>
-            <el-button size="small" @click="seekRelative(-1)" title="快退1秒" class="rounded-lg hover:border-blue-300 hover:text-blue-500 px-3">-1s</el-button>
+          <div class="flex items-center justify-center space-x-2 md:space-x-3 w-full">
+            <el-button size="small" @click="seekRelative(-5)" title="快退5秒" class="rounded-lg hover:text-blue-500 font-bold px-2 md:px-3">-5s</el-button>
+            <el-button size="small" @click="seekRelative(-1)" title="快退1秒" class="rounded-lg hover:text-blue-500 px-2 md:px-3">-1s</el-button>
 
-            <button @click="togglePlay" class="w-12 h-12 flex items-center justify-center hover:opacity-80 transition">
-              <svg v-if="!isPlaying" class="w-8 h-8 text-gray-700 ml-1" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z"/>
-              </svg>
-              <svg v-else class="w-8 h-8 text-gray-700" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
-              </svg>
+            <button @click="togglePlay" class="w-12 h-12 flex items-center justify-center hover:opacity-80 transition active:scale-95 shrink-0 bg-blue-50 rounded-full text-blue-600">
+              <svg v-if="!isPlaying" class="w-6 h-6 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              <svg v-else class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
             </button>
 
-            <el-button size="small" @click="seekRelative(1)" title="快进1秒" class="rounded-lg hover:border-blue-300 hover:text-blue-500 px-3">+1s</el-button>
-            <el-button size="small" @click="seekRelative(5)" title="快进5秒" class="rounded-lg hover:border-blue-300 hover:text-blue-500 font-bold px-3">+5s</el-button>
+            <el-button size="small" @click="seekRelative(1)" title="快进1秒" class="rounded-lg hover:text-blue-500 px-2 md:px-3">+1s</el-button>
+            <el-button size="small" @click="seekRelative(5)" title="快进5秒" class="rounded-lg hover:text-blue-500 font-bold px-2 md:px-3">+5s</el-button>
           </div>
 
-          <div class="flex items-center justify-center space-x-2 mt-4 pt-3 border-t border-gray-200">
-            <span class="text-xs text-gray-400 font-bold shrink-0">倍速</span>
-            <el-button size="small" @click="adjustPlaybackRate(-0.1)" :icon="Minus" class="rounded shadow-sm w-8 h-8" />
-            <el-input
-              v-model.number="playbackRate"
-              type="number"
-              :min="0.1"
-              :max="2.0"
-              :step="0.1"
-              size="small"
-              @change="setPlaybackRate(playbackRate)"
-              class="w-16 text-center"
-            >
-              <template #suffix>
-                <span class="text-xs text-gray-400 mr-1">x</span>
-              </template>
-            </el-input>
-            <el-button size="small" @click="adjustPlaybackRate(0.1)" :icon="Plus" class="rounded shadow-sm w-8 h-8" />
-            <div class="flex items-center space-x-1 ml-2 border-l border-gray-200 pl-2">
-              <el-button size="small" type="info" plain @click="setPlaybackRate(0.5)" class="text-xs px-2 py-1" :class="{'bg-blue-100 border-blue-400': playbackRate === 0.5}">0.5x</el-button>
-              <el-button size="small" type="info" plain @click="setPlaybackRate(1.0)" class="text-xs px-2 py-1" :class="{'bg-blue-100 border-blue-400': playbackRate === 1.0}">1x</el-button>
-              <el-button size="small" type="info" plain @click="setPlaybackRate(1.5)" class="text-xs px-2 py-1" :class="{'bg-blue-100 border-blue-400': playbackRate === 1.5}">1.5x</el-button>
-              <el-button size="small" type="info" plain @click="setPlaybackRate(2.0)" class="text-xs px-2 py-1" :class="{'bg-blue-100 border-blue-400': playbackRate === 2.0}">2x</el-button>
+          <div class="flex flex-wrap items-center justify-center gap-y-2 mt-4 pt-4 border-t border-gray-200 w-full">
+            <div class="flex items-center space-x-1">
+              <el-button size="small" @click="adjustPlaybackRate(-0.1)" :icon="Minus" class="rounded shadow-sm w-7 h-7 md:w-8 md:h-8" />
+              <el-input v-model.number="playbackRate" type="number" :min="0.1" :max="2.0" :step="0.1" size="small" @change="setPlaybackRate(playbackRate)" class="w-16 text-center font-mono" />
+              <el-button size="small" @click="adjustPlaybackRate(0.1)" :icon="Plus" class="rounded shadow-sm w-7 h-7 md:w-8 md:h-8" />
+            </div>
+            
+            <div class="flex items-center space-x-1 sm:ml-2 border-l-0 sm:border-l border-gray-200 sm:pl-2">
+              <el-button size="small" type="info" plain @click="setPlaybackRate(0.5)" class="text-xs px-2 py-1" :class="{'bg-blue-100 border-blue-400 text-blue-600': playbackRate === 0.5}">0.5x</el-button>
+              <el-button size="small" type="info" plain @click="setPlaybackRate(1.0)" class="text-xs px-2 py-1" :class="{'bg-blue-100 border-blue-400 text-blue-600': playbackRate === 1.0}">1x</el-button>
+              <el-button size="small" type="info" plain @click="setPlaybackRate(1.5)" class="text-xs px-2 py-1" :class="{'bg-blue-100 border-blue-400 text-blue-600': playbackRate === 1.5}">1.5x</el-button>
             </div>
           </div>
         </div>
 
-        <div class="flex-1 p-6 flex flex-col min-h-0">
-          <div class="flex justify-between items-center mb-3">
-            <h3 class="font-bold text-gray-700 flex items-center">
+        <!-- 原始文本输入区 (移动端和PC端共用) -->
+        <div class="flex-1 p-4 md:p-6 flex flex-col min-h-0 bg-white">
+          <div class="flex justify-between items-center mb-2 md:mb-3">
+            <h3 class="font-bold text-gray-700 flex items-center text-sm md:text-base">
               <el-icon class="mr-1"><Document /></el-icon>原始文本
             </h3>
-            <el-button size="default" type="primary" plain @click="parseRawText" class="font-bold">
-              解析到时间轴 &rarr;
+            <el-button size="small" type="primary" plain @click="handleParse" class="font-bold text-xs md:text-sm">
+              <span class="hidden sm:inline">解析到时间轴 &rarr;</span>
+              <span class="sm:hidden">解析 &rarr;</span>
             </el-button>
           </div>
-          <el-input
-            v-model="rawText"
-            type="textarea"
-            class="flex-1 custom-textarea h-full"
-            placeholder="在此粘贴网上复制的纯文本歌词，然后点击右上角解析..."
-            resize="none"
-            @paste="handlePaste"
+          <el-input 
+            v-model="rawText" 
+            type="textarea" 
+            class="flex-1 custom-textarea h-full" 
+            placeholder="粘贴纯文本歌词..." 
+            resize="none" 
+            @paste="handlePaste" 
           />
         </div>
       </aside>
 
-      <section class="flex-1 bg-gray-50 flex flex-col relative">
-        <div class="px-8 py-4 border-b border-gray-200 bg-white/70 backdrop-blur flex justify-between items-center shadow-sm z-10 sticky top-0">
-          <span class="text-sm font-bold text-gray-700">LRC 制作轨道 (共 {{ lyrics.filter(l => !l.deleted).length }} 行)</span>
+      <!-- 歌词打点主轨道区 -->
+      <section class="flex-1 flex flex-col relative min-w-0 bg-gray-50/50">
+        
+        <!-- 轨道工具栏 -->
+        <div class="px-3 md:px-8 py-2 md:py-3 border-b border-gray-200 bg-white/80 backdrop-blur flex justify-between items-center sticky top-0 z-10 shadow-sm">
+          <div class="flex items-center space-x-2">
+            <el-button size="small" :icon="Plus" @click="addLine" type="primary" plain class="font-bold px-3">
+              <span class="hidden sm:inline">新增行</span>
+            </el-button>
+            <el-button size="small" :icon="RefreshLeft" @click="resetTimes" type="danger" plain class="hidden sm:inline-flex px-3">重置</el-button>
+          </div>
+          
           <div class="flex items-center space-x-3">
-            <el-button size="small" :icon="Plus" @click="addLine" type="primary" plain class="font-bold">新增行</el-button>
-            <el-switch
-              v-model="autoScroll"
-              size="small"
-              active-text="预览"
-              class="shrink-0"
-            />
-            <el-button size="default" :icon="RefreshLeft" @click="resetTimes" type="danger" plain>重置时间</el-button>
+            <span v-if="isMobile" class="text-xs text-blue-600 font-mono font-bold bg-blue-50 px-2 py-1 rounded">
+              {{ formatTime(currentTime) }}
+            </span>
+            <span class="text-xs md:text-sm font-bold text-gray-500 hidden md:inline">共 {{ lyrics.filter(l => !l.deleted).length }} 行</span>
+            <el-switch v-model="autoScroll" size="small" active-text="跟随预览" />
           </div>
         </div>
 
-        <div class="flex-1 overflow-y-auto p-8 custom-scrollbar" ref="lrcListRef">
-          <div v-if="lyrics.length === 0" class="h-full flex flex-col items-center justify-center text-gray-400">
-            <el-icon class="text-6xl mb-4 text-gray-300"><Document /></el-icon>
-            <p class="text-lg">请先在左侧粘贴纯文本歌词并点击解析</p>
+        <!-- 歌词列表区 -->
+        <div class="flex-1 overflow-y-auto p-2 md:p-8 custom-scrollbar" ref="lrcListRef">
+          <div v-if="lyrics.length === 0" class="h-full flex flex-col items-center justify-center text-gray-400 p-4 text-center">
+            <el-icon class="text-5xl md:text-6xl mb-4 text-gray-300"><Document /></el-icon>
+            <p class="text-sm md:text-lg">请先粘贴纯文本歌词并点击解析</p>
           </div>
 
           <div 
             v-for="(item, index) in lyrics" 
             :key="index"
             :ref="el => { if (el) lineRefs[index] = el }"
-            @click="handleRowClick($event, index)"
+            @click="setEditIndex(index, false)"
             :class="[
-              'group flex items-center p-3 mb-3 rounded-xl transition-all duration-300 border-2 cursor-pointer',
+              'group flex items-center p-2 md:p-3 mb-2 md:mb-3 rounded-xl transition-all duration-200 border-2 cursor-pointer',
               editIndex === index 
-                ? 'bg-blue-50 border-blue-400 shadow-md transform scale-[1.01]' 
+                ? 'bg-blue-50 border-blue-400 shadow-sm md:shadow-md transform md:scale-[1.01]' 
                 : item.deleted
                 ? 'bg-gray-100 border-transparent opacity-40'
-                : 'bg-white border-transparent hover:border-blue-200 hover:shadow-sm'
+                : 'bg-white border-transparent hover:border-blue-200'
             ]"
           >
-            <div class="w-32 shrink-0 flex items-center">
-              <el-input 
-                v-model="item.timeStr" 
-                size="default" 
-                class="w-24 font-mono text-center"
-                :disabled="item.deleted"
-                @change="syncTimeFromStr(index)"
-                @focus="setEditIndex(index, false)"
-                @click.stop
-                :class="{'text-blue-600 font-bold': editIndex === index}"
-              />
+            <!-- 时间显示：纯文本块 -->
+            <div class="w-16 md:w-24 shrink-0 flex items-center justify-center md:justify-start">
+              <div 
+                class="font-mono text-xs md:text-sm px-1.5 py-1 rounded transition-colors cursor-pointer select-none"
+                :class="[
+                  item.deleted ? 'text-gray-400 cursor-not-allowed' : (editIndex === index ? 'text-blue-600 font-bold bg-blue-100/50' : 'text-gray-500 hover:bg-gray-100')
+                ]"
+                @click.stop="!item.deleted && setEditIndex(index, true)"
+              >
+                {{ item.timeStr }}
+              </div>
             </div>
 
-            <div class="flex-1 px-4 min-w-0">
-              <el-input 
+            <!-- 歌词文本 -->
+            <div class="flex-1 px-2 md:px-4 min-w-0 flex items-center">
+              <input 
                 v-model="item.text" 
-                size="default"
-                class="w-full lrc-input text-lg"
                 :disabled="item.deleted"
-                :class="{'font-bold text-blue-600': playingIndex === index}"
+                class="w-full bg-transparent border-none outline-none text-[15px] md:text-lg transition-colors placeholder-gray-300"
+                :class="{'font-bold text-blue-600': playingIndex === index, 'text-gray-700': playingIndex !== index}"
                 @focus="setEditIndex(index, false)"
                 @click.stop
+                placeholder="在此输入歌词..."
               />
             </div>
 
-            <div class="w-20 shrink-0 flex justify-end gap-3 opacity-30 group-hover:opacity-100 transition-opacity" :class="{'opacity-100': editIndex === index}">
-              <svg v-if="!item.deleted" @click.stop="previewLine(item.time)" class="w-5 h-5 text-gray-400 hover:text-blue-500 cursor-pointer transition" fill="currentColor" viewBox="0 0 24 24" title="试听此行">
-                <path d="M8 5v14l11-7z"/>
-              </svg>
-              <svg v-if="item.deleted" @click.stop="lineRefs[index] && (lyrics[index].deleted = false)" class="w-5 h-5 text-gray-400 hover:text-orange-500 cursor-pointer transition" fill="currentColor" viewBox="0 0 24 24" title="撤销删除">
-                <path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/>
-              </svg>
-              <svg v-else @click.stop="deleteLine(index)" class="w-5 h-5 text-gray-400 hover:text-red-500 cursor-pointer transition" fill="currentColor" viewBox="0 0 24 24" title="删除此行">
-                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-              </svg>
+            <!-- 操作按钮 -->
+            <div class="flex justify-end gap-2 md:gap-3 shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" :class="{'md:opacity-100': editIndex === index}">
+              <div v-if="!item.deleted" @click.stop="previewLine(item.time)" class="p-1.5 md:p-1 rounded-md hover:bg-gray-100 cursor-pointer">
+                <el-icon class="text-lg md:text-xl text-gray-400 hover:text-blue-500"><VideoPlay /></el-icon>
+              </div>
+              <div v-if="item.deleted" @click.stop="lineRefs[index] && (lyrics[index].deleted = false)" class="p-1.5 md:p-1 rounded-md hover:bg-gray-100 cursor-pointer">
+                <el-icon class="text-lg md:text-xl text-gray-400 hover:text-orange-500"><RefreshLeft /></el-icon>
+              </div>
+              <div v-else @click.stop="deleteLine(index)" class="p-1.5 md:p-1 rounded-md hover:bg-gray-100 cursor-pointer">
+                <el-icon class="text-lg md:text-xl text-gray-400 hover:text-red-500"><Delete /></el-icon>
+              </div>
             </div>
           </div>
           
-          <div class="h-96 w-full flex items-center justify-center text-gray-300 font-bold text-sm">
+          <div class="h-40 md:h-96 w-full flex items-center justify-center text-gray-300 font-bold text-xs md:text-sm">
             --- End of Track ---
           </div>
         </div>
+
+        <!-- 移动端底部固定打点与播放控制栏 -->
+        <div v-if="isMobile" class="shrink-0 bg-white border-t border-gray-200 flex flex-col shadow-[0_-4px_15px_rgba(0,0,0,0.05)] z-20 pb-safe">
+          <!-- 上排：播放进度条 -->
+          <div class="px-4 pt-2">
+            <el-slider v-model="currentTime" :max="duration" size="small" @change="seekAudio" :show-tooltip="false" class="mobile-slider" />
+            <div class="flex justify-between text-[10px] text-gray-400 mt-0.5 font-mono">
+              <span>{{ formatTime(currentTime) }}</span>
+              <span>{{ formatTime(duration) }}</span>
+            </div>
+          </div>
+          <!-- 下排：控制与打点按钮 -->
+          <div class="flex items-center px-4 pb-3 pt-2 gap-2 sm:gap-3">
+            <button 
+              @click="togglePlay" 
+              class="w-12 h-12 shrink-0 bg-gray-100 text-blue-600 rounded-full flex items-center justify-center active:scale-95 transition-transform"
+            >
+              <el-icon size="24"><component :is="isPlaying ? VideoPause : VideoPlay" /></el-icon>
+            </button>
+            <button 
+              @click="seekRelative(-5)" 
+              class="w-12 h-12 shrink-0 bg-gray-100 text-gray-700 rounded-full flex items-center justify-center active:scale-95 transition-transform font-bold text-sm"
+            >
+              -5s
+            </button>
+            <button 
+              @click="seekRelative(5)" 
+              class="w-12 h-12 shrink-0 bg-gray-100 text-gray-700 rounded-full flex items-center justify-center active:scale-95 transition-transform font-bold text-sm"
+            >
+              +5s
+            </button>
+            <button 
+              @click.stop="stampTime"
+              class="flex-1 h-12 bg-blue-600 text-white rounded-xl flex items-center justify-center shadow-md active:scale-95 transition-transform font-bold text-[15px]"
+            >
+              <el-icon class="mr-1 text-lg"><Location /></el-icon>
+              打点 (跳至下行)
+            </button>
+          </div>
+        </div>
+
       </section>
     </main>
 
@@ -282,11 +293,7 @@
       @ended="isPlaying = false"
     ></audio>
 
-    <AppleToast
-      v-model="toastVisible"
-      :message="toastMessage"
-      :type="toastType"
-    />
+    <AppleToast v-model="toastVisible" :message="toastMessage" :type="toastType" />
   </div>
 </template>
 
@@ -294,7 +301,7 @@
 import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppleToast from '../components/AppleToast.vue'
-import { Back, Check, VideoPlay, VideoPause, RefreshLeft, Document, Plus, Minus, Delete, Refresh, QuestionFilled } from '@element-plus/icons-vue'
+import { Check, VideoPlay, VideoPause, RefreshLeft, Document, Plus, Minus, Delete, Operation, Close, Location, QuestionFilled } from '@element-plus/icons-vue'
 import request, { STREAM_BASE_URL } from '../api'
 import { usePlayerStore } from '../stores/player'
 
@@ -311,13 +318,22 @@ const currentTime = ref(0)
 const duration = ref(0)
 const saving = ref(false)
 
-// 🚨 核心分离：编辑光标与播放光标
-const editIndex = ref(-1)    // 当前等待被打点的行（高亮带边框）
-const playingIndex = ref(-1) // 当前正在播放的行（仅文字变蓝）
-const playbackRate = ref(1.0) // 播放倍速
-const deletedLines = ref([]) // 被删除的行（用于撤销）
-const timeOffsetMs = ref(251) // 时间偏移量（毫秒），用于补偿延迟
-const autoScroll = ref(false) // 预览开关，自动滚动到当前播放行
+const isMobile = ref(window.innerWidth < 768)
+const sidebarDrawer = ref(false)
+
+const handleResize = () => {
+  isMobile.value = window.innerWidth < 768
+  if (!isMobile.value) {
+    sidebarDrawer.value = false 
+  }
+}
+
+const editIndex = ref(-1)    
+const playingIndex = ref(-1) 
+const playbackRate = ref(1.0) 
+const deletedLines = ref([]) 
+const timeOffsetMs = ref(251) 
+const autoScroll = ref(false) 
 const toastVisible = ref(false)
 const toastMessage = ref('')
 const toastType = ref('success')
@@ -326,9 +342,7 @@ const showToast = (message, type = 'success') => {
   toastVisible.value = false
   toastMessage.value = message
   toastType.value = type
-  setTimeout(() => {
-    toastVisible.value = true
-  }, 50)
+  setTimeout(() => { toastVisible.value = true }, 50)
 }
 
 const handlePaste = (e) => {
@@ -364,7 +378,6 @@ const loadTrackData = async () => {
   }
 }
 
-// 解析文本
 const parseRawText = () => {
   if (!rawText.value.trim()) return
   const lines = rawText.value.split('\n')
@@ -376,21 +389,24 @@ const parseRawText = () => {
     return { time: 0, timeStr: '00:00.00', text: line.trim(), deleted: false }
   })
   
-  // 解析完成后，光标默认停留在第一行
   editIndex.value = 0
-  showToast('解析完成，已为您定位到第一行，请开始播放并打点！', 'success')
+  showToast('解析完成，请开始播放并打点！', 'success')
 }
 
-// 时间转换工具
+const handleParse = () => {
+  parseRawText()
+  if (isMobile.value) {
+    sidebarDrawer.value = false
+  }
+}
+
 const formatTime = (seconds) => {
   if (isNaN(seconds)) return '00:00.00'
   const hours = Math.floor(seconds / 3600)
   const mins = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0')
   const secs = Math.floor(seconds % 60).toString().padStart(2, '0')
   const ms = Math.floor((seconds % 1) * 100).toString().padStart(2, '0')
-  return hours > 0
-    ? `${hours}:${mins}:${secs}.${ms}`
-    : `${mins}:${secs}.${ms}`
+  return hours > 0 ? `${hours}:${mins}:${secs}.${ms}` : `${mins}:${secs}.${ms}`
 }
 
 const strToSeconds = (str) => {
@@ -417,12 +433,11 @@ const togglePlay = () => {
   isPlaying.value ? audioRef.value.pause() : audioRef.value.play()
   isPlaying.value = !isPlaying.value
   
-  // 【新增】：强制移除按钮的焦点
-  // 防止鼠标点击播放按钮后，按钮处于 focus 状态，导致按空格键时触发系统默认的按钮点击
   if (document.activeElement && document.activeElement.tagName === 'BUTTON') {
     document.activeElement.blur()
   }
 }
+
 const seekAudio = (val) => {
   if (audioRef.value) audioRef.value.currentTime = val
 }
@@ -437,16 +452,12 @@ const seekRelative = (delta) => {
 const adjustPlaybackRate = (delta) => {
   const newRate = Math.max(0.1, Math.min(2.0, playbackRate.value + delta))
   playbackRate.value = parseFloat(newRate.toFixed(1))
-  if (audioRef.value) {
-    audioRef.value.playbackRate = playbackRate.value
-  }
+  if (audioRef.value) audioRef.value.playbackRate = playbackRate.value
 }
 
 const setPlaybackRate = (rate) => {
   playbackRate.value = rate
-  if (audioRef.value) {
-    audioRef.value.playbackRate = rate
-  }
+  if (audioRef.value) audioRef.value.playbackRate = rate
 }
 
 const onMetadataLoaded = () => {
@@ -456,25 +467,11 @@ const onMetadataLoaded = () => {
 const setEditIndex = (index, blurInputs = true) => {
   if (blurInputs) {
     const active = document.activeElement
-    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
-      active.blur()
-    }
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) active.blur()
   }
   editIndex.value = index
 }
 
-const handleRowClick = (e, index) => {
-  const isInputClick = e.target.closest('INPUT') || e.target.closest('TEXTAREA')
-  if (!isInputClick) {
-    const active = document.activeElement
-    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
-      active.blur()
-    }
-  }
-  editIndex.value = index
-}
-
-// 随着音乐播放更新文字变蓝的行
 const onTimeUpdate = () => {
   if (!audioRef.value) return
   currentTime.value = audioRef.value.currentTime
@@ -486,9 +483,7 @@ const onTimeUpdate = () => {
 
   if (index !== -1 && playingIndex.value !== index) {
     playingIndex.value = index
-    if (autoScroll.value) {
-      scrollToLine(playingIndex.value)
-    }
+    if (autoScroll.value) scrollToLine(playingIndex.value)
   }
 }
 
@@ -500,7 +495,6 @@ const scrollToLine = async (index) => {
   }
 }
 
-// ⭐ 核心逻辑：记录当前行，永远跳转下一行（跳过已删除的行）
 const stampTime = () => {
   if (!audioRef.value || editIndex.value === -1 || editIndex.value >= lyrics.value.length) return
 
@@ -510,7 +504,6 @@ const stampTime = () => {
   lyrics.value[editIndex.value].time = time
   lyrics.value[editIndex.value].timeStr = formatTime(time)
 
-  // 打点后自动焦点移到下一行（跳过已删除的行）
   if (editIndex.value < lyrics.value.length - 1) {
     let nextIndex = editIndex.value + 1
     while (nextIndex < lyrics.value.length && lyrics.value[nextIndex].deleted) {
@@ -538,33 +531,18 @@ const deleteLine = (index) => {
   if (line && !line.deleted) {
     line.deleted = true
     deletedLines.value.push(index)
-    showToast('已删除，可撤销', 'success')
+    showToast('已删除', 'success')
   }
 }
 
 const addLine = () => {
   const newLine = { time: 0, timeStr: '00:00.00', text: '', deleted: false }
   let insertIndex = editIndex.value >= 0 ? editIndex.value + 1 : lyrics.value.length
-  
-  if (insertIndex > lyrics.value.length) {
-    insertIndex = lyrics.value.length
-  }
+  if (insertIndex > lyrics.value.length) insertIndex = lyrics.value.length
   
   lyrics.value.splice(insertIndex, 0, newLine)
   editIndex.value = insertIndex
-  nextTick(() => {
-    scrollToLine(editIndex.value)
-  })
-  showToast('已在下方新增空白行', 'success')
-}
-
-const undoDelete = () => {
-  if (deletedLines.value.length === 0) return
-  const lastIndex = deletedLines.value.pop()
-  if (lyrics.value[lastIndex]) {
-    lyrics.value[lastIndex].deleted = false
-    showToast('已撤销', 'success')
-  }
+  nextTick(() => scrollToLine(editIndex.value))
 }
 
 const resetTimes = () => {
@@ -573,28 +551,25 @@ const resetTimes = () => {
     l.timeStr = '00:00.00'
   })
   editIndex.value = 0
-  showToast('所有时间已归零，请重新开始打点', 'success')
+  showToast('时间已归零', 'success')
 }
 
-// 保存逻辑
 const saveLyrics = async () => {
   if (!track.value) return
-  
   const lrcContent = lyrics.value
-    .filter(l => l.text && !l.deleted) // 忽略空行和已删除的行
+    .filter(l => l.text && !l.deleted)
     .map(l => `[${l.timeStr}]${l.text}`)
     .join('\n')
   
   saving.value = true
   try {
-    // 兼容 multipart/form-data 
     const formData = new FormData()
     formData.append('lyrics', lrcContent)
 
     await request.patch(`/tracks/${track.value.id}/`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
-    showToast('歌词已成功保存并同步至音频文件！', 'success')
+    showToast('歌词已同步至音频文件！', 'success')
     rawText.value = lrcContent
     deletedLines.value = []
   } catch (error) {
@@ -604,12 +579,10 @@ const saveLyrics = async () => {
   }
 }
 
-// 键盘事件劫持
 const handleKeyDown = (e) => {
   const activeTag = document.activeElement.tagName
   const isInput = activeTag === 'TEXTAREA' || activeTag === 'INPUT'
 
-  // 空格键：在输入框内打字时不允许暂停
   if (e.code === 'Space') {
     if (!isInput) {
       e.preventDefault()
@@ -618,63 +591,35 @@ const handleKeyDown = (e) => {
     }
   }
 
-  // 回车键：即使在输入框内（比如修改歌词错别字），敲回车也会直接打点并跳下一行
   if (e.code === 'Enter' || e.code === 'NumpadEnter') {
     if (document.activeElement.type === 'textarea') return
-
     e.preventDefault()
     stampTime()
   }
 
-  // 数字键1-4：快退/快进
   if (!isInput) {
-    if (e.code === 'Digit1' || e.code === 'Numpad1') {
-      e.preventDefault()
-      seekRelative(-5)
-    }
-    if (e.code === 'Digit2' || e.code === 'Numpad2') {
-      e.preventDefault()
-      seekRelative(-1)
-    }
-    if (e.code === 'Digit3' || e.code === 'Numpad3') {
-      e.preventDefault()
-      seekRelative(1)
-    }
-    if (e.code === 'Digit4' || e.code === 'Numpad4') {
-      e.preventDefault()
-      seekRelative(5)
-    }
-
-    // Q/W/E/R：设置播放倍速
-    if (e.code === 'KeyQ') {
-      e.preventDefault()
-      setPlaybackRate(0.5)
-    }
-    if (e.code === 'KeyW') {
-      e.preventDefault()
-      setPlaybackRate(1.0)
-    }
-    if (e.code === 'KeyE') {
-      e.preventDefault()
-      setPlaybackRate(1.5)
-    }
-    if (e.code === 'KeyR') {
-      e.preventDefault()
-      setPlaybackRate(2.0)
-    }
+    if (e.code === 'Digit1' || e.code === 'Numpad1') { e.preventDefault(); seekRelative(-5) }
+    if (e.code === 'Digit2' || e.code === 'Numpad2') { e.preventDefault(); seekRelative(-1) }
+    if (e.code === 'Digit3' || e.code === 'Numpad3') { e.preventDefault(); seekRelative(1) }
+    if (e.code === 'Digit4' || e.code === 'Numpad4') { e.preventDefault(); seekRelative(5) }
+    
+    if (e.code === 'KeyQ') { e.preventDefault(); setPlaybackRate(0.5) }
+    if (e.code === 'KeyW') { e.preventDefault(); setPlaybackRate(1.0) }
+    if (e.code === 'KeyE') { e.preventDefault(); setPlaybackRate(1.5) }
+    if (e.code === 'KeyR') { e.preventDefault(); setPlaybackRate(2.0) }
   }
 }
 
 onMounted(() => {
-  if (playerStore.audioElement) {
-    playerStore.audioElement.pause()
-  }
+  window.addEventListener('resize', handleResize)
+  if (playerStore.audioElement) playerStore.audioElement.pause()
   playerStore.isPlaying = false
   loadTrackData()
   window.addEventListener('keydown', handleKeyDown)
 })
 
 onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
   window.removeEventListener('keydown', handleKeyDown)
   document.title = 'NasMusic'
 })
@@ -688,17 +633,6 @@ watch(track, (newTrack) => {
 </script>
 
 <style scoped>
-/* 隐藏歌词输入框自带边框，背景透明 */
-.lrc-input :deep(.el-input__wrapper) {
-  box-shadow: none !important;
-  background: transparent !important;
-  padding: 0;
-}
-.lrc-input :deep(.el-input__inner) {
-  font-size: 1.125rem; /* 更大更清晰的歌词字体 */
-  transition: all 0.3s;
-}
-
 /* 左侧多行文本框 */
 .custom-textarea :deep(.el-textarea__inner) {
   height: 100% !important;
@@ -713,20 +647,10 @@ watch(track, (newTrack) => {
   background-color: #fff;
   border-color: #bfdbfe;
 }
-.custom-textarea :deep(.el-textarea__inner::-webkit-scrollbar) {
-  width: 6px;
-}
-.custom-textarea :deep(.el-textarea__inner::-webkit-scrollbar-track) {
-  background: transparent;
-}
-.custom-textarea :deep(.el-textarea__inner::-webkit-scrollbar-thumb) {
-  background-color: #d1d5db;
-  border-radius: 3px;
-}
 
 /* 滚动条美化 */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
@@ -735,7 +659,14 @@ watch(track, (newTrack) => {
   background-color: #e5e7eb;
   border-radius: 20px;
 }
-.custom-scrollbar:hover::-webkit-scrollbar-thumb {
-  background-color: #d1d5db;
+
+/* 移动端底部播放进度条修饰 */
+.mobile-slider :deep(.el-slider__runway) {
+  margin: 0;
+}
+
+/* iOS安全区适配 */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
 }
 </style>
