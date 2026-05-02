@@ -85,7 +85,18 @@ class BatchScrapeCoverView(APIView):
             return Response({"message": "任务不存在"}, status=status.HTTP_404_NOT_FOUND)
 
         if task.status == 'running':
-            return Response({"message": "该任务已经在运行中，请勿重复触发！"}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            existing_scrape_task = ScanTask.objects.filter(
+                target_path__startswith='scrape_cover_'
+            ).order_by('-created_at').first()
+
+            if existing_scrape_task and existing_scrape_task.status in ['pending', 'running']:
+                return Response({"message": "补全封面任务已在运行中，请等待完成"}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+            task = ScanTask.objects.create(
+                target_path=f'scrape_cover_{task_id}',
+                status='pending'
+            )
+            task_id = task.id
 
         def run_batch_scrape():
             task = ScanTask.objects.filter(id=task_id).first()
@@ -262,7 +273,18 @@ class BatchScrapeLyricsView(APIView):
             return Response({"message": "任务不存在"}, status=status.HTTP_404_NOT_FOUND)
 
         if task.status == 'running':
-            return Response({"message": "该任务已经在运行中，请勿重复触发！"}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            existing_scrape_task = ScanTask.objects.filter(
+                target_path__startswith='scrape_lyrics_'
+            ).order_by('-created_at').first()
+
+            if existing_scrape_task and existing_scrape_task.status in ['pending', 'running']:
+                return Response({"message": "补全歌词任务已在运行中，请等待完成"}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+            task = ScanTask.objects.create(
+                target_path=f'scrape_lyrics_{task_id}',
+                status='pending'
+            )
+            task_id = task.id
 
         def run_batch_scrape():
             task = ScanTask.objects.filter(id=task_id).first()

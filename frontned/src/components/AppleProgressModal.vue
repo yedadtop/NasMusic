@@ -174,17 +174,18 @@ const handleStart = async () => {
 
   try {
     const scannerRes = await axios.post('/api/scanner/run/')
-    currentTaskId.value = scannerRes.data.task_id
-    emit('started', currentTaskId.value)
+    const scannerTaskId = scannerRes.data.task_id
+    emit('started', scannerTaskId)
 
     const endpoint = props.actionType === 'scrapeCovers'
       ? '/api/scraper/batch/scrape/'
       : '/api/scraper/batch/scrape_lyrics/'
 
-    await axios.post(endpoint, {
-      task_id: currentTaskId.value,
+    const scrapeRes = await axios.post(endpoint, {
+      task_id: scannerTaskId,
       mode: selectedMode.value
     })
+    currentTaskId.value = scrapeRes.data.task_id
 
     progressText.value = '任务运行中...'
     startPolling()
