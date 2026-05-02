@@ -1,5 +1,5 @@
 from pathlib import Path
-
+import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -13,7 +13,7 @@ SECRET_KEY = 'django-insecure-5m@tmc54+@19lrc98y^0fsvklo%%pr61ry(pj_0=3xmn70u6$g
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '0.0.0.0',"localhost:5173"]
+ALLOWED_HOSTS = ['*']
 
 
 
@@ -99,12 +99,13 @@ USE_I18N = True
 
 USE_TZ = False
 
+# 访问静态文件的 URL 前缀
+STATIC_URL = '/static/'
+# 收集静态文件的物理绝对路径（宝塔 Nginx 会来这里找）
+STATIC_ROOT = os.path.join(BASE_DIR, 'static_root')
 
 
-STATIC_URL = 'static/'
 
-
-import os
 # 访问上传文件的 URL 前缀
 MEDIA_URL = '/media/'
 # 上传文件的实际物理存放路径 (存在项目根目录的 media 文件夹下)

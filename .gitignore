@@ -131,3 +131,4 @@ __screenshots__/
 # Vite
 *.timestamp-*-*.mjs
 backend/exported_code.txt
+/backend/static_root/
