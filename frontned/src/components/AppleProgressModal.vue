@@ -43,9 +43,12 @@
 
           <div v-if="status === 'loading'" class="apple-modal-progress">
             <div class="apple-progress-bar">
-              <div class="apple-progress-fill" :style="{ width: progress + '%' }"></div>
+              <div class="apple-progress-fill" :style="{ width: (progress > 0 ? progress : 0) + '%' }"></div>
             </div>
-            <p class="apple-progress-text">{{ progressText }}</p>
+            <div class="apple-progress-info">
+              <p class="apple-progress-text">{{ progressText }}</p>
+              <span v-if="progress > 0" class="apple-progress-percent">{{ Math.round(progress) }}%</span>
+            </div>
           </div>
 
           <div v-if="status === 'success' || status === 'error'" class="apple-modal-result">
@@ -410,6 +413,19 @@ const startPolling = () => {
   color: #6e6e73;
   text-align: center;
   margin: 0;
+}
+
+.apple-progress-info {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+.apple-progress-percent {
+  font-size: 13px;
+  font-weight: 600;
+  color: #007AFF;
 }
 
 .apple-modal-result {
