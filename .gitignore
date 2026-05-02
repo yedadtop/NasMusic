@@ -132,3 +132,4 @@ __screenshots__/
 *.timestamp-*-*.mjs
 backend/exported_code.txt
 /backend/static_root/
+backend/exported_code.txt
