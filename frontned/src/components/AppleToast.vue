@@ -22,7 +22,7 @@
 </template>
 
 <script setup>
-import { watch, ref } from 'vue'
+import { watch, ref, onMounted } from 'vue'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -45,12 +45,27 @@ const emit = defineEmits(['update:modelValue'])
 
 let timer = null
 
+const startTimer = () => {
+  if (timer) clearTimeout(timer)
+  timer = setTimeout(() => {
+    emit('update:modelValue', false)
+  }, props.duration)
+}
+
 watch(() => props.modelValue, (val) => {
   if (val) {
-    if (timer) clearTimeout(timer)
-    timer = setTimeout(() => {
-      emit('update:modelValue', false)
-    }, props.duration)
+    startTimer()
+  } else {
+    if (timer) {
+      clearTimeout(timer)
+      timer = null
+    }
+  }
+}, { immediate: true })
+
+onMounted(() => {
+  if (props.modelValue) {
+    startTimer()
   }
 })
 </script>

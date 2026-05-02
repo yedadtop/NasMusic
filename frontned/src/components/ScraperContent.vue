@@ -124,6 +124,7 @@ const openRescanCoversConfirm = async () => {
     const res = await axios.post('/api/scanner/run/', {
       force_reextract_cover: true
     })
+    scanning.value = false
     emit('task-started', res.data.task_id)
     showToast('封面重提取任务已在后台启动', 'success')
   } catch (error) {
