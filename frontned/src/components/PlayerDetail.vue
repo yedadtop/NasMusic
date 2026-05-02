@@ -1,6 +1,7 @@
 <template>
   <div class="fixed inset-0 z-50 flex text-white selection:bg-white/20 font-sans overflow-hidden bg-gray-900">
     
+    <!-- 动态高斯模糊背景 -->
     <div class="absolute inset-0 z-0 pointer-events-none">
       <div 
         class="absolute inset-0 bg-cover bg-center transition-all duration-1000 scale-125 blur-[80px] opacity-80"
@@ -11,17 +12,21 @@
 
     <div class="relative z-10 flex flex-col md:flex-row w-full h-full mx-auto">
       
+      <!-- 歌词滚动区 -->
       <div class="w-full md:w-1/2 flex-1 md:h-full relative overflow-hidden order-1 md:order-2">
         <div 
-          class="w-full h-full overflow-y-auto px-6 md:pl-12 md:pr-32 flex flex-col text-center md:text-left pb-[25vh] md:pb-[50vh] pt-[25vh] md:pt-[45vh] lyrics-scroll" 
-          style="mask-image: linear-gradient(180deg, transparent 0%, black 15%, black 85%, transparent 100%); -webkit-mask-image: linear-gradient(180deg, transparent 0%, black 15%, black 85%, transparent 100%);"
+          class="w-full h-full overflow-y-auto px-6 md:pl-12 md:pr-32 flex flex-col text-center md:text-left pb-[35vh] md:pb-[50vh] pt-[35vh] md:pt-[45vh] lyrics-scroll" 
+          style="mask-image: linear-gradient(180deg, transparent 0%, black 10%, black 90%, transparent 100%); -webkit-mask-image: linear-gradient(180deg, transparent 0%, black 10%, black 90%, transparent 100%);"
           ref="lyricsContainer"
+          @wheel="handleUserInteraction"
+          @touchstart="handleUserInteraction"
+          @touchmove="handleUserInteraction"
         >
           <template v-if="parsedLyrics && parsedLyrics.length > 0">
             <p 
               v-for="(line, index) in parsedLyrics" 
               :key="index"
-              class="transition-colors duration-300 ease-in-out cursor-pointer block py-3 md:py-4"
+              class="transition-all duration-[800ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] cursor-pointer block py-3 md:py-4 transform-gpu origin-center md:origin-left font-bold text-[24px] md:text-[34px] leading-tight md:leading-snug"
               :class="getCurrentLyricClass(index)"
               :ref="el => setLyricRef(el, index)"
               @click="seekToLine(line.time)"
@@ -33,6 +38,7 @@
         </div>
       </div>
 
+      <!-- 播放控制区 -->
       <div class="w-full md:w-1/2 h-auto md:h-full flex flex-col items-center justify-end md:justify-center px-6 md:px-12 pb-10 md:pb-10 pt-8 md:py-10 shrink-0 order-2 md:order-1 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent md:bg-none">
         
         <div class="w-full max-w-[360px] flex flex-col">
@@ -131,8 +137,6 @@
             </button>
           </div>
 
-
-
         </div>
       </div>
       
@@ -158,7 +162,6 @@ import { Icon } from '@iconify/vue'
 import { usePlayerStore } from '../stores/player'
 import EditTrackModal from './EditTrackModal.vue'
 import AppleToast from './AppleToast.vue'
-import request from '../api'
 import { STREAM_BASE_URL } from '../api'
 
 const emit = defineEmits(['close', 'trackUpdated'])
@@ -167,10 +170,13 @@ const lyricsContainer = ref(null)
 const showEditModal = ref(false)
 const showOptionsMenu = ref(false)
 const lyricRefs = ref({})
-const isScraping = ref(false)
 const toastVisible = ref(false)
 const toastMessage = ref('')
 const toastType = ref('success')
+
+// 用户干预滚动状态控制
+let isUserScrolling = false
+let scrollTimeout = null
 
 onBeforeUpdate(() => {
   lyricRefs.value = {}
@@ -180,12 +186,16 @@ onMounted(async () => {
   await nextTick()
   if (currentLyricIndex.value >= 0) {
     scrollToCenter(currentLyricIndex.value)
+  } else if (parsedLyrics.value.length > 0) {
+    // 组件挂载时，如果没有达到第一句的时间，依然居中第一句
+    scrollToCenter(0)
   }
   window.addEventListener('keydown', handleKeydown)
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
+  if (scrollTimeout) clearTimeout(scrollTimeout)
 })
 
 const handleKeydown = (e) => {
@@ -193,21 +203,19 @@ const handleKeydown = (e) => {
   
   switch (e.code) {
     case 'Space':
-      e.preventDefault()
-      e.stopPropagation()
-      togglePlay()
-      break
     case 'KeyP':
       e.preventDefault()
       e.stopPropagation()
       togglePlay()
       break
     case 'KeyQ':
+    case 'ArrowLeft':
       e.preventDefault()
       e.stopPropagation()
       prevTrack()
       break
     case 'KeyE':
+    case 'ArrowRight':
       e.preventDefault()
       e.stopPropagation()
       nextTrack()
@@ -221,16 +229,6 @@ const handleKeydown = (e) => {
       e.preventDefault()
       e.stopPropagation()
       emit('close')
-      break
-    case 'ArrowLeft':
-      e.preventDefault()
-      e.stopPropagation()
-      prevTrack()
-      break
-    case 'ArrowRight':
-      e.preventDefault()
-      e.stopPropagation()
-      nextTrack()
       break
   }
 }
@@ -273,15 +271,45 @@ const currentLyricIndex = computed(() => {
       return i
     }
   }
+  // 未达到第一句歌词的时间时返回 -1，此时没有高亮
   return -1
 })
 
 watch(currentLyricIndex, async (newIndex) => {
-  if (newIndex >= 0) {
+  if (!isUserScrolling) {
     await nextTick()
-    scrollToCenter(newIndex)
+    if (newIndex >= 0) {
+      scrollToCenter(newIndex)
+    } else if (newIndex === -1 && parsedLyrics.value.length > 0) {
+      // 当前处于 -1 状态时（未开始或倒回开头），强制居中第 0 行
+      scrollToCenter(0)
+    }
   }
 })
+
+watch(parsedLyrics, async (newLyrics) => {
+  if (newLyrics && newLyrics.length > 0 && !isUserScrolling) {
+    await nextTick()
+    setTimeout(() => {
+      // 歌词初次加载时，居中第一句
+      scrollToCenter(0)
+    }, 100)
+  }
+})
+
+const handleUserInteraction = () => {
+  isUserScrolling = true
+  if (scrollTimeout) clearTimeout(scrollTimeout)
+  scrollTimeout = setTimeout(() => {
+    isUserScrolling = false
+    if (currentLyricIndex.value >= 0) {
+      scrollToCenter(currentLyricIndex.value)
+    } else if (parsedLyrics.value.length > 0) {
+      // 用户干预结束后，如果还没到第一句的时间，依然回滚到第一句
+      scrollToCenter(0)
+    }
+  }, 3000)
+}
 
 const scrollToCenter = (index) => {
   const el = lyricRefs.value[index]
@@ -291,7 +319,6 @@ const scrollToCenter = (index) => {
     const elementTop = el.offsetTop
     const elementHeight = el.clientHeight
     
-    // 居中定位计算
     const scrollTarget = elementTop - (containerHeight / 2) + (elementHeight / 2)
     container.scrollTo({
       top: scrollTarget,
@@ -300,12 +327,11 @@ const scrollToCenter = (index) => {
   }
 }
 
-// 这里的样式同样也把 lg 换成了 md，确保平板电脑也能显示较大的桌面级歌词字号
 const getCurrentLyricClass = (index) => {
   if (index === currentLyricIndex.value) {
-    return 'text-white font-bold text-[24px] md:text-[34px] opacity-100 drop-shadow-md'
+    return 'text-white opacity-100 scale-105 md:scale-[1.1] drop-shadow-xl'
   }
-  return 'text-white/40 font-bold text-[24px] md:text-[34px] hover:text-white/70'
+  return 'text-white/70 opacity-60 scale-100 hover:text-white/90 hover:scale-[1.02]'
 }
 
 const formatTime = (seconds) => {
@@ -351,6 +377,9 @@ const seekToLine = (time) => {
   if (player.audioElement) {
     player.audioElement.currentTime = time
     player.setCurrentTime(time)
+    
+    isUserScrolling = false
+    if (scrollTimeout) clearTimeout(scrollTimeout)
   }
 }
 
@@ -369,13 +398,6 @@ const handleTrackUpdated = (updatedTrack) => {
   }
   emit('trackUpdated')
 }
-
-const showToast = (message, type = 'success') => {
-  toastMessage.value = message
-  toastType.value = type
-  toastVisible.value = true
-}
-
 
 </script>
 
