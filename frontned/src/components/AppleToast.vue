@@ -77,33 +77,31 @@ onMounted(() => {
   left: 50%;
   transform: translateX(-50%);
   z-index: 99999;
-  animation: slideDown 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
+  /* 限制最大宽度，防止内容过长时贴边 */
+  max-width: 90vw;
+  width: max-content;
 }
 
 .apple-toast-content {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   padding: 12px 20px;
-  background-color: rgba(255, 255, 255, 0.9);
+  background-color: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-radius: 12px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  /* 核心：宽度自适应内容 */
+  width: fit-content;
 }
 
 .apple-toast-icon {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .apple-toast-text {
@@ -111,33 +109,58 @@ onMounted(() => {
   font-weight: 500;
   color: #1f2937;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+  text-align: left;
+  white-space: nowrap;
 }
 
-.toast-enter-active,
+.toast-enter-active {
+  animation: toastIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
 .toast-leave-active {
-  transition: all 0.3s ease;
+  animation: toastOut 0.3s cubic-bezier(0.4, 0, 1, 1);
 }
 
-.toast-enter-from {
-  opacity: 0;
-  transform: translateX(-50%) translateY(-20px);
+@keyframes toastIn {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-30px) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
 }
 
-.toast-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(-10px);
+@keyframes toastOut {
+  0% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px) scale(0.9);
+  }
 }
 
+/* 移动端优化 */
 @media (max-width: 480px) {
   .apple-toast-container {
     top: 16px;
-    left: 16px;
-    right: 16px;
-    transform: none;
+    /* 移除强制拉伸，保持左侧50%居中 */
   }
   
   .apple-toast-content {
     padding: 10px 16px;
+    /* 移除 width: 100%，让它继承 fit-content */
   }
+  
+  .apple-toast-text {
+    /* 如果文字太长，允许换行显示 */
+    white-space: normal;
+    word-break: break-word;
+  }
+  
+  /* 移动端直接复用 PC 端的动画（因为都保留了 translateX(-50%) 居中逻辑） */
 }
 </style>
