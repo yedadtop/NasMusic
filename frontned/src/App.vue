@@ -26,10 +26,16 @@
 
       <main class="flex-1 flex flex-col min-w-0 bg-white relative">
         <header class="h-14 sm:h-16 flex items-center justify-between px-4 sm:px-6 md:px-8 shrink-0 md:hidden">
-          <div class="flex items-center space-x-3 sm:space-x-4 md:space-x-6 text-base md:text-lg font-medium text-gray-500 shrink-0">
-            <router-link to="/" class="tab-link whitespace-nowrap" active-class="tab-active">本地歌曲</router-link>
-            <router-link to="/artists" class="tab-link whitespace-nowrap" active-class="tab-active">艺人</router-link>
-            <router-link to="/albums" class="hidden sm:block tab-link whitespace-nowrap" active-class="tab-active">专辑</router-link>
+          <div class="flex items-center space-x-2 sm:space-x-4 md:space-x-6 shrink-0">
+            <router-link to="/" class="mobile-nav-icon" active-class="mobile-nav-icon-active" exact-active-class="mobile-nav-icon-active">
+              <Icon icon="mdi:music-box-multiple" class="w-6 h-6" />
+            </router-link>
+            <router-link to="/artists" class="mobile-nav-icon" active-class="mobile-nav-icon-active">
+              <Icon icon="mdi:account-music" class="w-6 h-6" />
+            </router-link>
+            <router-link to="/albums" class="mobile-nav-icon" active-class="mobile-nav-icon-active">
+              <Icon icon="mdi:album" class="w-6 h-6" />
+            </router-link>
           </div>
           <div class="flex items-center space-x-2 sm:space-x-4">
             <router-link 
@@ -56,8 +62,8 @@
                 </button>
               </div>
             </div>
-            <router-link to="/settings" class="p-2 hover:bg-gray-100 rounded-lg transition shrink-0" @click.stop>
-              <Icon icon="mdi:cog" class="w-5 h-5 text-gray-500" />
+            <router-link to="/settings" class="mobile-nav-icon shrink-0" active-class="mobile-nav-icon-active" @click.stop>
+              <Icon icon="mdi:cog" class="w-5 h-5" />
             </router-link>
           </div>
         </header>
@@ -479,6 +485,9 @@ watch(() => player.currentTrack, (track) => {
 .nav-btn.active { @apply bg-blue-600 text-white shadow-md; }
 .tab-link { @apply transition pb-1 border-b-2 border-transparent; }
 .tab-active { @apply text-black font-bold border-black; }
+
+.mobile-nav-icon { @apply p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-all; }
+.mobile-nav-icon-active { @apply text-gray-700; }
 
 /* 页面淡入淡出动画 */
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }

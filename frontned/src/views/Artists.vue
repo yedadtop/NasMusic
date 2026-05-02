@@ -12,20 +12,20 @@
       暂无艺人
     </div>
 
-    <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-5">
+    <div v-else class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4 sm:gap-5">
       <div
         v-for="artist in artists"
         :key="artist.id"
         class="group cursor-pointer"
         @click="selectArtist(artist)"
       >
-        <div class="relative aspect-square rounded-full overflow-hidden shadow-md group-hover:shadow-xl transition-all duration-300">
+        <div class="relative aspect-square rounded-xl overflow-hidden shadow-md group-hover:shadow-xl transition-all duration-300">
           <img
             :src="getAvatarUrl(artist)"
             :alt="artist.name"
             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           >
-          <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 rounded-full"></div>
+          <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 rounded-xl"></div>
           <div class="absolute inset-0 flex items-center justify-center rounded-full">
             <div class="w-14 h-14 rounded-full bg-blue-500/90 flex items-center justify-center opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all duration-300 shadow-lg">
               <svg class="w-7 h-7 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
