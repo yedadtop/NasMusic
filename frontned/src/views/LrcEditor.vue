@@ -216,7 +216,7 @@
                 v-model="item.text" 
                 :disabled="item.deleted"
                 class="w-full bg-transparent border-none outline-none text-[15px] md:text-lg transition-colors placeholder-gray-300"
-                :class="{'font-bold text-blue-600': playingIndex === index, 'text-gray-700': playingIndex !== index}"
+                :class="{'font-bold text-gray-600': playingIndex === index, 'text-gray-700': playingIndex !== index}"
                 @focus="setEditIndex(index, false)"
                 @click.stop
                 placeholder="在此输入歌词..."

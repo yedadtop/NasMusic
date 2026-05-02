@@ -1,7 +1,7 @@
 <template>
   <div class="flex-1 overflow-y-auto px-4 sm:px-6 md:px-8 pb-4 custom-scrollbar">
     <div class="flex items-center justify-between py-4">
-      <h2 class="text-xl font-bold text-gray-900 dark:text-white">艺人</h2>
+      <h2 class="text-xl font-bold text-gray-900">艺人</h2>
     </div>
 
     <div v-if="loading && artists.length === 0" class="flex items-center justify-center py-20">
