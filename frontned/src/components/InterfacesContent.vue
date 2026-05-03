@@ -193,9 +193,9 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import axios from 'axios'
 import { Icon } from '@iconify/vue'
 import AppleToast from './AppleToast.vue'
+import request from '../api'
 
 const toastVisible = ref(false)
 const toastMessage = ref('')
@@ -218,7 +218,7 @@ const previous = ref(null)
 const fetchInterfaces = async (page = 1) => {
   try {
     loadingInterfaces.value = true
-    const res = await axios.get('/api/scraper/apis/', {
+    const res = await request.get('/scraper/apis/', {
       params: { page, size: pageSize.value }
     })
 
@@ -298,7 +298,7 @@ const saveInterface = async () => {
       })
       showToast('接口更新成功', 'success')
     } else {
-      await axios.post('/api/scraper/apis/', {
+      await request.post('/scraper/apis/', {
         name: formData.value.name,
         url: formData.value.url,
         priority: formData.value.priority,
@@ -330,7 +330,7 @@ const deleteInterface = async () => {
 
   try {
     deleting.value = true
-    await axios.delete(`/api/scraper/apis/${interfaceToDelete.value.id}/`)
+    await request.delete(`/scraper/apis/${interfaceToDelete.value.id}/`)
     showToast('接口删除成功', 'success')
     showDeleteDialog.value = false
     fetchInterfaces(currentPage.value)

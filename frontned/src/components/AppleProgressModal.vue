@@ -111,7 +111,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import axios from 'axios'
+import request from '../api'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -177,20 +177,20 @@ const handleStart = async () => {
 
   try {
     if (props.actionType === 'rescanCovers') {
-      const scannerRes = await axios.post('/api/scanner/run/', {
+      const scannerRes = await request.post('/scanner/run/', {
         force_reextract_cover: true
       })
       currentTaskId.value = scannerRes.data.task_id
     } else {
-      const scannerRes = await axios.post('/api/scanner/run/')
+      const scannerRes = await request.post('/scanner/run/')
       const scannerTaskId = scannerRes.data.task_id
       emit('started', scannerTaskId)
 
       const endpoint = props.actionType === 'scrapeCovers'
-        ? '/api/scraper/batch/scrape/'
-        : '/api/scraper/batch/scrape_lyrics/'
+        ? '/scraper/batch/scrape/'
+        : '/scraper/batch/scrape_lyrics/'
 
-      const scrapeRes = await axios.post(endpoint, {
+      const scrapeRes = await request.post(endpoint, {
         task_id: scannerTaskId,
         mode: selectedMode.value
       })
@@ -214,7 +214,7 @@ const handleStart = async () => {
 const startPolling = () => {
   pollTimer = setInterval(async () => {
     try {
-      const res = await axios.get(`/api/scanner/status/?task_id=${currentTaskId.value}`)
+      const res = await request.get(`/scanner/status/?task_id=${currentTaskId.value}`)
       const data = res.data
 
       if (data.progress !== undefined) {

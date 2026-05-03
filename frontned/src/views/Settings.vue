@@ -290,10 +290,10 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed, defineAsyncComponent } from 'vue'
-import axios from 'axios'
 import { FolderOpened, Loading, CircleCheck, Upload, Close } from '@element-plus/icons-vue'
 import AppleToast from '../components/AppleToast.vue'
 import AppleConfirmModal from '../components/AppleConfirmModal.vue'
+import request from '../api'
 
 const InterfacesContent = defineAsyncComponent(() => import('../components/InterfacesContent.vue'))
 const TrashContent = defineAsyncComponent(() => import('../components/TrashContent.vue'))
@@ -361,7 +361,7 @@ const uploadFile = async (item) => {
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
 
   try {
-    const initRes = await axios.post('/api/upload/init/', {
+    const initRes = await request.post('/upload/init/', {
       filename: file.name,
       total_chunks: totalChunks,
       file_size: file.size
@@ -380,14 +380,14 @@ const uploadFile = async (item) => {
       formData.append('chunk_index', i)
       formData.append('chunk', chunk)
 
-      await axios.post('/api/upload/upload_chunk/', formData, {
+      await request.post('/upload/upload_chunk/', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
 
       item.progress = Math.round(((i + 1) / totalChunks) * 100)
     }
 
-    await axios.post('/api/upload/complete/', {
+    await request.post('/upload/complete/', {
       upload_id: item.uploadId
     })
 
@@ -407,7 +407,7 @@ const uploadFile = async (item) => {
 const cancelUpload = async (item) => {
   if (item.uploadId) {
     try {
-      await axios.delete('/api/upload/cancel/', {
+      await request.delete('/upload/cancel/', {
         params: { upload_id: item.uploadId }
       })
     } catch (e) {
@@ -467,7 +467,7 @@ const saveConfig = async () => {
   }
   try {
     saving.value = true
-    await axios.put('/api/scanner/config/', {
+    await request.put('/scanner/config/', {
       key: 'music_path',
       value: musicPath.value,
       description: '音乐文件路径'
@@ -483,7 +483,7 @@ const saveConfig = async () => {
 const startScan = async () => {
   try {
     scanning.value = true
-    const res = await axios.post('/api/scanner/run/')
+    const res = await request.post('/scanner/run/')
     scanTask.value.id = res.data.task_id
     showToast('扫描任务已在后台启动', 'success')
     startPolling()
@@ -502,7 +502,7 @@ const handleTaskStarted = (taskId) => {
 const fetchStatus = async () => {
   if (!scanTask.value.id) return
   try {
-    const res = await axios.get('/api/scanner/status/', {
+    const res = await request.get('/scanner/status/', {
       params: { task_id: scanTask.value.id }
     })
 
@@ -541,7 +541,7 @@ const stopPolling = () => {
 
 onMounted(async () => {
   try {
-    const res = await axios.get('/api/scanner/config/')
+    const res = await request.get('/scanner/config/')
     if (res.data.music_path) {
       musicPath.value = res.data.music_path.value
     }

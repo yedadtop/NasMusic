@@ -98,10 +98,10 @@
 
 <script setup>
 import { ref } from 'vue'
-import axios from 'axios'
 import { Icon } from '@iconify/vue'
 import AppleToast from './AppleToast.vue'
 import AppleConfirmModal from './AppleConfirmModal.vue'
+import request from '../api'
 
 const toastVisible = ref(false)
 const toastMessage = ref('')
@@ -178,7 +178,7 @@ const openDeleteAllConfirm = () => {
 const fetchTrashFiles = async () => {
   try {
     loadingTrash.value = true
-    const res = await axios.get('/api/scanner/trash/')
+    const res = await request.get('/scanner/trash/')
     trashFiles.value = res.data.files || []
     showTrashList.value = true
   } catch (error) {
@@ -191,7 +191,7 @@ const fetchTrashFiles = async () => {
 
 const restoreFile = async (path) => {
   try {
-    await axios.post('/api/scanner/trash/', { paths: [path] })
+    await request.post('/scanner/trash/', { paths: [path] })
     showToast('文件已恢复', 'success')
     await fetchTrashFiles()
   } catch (error) {
@@ -203,7 +203,7 @@ const restoreFile = async (path) => {
 const restoreAllFiles = async () => {
   try {
     restoringAll.value = true
-    await axios.post('/api/scanner/trash/', { restore_all: true })
+    await request.post('/scanner/trash/', { restore_all: true })
     showToast('已恢复全部文件', 'success')
     await fetchTrashFiles()
   } catch (error) {
@@ -216,7 +216,7 @@ const restoreAllFiles = async () => {
 
 const deleteFile = async (path) => {
   try {
-    await axios.delete('/api/scanner/trash/', { data: { paths: [path] } })
+    await request.delete('/scanner/trash/', { data: { paths: [path] } })
     showToast('文件已彻底删除', 'success')
     await fetchTrashFiles()
   } catch (error) {
@@ -228,7 +228,7 @@ const deleteFile = async (path) => {
 const deleteAllFiles = async () => {
   try {
     deletingAll.value = true
-    await axios.delete('/api/scanner/trash/', { data: { delete_all: true } })
+    await request.delete('/scanner/trash/', { data: { delete_all: true } })
     showToast('已清空回收站', 'success')
     await fetchTrashFiles()
   } catch (error) {
