@@ -1,8 +1,8 @@
 <template>
-  <div class="relative w-full h-full overflow-hidden">
+  <div class="relative w-full h-full flex flex-col overflow-hidden">
     <div class="absolute inset-0 bg-gradient-to-br from-gray-50 via-white to-blue-50"></div>
 
-    <div class="relative z-10 flex items-start justify-center pt-2 sm:pt-8 px-4">
+    <div class="relative z-10 flex-shrink-0 flex items-start justify-center pt-2 sm:pt-8 px-4">
       <div class="w-full max-w-2xl">
         <div
           class="bg-white/80 backdrop-blur-2xl rounded-2xl shadow-2xl border border-white/50 p-1.5"
@@ -35,7 +35,7 @@
       </div>
     </div>
 
-    <div class="relative z-10 flex-1 overflow-y-auto custom-scrollbar px-4 sm:px-6 md:px-8 pb-4 mt-4">
+    <div class="relative z-10 flex-1 overflow-y-auto custom-scrollbar px-4 sm:px-6 md:px-8 pb-4 mt-4 min-h-0">
       <div v-if="loading" class="flex items-center justify-center py-20">
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
       </div>
