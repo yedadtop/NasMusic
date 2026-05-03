@@ -248,6 +248,8 @@ onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   window.removeEventListener('keydown', handleKeydown)
   window.removeEventListener('click', handleClickOutside)
+  if (searchTimer) clearTimeout(searchTimer)
+  if (volumeTimer) clearTimeout(volumeTimer)
 })
 
 const handleKeydown = (e) => {

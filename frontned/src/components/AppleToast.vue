@@ -22,7 +22,7 @@
 </template>
 
 <script setup>
-import { watch, ref, onMounted } from 'vue'
+import { watch, ref, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -66,6 +66,13 @@ watch(() => props.modelValue, (val) => {
 onMounted(() => {
   if (props.modelValue) {
     startTimer()
+  }
+})
+
+onUnmounted(() => {
+  if (timer) {
+    clearTimeout(timer)
+    timer = null
   }
 })
 </script>

@@ -71,7 +71,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { Icon } from '@iconify/vue'
 import request from '../api'
 
@@ -86,18 +86,21 @@ const totalCount = ref(0)
 const searchKeyword = ref('')
 const allLoaded = ref(false)
 const searchInput = ref(null)
-let searchTimer = null
+const searchTimer = ref(null)
+let currentController = null
 
 const handleSearch = () => {
-  if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
+  if (searchTimer.value) clearTimeout(searchTimer.value)
+  searchTimer.value = setTimeout(() => {
+    currentController?.abort()
+    currentController = new AbortController()
     page.value = 1
     allLoaded.value = false
-    fetchTracks()
+    fetchTracks(currentController.signal)
   }, 300)
 }
 
-const fetchTracks = async () => {
+const fetchTracks = async (signal) => {
   if (loading.value) return
   
   if (page.value === 1) {
@@ -114,7 +117,7 @@ const fetchTracks = async () => {
     if (searchKeyword.value) {
       params.search = searchKeyword.value
     }
-    const res = await request.get('/tracks/', { params })
+    const res = await request.get('/tracks/', { params, signal })
     const results = res.data.results || []
     
     if (page.value > 1) {
@@ -128,6 +131,7 @@ const fetchTracks = async () => {
       allLoaded.value = true
     }
   } catch (error) {
+    if (error.name === 'CanceledError' || error.name === 'AbortError') return
     console.error('获取歌曲列表失败:', error)
   } finally {
     loading.value = false
@@ -137,7 +141,8 @@ const fetchTracks = async () => {
 const loadMore = () => {
   if (!allLoaded.value && !loading.value && tracks.value.length > 0) {
     page.value++
-    fetchTracks()
+    const controller = new AbortController()
+    fetchTracks(controller.signal)
   }
 }
 
@@ -167,6 +172,13 @@ const clearSearch = () => {
 onMounted(async () => {
   await nextTick()
   searchInput.value?.focus()
+})
+
+onUnmounted(() => {
+  if (searchTimer.value) {
+    clearTimeout(searchTimer.value)
+  }
+  currentController?.abort()
 })
 </script>
 
