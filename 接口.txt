@@ -701,7 +701,7 @@
 ## 25. 手动刮削歌曲歌词
 
 - **接口地址**：`POST /api/scraper/track/{track_id}/scrape_lyrics/`
-- **功能描述**：手动触发单首歌曲的歌词刮削。后端通过 LRCLIB 接口搜索并获取歌词（优先获取时间轴滚动歌词），自动进行简繁转换，同时写入数据库和物理音频文件。
+- **功能描述**：手动触发单首歌曲的歌词刮削。后端优先从本地物理音频文件中提取内嵌歌词，若文件无歌词则通过 LRCLIB 接口搜索并获取（自动进行简繁转换），同时写入数据库和物理音频文件。
 - **注意**：如果歌曲已有歌词（数据库 `lyrics` 字段不为空），则跳过刮削，不会覆盖原有歌词。
 - **查询歌词状态**：`GET /api/scraper/track/{track_id}/scrape_lyrics/`
 - **返回格式**（HTTP 200 OK）：
@@ -710,7 +710,21 @@
     "track_id": 1,
     "track_title": "成都",
     "success": true,
+    "message": "已从本地物理文件恢复歌词",
+    "source": "local",
+    "had_lyrics_before": false,
+    "has_lyrics_after": true,
+    "lyrics_length": 1520
+  }
+  ```
+  或（从 LRCLIB 获取）
+  ```json
+  {
+    "track_id": 1,
+    "track_title": "成都",
+    "success": true,
     "message": "成功刮削并嵌入歌词！",
+    "source": "lrclib",
     "had_lyrics_before": false,
     "has_lyrics_after": true,
     "lyrics_length": 1520
@@ -723,11 +737,16 @@
     "track_title": "成都",
     "success": false,
     "message": "歌曲已有歌词，已跳过刮削。",
+    "source": null,
     "had_lyrics_before": true,
     "has_lyrics_after": true,
     "lyrics_length": 1520
   }
   ```
+- **source 字段说明**：
+  - `local`：歌词从本地物理音频文件提取
+  - `lrclib`：歌词从 LRCLIB 网络接口获取
+  - `null`：未成功获取歌词（失败或跳过）
 - **查询歌词状态返回**（HTTP 200 OK）：
   ```json
   {
@@ -741,25 +760,37 @@
   ```json
   {
     "success": false,
-    "message": "歌曲缺少标题，无法进行搜索。"
+    "message": "歌曲缺少标题，无法进行搜索。",
+    "source": null
   }
   ```
   或
   ```json
   {
     "success": false,
-    "message": "未找到匹配的歌词。"
+    "message": "未找到匹配的歌词。",
+    "source": null
   }
   ```
   或
   ```json
   {
     "success": false,
-    "message": "该歌曲在曲库中暂无歌词内容。"
+    "message": "该歌曲在曲库中暂无歌词内容。",
+    "source": null
   }
   ```
-- **歌词来源**：LRCLIB（https://lrclib.net），自动优先获取 `syncedLyrics`（时间轴歌词），若不存在则降级获取 `plainLyrics`（普通歌词）
-- **歌词处理**：自动将繁体中文转换为简体中文
+- **歌词处理流程**：
+  1. 检查数据库 `lyrics` 字段是否为空，若不为空则跳过
+  2. 读取本地物理音频文件，检查是否有内嵌歌词
+     - 若有，提取、简繁转换后写入数据库，直接返回（**不请求 LRCLIB**）
+  3. 若本地文件无歌词，通过 LRCLIB 接口搜索并获取歌词
+  4. 自动将繁体中文歌词转换为简体中文
+  5. 写入数据库和物理音频文件
+- **歌词嵌入格式**：
+  - MP3：写入 USLT 标签
+  - FLAC/OGG：写入 `lyrics` 标签
+  - M4A：写入 `\xa9lyr` 标签
 
 ---
 
@@ -809,9 +840,10 @@
   2. 遍历筛选后的歌曲列表
   3. 检查歌曲是否已有歌词（数据库层面），如有则跳过
   4. 检查物理文件是否存在，如不存在则跳过
-  5. 通过 LRCLIB 接口搜索歌词
-  6. 自动将繁体歌词转换为简体
-  7. 写入数据库和物理音频文件
+  5. 读取本地物理音频文件，检查是否有内嵌歌词（如有，直接提取并写入数据库，**不请求 LRCLIB**）
+  6. 若本地文件无歌词，通过 LRCLIB 接口搜索歌词
+  7. 自动将繁体歌词转换为简体
+  8. 写入数据库和物理音频文件
 - **结果汇总**：任务完成后，`result_summary` 字段包含：
   ```json
   {
