@@ -214,7 +214,6 @@ watch(() => props.modelValue, async (val) => {
 
     if (!trackCover && props.track.id) {
       scrapeResults.coverScraped = true
-      showToast('正在刮削...', 'info')
       const scrapedCover = await scrapeCover(props.track.id)
       if (scrapedCover) {
         coverPreview.value = scrapedCover
@@ -233,7 +232,6 @@ watch(() => props.modelValue, async (val) => {
 
     if (!trackLyrics && props.track.id) {
       scrapeResults.lyricsScraped = true
-      showToast('正在刮削...', 'info')
       const scrapedLyrics = await scrapeLyrics(props.track.id)
       if (scrapedLyrics) {
         form.value.lyrics = scrapedLyrics
