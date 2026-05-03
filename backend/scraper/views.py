@@ -335,21 +335,22 @@ class BatchScrapeLyricsView(APIView):
                     task.current_file = track.file_path
                     task.save()
 
-                    success, message = fetch_and_embed_lyrics(track)
-                    if success:
+                    result = fetch_and_embed_lyrics(track)
+                    if result["success"]:
                         success_list.append({
                             "track_id": track.id,
                             "title": track.title,
-                            "message": message
+                            "message": result["message"],
+                            "source": result["source"]
                         })
-                        print(f"[批量歌词刮削] ✅ 成功: {track.title} - {message}")
+                        print(f"[批量歌词刮削] ✅ 成功: {track.title} - {result['message']} (来源: {result['source']})")
                     else:
                         failed_list.append({
                             "track_id": track.id,
                             "title": track.title,
-                            "message": message
+                            "message": result["message"]
                         })
-                        print(f"[批量歌词刮削] ❌ 失败: {track.title} - {message}")
+                        print(f"[批量歌词刮削] ❌ 失败: {track.title} - {result['message']}")
 
                     task.processed_files = len(success_list) + len(failed_list)
                     task.save()

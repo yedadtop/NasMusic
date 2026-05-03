@@ -854,13 +854,15 @@
     "skipped_lyrics": 5,
     "skipped_file_not_exist": 1,
     "success_list": [
-      {"track_id": 1, "title": "成都", "message": "成功刮削并嵌入歌词！"}
+      {"track_id": 1, "title": "成都", "message": "已从本地物理文件恢复歌词", "source": "local"},
+      {"track_id": 2, "title": "成都", "message": "成功刮削并嵌入歌词！", "source": "lrclib"}
     ],
     "failed_list": [
       {"track_id": 3, "title": "xxx", "message": "未找到匹配的歌词。"}
     ]
   }
   ```
+  - `success_list` 中的 `source` 字段表示歌词来源：`local`（本地物理文件）或 `lrclib`（网络接口）
 - **歌词嵌入格式**：
   - MP3：写入 USLT 标签
   - FLAC/OGG：写入 `lyrics` 标签
