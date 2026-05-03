@@ -158,8 +158,9 @@ const scrapeLyrics = async (trackId) => {
           return { lyrics: trackRes.data.lyrics, source: res.data.source }
         }
       }
+    } else if (!res.data.success && res.data.message) {
+      return { error: res.data.message }
     }
-    return null
   } catch (error) {
     console.error('自动爬取歌词失败:', error)
   }
@@ -237,7 +238,9 @@ watch(() => props.modelValue, async (val) => {
     if (!trackLyrics && props.track.id) {
       scrapeResults.lyricsScraped = true
       const scrapeResult = await scrapeLyrics(props.track.id)
-      if (scrapeResult) {
+      if (scrapeResult?.error) {
+        showToast(scrapeResult.error, 'error')
+      } else if (scrapeResult) {
         form.value.lyrics = scrapeResult.lyrics
         scrapeResults.lyricsSuccess = true
         scrapeResults.lyricsSource = scrapeResult.source

@@ -238,7 +238,7 @@ class TrackScrapeLyricsView(APIView):
         if result["success"]:
             return Response(response_data, status=status.HTTP_200_OK)
         else:
-            return Response(response_data, status=status.HTTP_404_NOT_FOUND)
+            return Response(response_data, status=status.HTTP_200_OK)
 
     def get(self, request, track_id):
         track = get_object_or_404(Track, id=track_id)
