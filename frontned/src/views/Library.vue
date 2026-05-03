@@ -364,7 +364,7 @@ const scrollToCurrentTrack = async () => {
   }
 }
 
-defineExpose({ fetchTracks, searchKeyword, scrollToCurrentTrack, tracks, allLoaded, page })
+defineExpose({ fetchTracks, searchKeyword, scrollToCurrentTrack, tracks, allLoaded, page, loadMore })
 </script>
 
 <style scoped>

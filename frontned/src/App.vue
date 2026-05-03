@@ -231,6 +231,35 @@ watch(showSearch, async (isShowing) => {
   }
 })
 
+watch(libraryRef, (ref) => {
+  if (ref && route.path === '/') {
+    player.setLoadMoreCallback(async () => {
+      await ref.loadMore()
+      if (ref?.tracks) {
+        player.syncPlaylist(ref.tracks)
+      }
+    })
+  } else {
+    player.setLoadMoreCallback(null)
+  }
+})
+
+watch(() => route.path, (newPath) => {
+  if (newPath === '/') {
+    searchKeyword.value = ''
+    if (libraryRef.value) {
+      player.setLoadMoreCallback(async () => {
+        await libraryRef.value?.loadMore()
+        if (libraryRef.value?.tracks) {
+          player.syncPlaylist(libraryRef.value.tracks)
+        }
+      })
+    }
+  } else {
+    player.setLoadMoreCallback(null)
+  }
+})
+
 const handleClickOutside = (e) => {
   if (showSearch.value && searchContainer.value && !searchContainer.value.contains(e.target)) {
     closeSearch()
@@ -326,12 +355,6 @@ const handleSearch = () => {
   }, 300)
 }
 
-watch(() => route.path, (newPath) => {
-  if (newPath === '/') {
-    searchKeyword.value = ''
-  }
-})
-
 const handlePlayTrack = ({ track, index, tracks }) => {
   const wasSearching = showSearch.value && searchKeyword.value
    
@@ -418,16 +441,23 @@ const endDrag = () => {
 }
 
 const prevTrack = () => {
+  const wasPlaying = player.isPlaying
   if (player.prevTrack() && audioRef.value) {
     audioRef.value.src = `${STREAM_BASE_URL}/stream/${player.currentTrack.id}/`
-    audioRef.value.play()
+    if (wasPlaying) {
+      audioRef.value.play()
+    }
   }
 }
 
-const nextTrack = () => {
-  if (player.nextTrack() && audioRef.value) {
+const nextTrack = async () => {
+  const wasPlaying = player.isPlaying
+  const hasNext = await player.nextTrack()
+  if (hasNext && audioRef.value) {
     audioRef.value.src = `${STREAM_BASE_URL}/stream/${player.currentTrack.id}/`
-    audioRef.value.play()
+    if (wasPlaying) {
+      audioRef.value.play()
+    }
   }
 }
 

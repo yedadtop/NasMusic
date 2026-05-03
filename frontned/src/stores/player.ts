@@ -15,6 +15,8 @@ export const usePlayerStore = defineStore('player', () => {
   const playMode = ref('sequential')
   const shuffleOrder = ref<number[]>([])
   const shuffleHistory = ref<number[]>([])
+  const loadMoreCallback = ref<(() => Promise<void>) | null>(null)
+  const isLoadingMore = ref(false)
 
   const progress = computed(() => {
     if (!duration.value) return 0
@@ -38,8 +40,29 @@ export const usePlayerStore = defineStore('player', () => {
     if (playMode.value === 'single') {
       return true
     }
-    return currentIndex.value < playlist.value.length - 1
+    if (currentIndex.value < playlist.value.length - 1) {
+      return true
+    }
+    return loadMoreCallback.value !== null && !isLoadingMore.value
   })
+
+  function setLoadMoreCallback(callback: (() => Promise<void>) | null) {
+    loadMoreCallback.value = callback
+  }
+
+  async function checkAndLoadMore() {
+    if (loadMoreCallback.value && !isLoadingMore.value) {
+      const remainingTracks = playlist.value.length - currentIndex.value - 1
+      if (remainingTracks <= 10) {
+        isLoadingMore.value = true
+        try {
+          await loadMoreCallback.value()
+        } finally {
+          isLoadingMore.value = false
+        }
+      }
+    }
+  }
 
   function generateShuffleOrder(excludeIndex = -1) {
     const indices = playlist.value.map((_, i) => i).filter(i => i !== excludeIndex)
@@ -75,7 +98,7 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
-  function playTrack(track: any, index = -1, tracks: any[] = []) {
+  function playTrack(track: any, index = -1, tracks: any[] = [], preservePlayingState = false) {
     if (tracks.length > 0) {
       playlist.value = tracks
       currentIndex.value = index
@@ -91,20 +114,29 @@ export const usePlayerStore = defineStore('player', () => {
       }
     }
     currentTrack.value = track
-    isPlaying.value = true
+    if (!preservePlayingState) {
+      isPlaying.value = true
+    }
     currentTime.value = 0
     duration.value = track.duration || 0
     fetchTrackDetail(track.id)
   }
 
+  function syncPlaylist(tracks: any[]) {
+    if (tracks.length > 0) {
+      playlist.value = tracks
+    }
+  }
+
   function prevTrack() {
+    const wasPlaying = isPlaying.value
     if (playMode.value === 'shuffle') {
       if (shuffleHistory.value.length > 0) {
         const prevIndex = shuffleHistory.value.pop()
         if (prevIndex === undefined) return false
         const track = playlist.value[prevIndex]
         currentIndex.value = prevIndex
-        playTrack(track)
+        playTrack(track, -1, [], !wasPlaying)
         return true
       }
       return false
@@ -112,13 +144,14 @@ export const usePlayerStore = defineStore('player', () => {
     if (currentIndex.value > 0) {
       currentIndex.value--
       const track = playlist.value[currentIndex.value]
-      playTrack(track)
+      playTrack(track, -1, [], !wasPlaying)
       return true
     }
     return false
   }
 
-  function nextTrack() {
+  async function nextTrack() {
+    const wasPlaying = isPlaying.value
     if (playMode.value === 'shuffle') {
       if (shuffleOrder.value.length > 0) {
         shuffleHistory.value.push(currentIndex.value)
@@ -126,7 +159,7 @@ export const usePlayerStore = defineStore('player', () => {
         if (nextIndex === undefined) return false
         const track = playlist.value[nextIndex]
         currentIndex.value = nextIndex
-        playTrack(track)
+        playTrack(track, -1, [], !wasPlaying)
         return true
       }
       return false
@@ -137,8 +170,17 @@ export const usePlayerStore = defineStore('player', () => {
     if (currentIndex.value < playlist.value.length - 1) {
       currentIndex.value++
       const track = playlist.value[currentIndex.value]
-      playTrack(track)
+      playTrack(track, -1, [], !wasPlaying)
       return true
+    }
+    if (loadMoreCallback.value && !isLoadingMore.value) {
+      await checkAndLoadMore()
+      if (currentIndex.value < playlist.value.length - 1) {
+        currentIndex.value++
+        const track = playlist.value[currentIndex.value]
+        playTrack(track, -1, [], !wasPlaying)
+        return true
+      }
     }
     return false
   }
@@ -186,8 +228,10 @@ export const usePlayerStore = defineStore('player', () => {
     progress,
     hasPrev,
     hasNext,
+    isLoadingMore,
     fetchTrackDetail,
     playTrack,
+    syncPlaylist,
     prevTrack,
     nextTrack,
     togglePlay,
@@ -196,6 +240,8 @@ export const usePlayerStore = defineStore('player', () => {
     setCurrentTime,
     setDuration,
     setVolume,
-    setAudioElement
+    setAudioElement,
+    setLoadMoreCallback,
+    checkAndLoadMore
   }
 })
