@@ -79,22 +79,22 @@ const goBack = () => {
 }
 
 const handlePlay = ({ track, index }) => {
-  if (album.value.tracks) {
+  if (album.value?.tracks) {
     emit('play', { track, index, tracks: album.value.tracks })
   }
 }
 
 const playAll = () => {
-  if (album.value.tracks && album.value.tracks.length > 0) {
+  if (album.value?.tracks?.length > 0) {
     emit('play', { track: album.value.tracks[0], index: 0, tracks: album.value.tracks })
   }
 }
 
 const getCoverUrl = () => {
-  if (album.value.cover) {
+  if (album.value?.cover) {
     return album.value.cover
   }
-  return `https://picsum.photos/seed/${album.value.id}/300/300`
+  return album.value?.id ? `https://picsum.photos/seed/${album.value.id}/300/300` : 'https://picsum.photos/300/300'
 }
 
 onMounted(() => {

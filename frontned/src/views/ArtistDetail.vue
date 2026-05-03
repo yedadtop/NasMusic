@@ -80,13 +80,13 @@ const goBack = () => {
 }
 
 const handlePlay = ({ track, index }) => {
-  if (artist.value.tracks) {
+  if (artist.value?.tracks) {
     emit('play', { track, index, tracks: artist.value.tracks })
   }
 }
 
 const playAll = () => {
-  if (artist.value.tracks && artist.value.tracks.length > 0) {
+  if (artist.value?.tracks?.length > 0) {
     emit('play', { track: artist.value.tracks[0], index: 0, tracks: artist.value.tracks })
   }
 }
