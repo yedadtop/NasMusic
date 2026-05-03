@@ -50,7 +50,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import request from '../api'
 
@@ -120,6 +120,13 @@ const getAvatarUrl = (artist) => {
 onMounted(() => {
   fetchArtists()
   nextTick(setupObserver)
+})
+
+onUnmounted(() => {
+  if (observer) {
+    observer.disconnect()
+    observer = null
+  }
 })
 </script>
 

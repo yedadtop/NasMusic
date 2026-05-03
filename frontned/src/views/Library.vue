@@ -276,6 +276,10 @@ onUnmounted(() => {
   if (retryTimer) {
     clearTimeout(retryTimer)
   }
+  if (observer) {
+    observer.disconnect()
+    observer = null
+  }
 })
 
 const showMoreMenu = (track, event) => {

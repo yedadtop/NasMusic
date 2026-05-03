@@ -87,8 +87,6 @@ const searchKeyword = ref('')
 const allLoaded = ref(false)
 const searchInput = ref(null)
 let searchTimer = null
-let observer = null
-const sentinel = ref(null)
 
 const handleSearch = () => {
   if (searchTimer) clearTimeout(searchTimer)
