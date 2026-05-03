@@ -476,6 +476,8 @@ const onTimeUpdate = () => {
   if (!audioRef.value) return
   currentTime.value = audioRef.value.currentTime
 
+  if (!autoScroll.value) return
+
   const index = lyrics.value.findIndex((l, i) => {
     const next = lyrics.value[i + 1]
     return currentTime.value >= l.time && (!next || currentTime.value < next.time)
@@ -483,16 +485,17 @@ const onTimeUpdate = () => {
 
   if (index !== -1 && playingIndex.value !== index) {
     playingIndex.value = index
-    if (autoScroll.value) scrollToLine(playingIndex.value)
+    scrollToLine(playingIndex.value)
   }
 }
 
-const scrollToLine = async (index) => {
-  await nextTick()
-  const el = lineRefs.value[index]
-  if (el && lrcListRef.value) {
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }
+const scrollToLine = (index) => {
+  nextTick(() => {
+    const el = lineRefs.value[index]
+    if (el && lrcListRef.value) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  })
 }
 
 const stampTime = () => {
@@ -542,7 +545,7 @@ const addLine = () => {
   
   lyrics.value.splice(insertIndex, 0, newLine)
   editIndex.value = insertIndex
-  nextTick(() => scrollToLine(editIndex.value))
+  scrollToLine(editIndex.value)
 }
 
 const resetTimes = () => {
