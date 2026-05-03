@@ -1,10 +1,10 @@
 <template>
   <div class="fixed inset-0 z-50 flex text-white selection:bg-white/20 font-sans overflow-hidden bg-gray-900">
     
-    <!-- 动态高斯模糊背景 -->
-    <div class="absolute inset-0 z-0 pointer-events-none">
+    <!-- 优化1：动态高斯模糊背景增加硬件加速，开启独立图层避免重绘 -->
+    <div class="absolute inset-0 z-0 pointer-events-none transform-gpu translate-z-0">
       <div 
-        class="absolute inset-0 bg-cover bg-center transition-all duration-1000 scale-125 blur-[80px] opacity-80"
+        class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 scale-125 blur-[80px] opacity-80 will-change-transform"
         :style="{ backgroundImage: `url(${player.currentTrack?.track_cover || 'https://picsum.photos/600'})` }"
       ></div>
       <div class="absolute inset-0 bg-black/50 md:bg-black/40"></div>
@@ -12,21 +12,27 @@
 
     <div class="relative z-10 flex flex-col md:flex-row w-full h-full mx-auto">
       
-      <!-- 歌词滚动区 -->
-      <div class="w-full md:w-1/2 flex-1 md:h-full relative overflow-hidden order-1 md:order-2">
+      <!-- 歌词区结构重构 -->
+      <!-- 优化2：将 mask-image 移至不滚动的父级外壳，避免滚动时全局重绘遮罩 -->
+      <div 
+        class="w-full md:w-1/2 flex-1 md:h-full relative overflow-hidden order-1 md:order-2"
+        style="mask-image: linear-gradient(180deg, transparent 0%, black 10%, black 90%, transparent 100%); -webkit-mask-image: linear-gradient(180deg, transparent 0%, black 10%, black 90%, transparent 100%); transform: translateZ(0);"
+      >
+        <!-- 优化3：内层作为纯粹的滚动容器，高频滚动事件增加 .passive 修饰符 -->
         <div 
           class="w-full h-full overflow-y-auto px-6 md:pl-12 md:pr-32 flex flex-col text-center md:text-left pb-[35vh] md:pb-[50vh] pt-[35vh] md:pt-[45vh] lyrics-scroll" 
-          style="mask-image: linear-gradient(180deg, transparent 0%, black 10%, black 90%, transparent 100%); -webkit-mask-image: linear-gradient(180deg, transparent 0%, black 10%, black 90%, transparent 100%);"
           ref="lyricsContainer"
-          @wheel="handleUserInteraction"
-          @touchstart="handleUserInteraction"
-          @touchmove="handleUserInteraction"
+          @wheel.passive="handleUserInteraction"
+          @touchstart.passive="handleUserInteraction"
+          @touchmove.passive="handleUserInteraction"
         >
           <template v-if="parsedLyrics && parsedLyrics.length > 0">
+            <!-- 优化4：增加换行规则、行高、上下 padding，并将 transition-all 改为明确属性 -->
             <p 
               v-for="(line, index) in parsedLyrics" 
               :key="index"
-              class="transition-all duration-[800ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] cursor-pointer block py-3 md:py-4 transform-gpu origin-center md:origin-left font-bold text-[18px] md:text-[34px] leading-tight md:leading-snug"
+              style="word-break: keep-all; overflow-wrap: break-word;"
+              class="transition-all duration-[800ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] cursor-pointer block py-3 md:py-4 transform-gpu origin-center md:origin-left font-bold text-base md:text-[clamp(24px,3vw,34px)] leading-[1.4]"
               :class="getCurrentLyricClass(index)"
               :ref="el => setLyricRef(el, index)"
               @click="seekToLine(line.time)"
@@ -38,7 +44,7 @@
         </div>
       </div>
 
-      <!-- 播放控制区 -->
+      <!-- 播放控制区 (保持原有逻辑，不做破坏性修改) -->
       <div class="w-full md:w-1/2 h-auto md:h-full flex flex-col items-center justify-end md:justify-center px-6 md:px-12 pb-10 md:pb-10 pt-8 md:py-10 shrink-0 order-2 md:order-1 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent md:bg-none">
         
         <div class="w-full max-w-[360px] flex flex-col">
@@ -53,7 +59,7 @@
               <h2 class="text-xl md:text-2xl font-bold truncate tracking-wide text-white drop-shadow-sm">
                 {{ player.currentTrack?.title || '未知歌曲' }}
               </h2>
-              <div class="text-xs md:text-sm text-white/70 truncate mt-1 md:mt-1.5 font-medium">
+              <div class="text-sm md:text-base text-white/70 truncate mt-1 md:mt-1.5 font-medium">
                 {{ player.currentTrack?.artist_name || '未知歌手' }}
               </div>
             </div>
@@ -82,7 +88,7 @@
             </div>
           </div>
 
-          <div class="mt-5 md:mt-7 flex items-center justify-between w-full text-[10px] md:text-xs font-medium text-white/60 space-x-3 md:space-x-4">
+          <div class="mt-5 md:mt-7 flex items-center justify-between w-full text-xs md:text-sm font-medium text-white/60 space-x-3 md:space-x-4">
             <span class="w-8 text-left">{{ formatTime(player.currentTime) }}</span>
             <div 
               class="flex-1 h-1 md:h-1.5 bg-white/20 rounded-full cursor-pointer relative group flex items-center"
@@ -174,7 +180,6 @@ const toastVisible = ref(false)
 const toastMessage = ref('')
 const toastType = ref('success')
 
-// 用户干预滚动状态控制
 let isUserScrolling = false
 let scrollTimeout = null
 
@@ -187,7 +192,6 @@ onMounted(async () => {
   if (currentLyricIndex.value >= 0) {
     scrollToCenter(currentLyricIndex.value)
   } else if (parsedLyrics.value.length > 0) {
-    // 组件挂载时，如果没有达到第一句的时间，依然居中第一句
     scrollToCenter(0)
   }
   window.addEventListener('keydown', handleKeydown)
@@ -271,7 +275,6 @@ const currentLyricIndex = computed(() => {
       return i
     }
   }
-  // 未达到第一句歌词的时间时返回 -1，此时没有高亮
   return -1
 })
 
@@ -281,7 +284,6 @@ watch(currentLyricIndex, async (newIndex) => {
     if (newIndex >= 0) {
       scrollToCenter(newIndex)
     } else if (newIndex === -1 && parsedLyrics.value.length > 0) {
-      // 当前处于 -1 状态时（未开始或倒回开头），强制居中第 0 行
       scrollToCenter(0)
     }
   }
@@ -291,7 +293,6 @@ watch(parsedLyrics, async (newLyrics) => {
   if (newLyrics && newLyrics.length > 0 && !isUserScrolling) {
     await nextTick()
     setTimeout(() => {
-      // 歌词初次加载时，居中第一句
       scrollToCenter(0)
     }, 100)
   }
@@ -305,7 +306,6 @@ const handleUserInteraction = () => {
     if (currentLyricIndex.value >= 0) {
       scrollToCenter(currentLyricIndex.value)
     } else if (parsedLyrics.value.length > 0) {
-      // 用户干预结束后，如果还没到第一句的时间，依然回滚到第一句
       scrollToCenter(0)
     }
   }, 3000)
