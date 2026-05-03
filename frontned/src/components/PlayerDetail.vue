@@ -26,7 +26,7 @@
             <p 
               v-for="(line, index) in parsedLyrics" 
               :key="index"
-              class="transition-all duration-[800ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] cursor-pointer block py-3 md:py-4 transform-gpu origin-center md:origin-left font-bold text-[24px] md:text-[34px] leading-tight md:leading-snug"
+              class="transition-all duration-[800ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] cursor-pointer block py-3 md:py-4 transform-gpu origin-center md:origin-left font-bold text-[18px] md:text-[34px] leading-tight md:leading-snug"
               :class="getCurrentLyricClass(index)"
               :ref="el => setLyricRef(el, index)"
               @click="seekToLine(line.time)"
