@@ -40,6 +40,7 @@
               {{ line.text }}
             </p>
           </template>
+          <p v-else-if="player.currentTrack?.is_bilibili" class="text-white/40 text-2xl md:text-3xl font-bold mt-[10vh]">在线音源暂无歌词</p>
           <p v-else class="text-white/40 text-2xl md:text-3xl font-bold mt-[10vh]">暂无歌词</p>
         </div>
       </div>
@@ -50,7 +51,7 @@
         <div class="w-full max-w-[360px] flex flex-col">
           
           <div class="hidden md:block w-full rounded-xl overflow-hidden bg-black/20 shrink-0 relative shadow-2xl transition-transform duration-500 hover:scale-[1.02]" style="aspect-ratio: 1 / 1;">
-            <img v-if="player.currentTrack?.track_cover" :src="player.currentTrack.track_cover" alt="cover" class="w-full h-full object-cover" />
+            <img v-if="player.currentTrack?.track_cover" :src="player.currentTrack.track_cover" alt="cover" class="w-full h-full object-cover" referrerpolicy="no-referrer" />
             <img v-else src="https://picsum.photos/600" alt="cover" class="w-full h-full object-cover" />
           </div>
 
@@ -169,6 +170,7 @@ import { usePlayerStore } from '../stores/player'
 import EditTrackModal from './EditTrackModal.vue'
 import AppleToast from './AppleToast.vue'
 import { STREAM_BASE_URL } from '../api'
+import request from '../api'
 
 const emit = defineEmits(['close', 'trackUpdated'])
 const player = usePlayerStore()
@@ -182,6 +184,23 @@ const toastType = ref('success')
 
 let isUserScrolling = false
 let scrollTimeout = null
+
+const showToast = (message, type = 'error') => {
+  toastMessage.value = message
+  toastType.value = type
+  toastVisible.value = true
+}
+
+const getStreamUrl = async (track) => {
+  if (track.is_bilibili) {
+    const res = await request.get('/scraper/bili/playurl/', { params: { bvid: track.bvid } })
+    if (res.data.audio_url) {
+      return `${STREAM_BASE_URL}/api/scraper/bili/proxy/?url=${encodeURIComponent(res.data.audio_url)}`
+    }
+    throw new Error('获取B站播放链接失败')
+  }
+  return `${STREAM_BASE_URL}/stream/${track.id}/`
+}
 
 onBeforeUpdate(() => {
   lyricRefs.value = {}
@@ -359,17 +378,27 @@ const handleSeek = (e) => {
   player.audioElement.currentTime = percent * player.duration
 }
 
-const prevTrack = () => {
+const prevTrack = async () => {
   if (player.prevTrack() && player.audioElement) {
-    player.audioElement.src = `${STREAM_BASE_URL}/stream/${player.currentTrack.id}/`
-    player.audioElement.play().catch(() => {})
+    try {
+      player.audioElement.src = await getStreamUrl(player.currentTrack)
+      player.audioElement.play().catch(() => {})
+    } catch (error) {
+      showToast('B站链接解析失败，请检查Cookie配置')
+      setTimeout(() => nextTrack(), 1500)
+    }
   }
 }
 
-const nextTrack = () => {
+const nextTrack = async () => {
   if (player.nextTrack() && player.audioElement) {
-    player.audioElement.src = `${STREAM_BASE_URL}/stream/${player.currentTrack.id}/`
-    player.audioElement.play().catch(() => {})
+    try {
+      player.audioElement.src = await getStreamUrl(player.currentTrack)
+      player.audioElement.play().catch(() => {})
+    } catch (error) {
+      showToast('B站链接解析失败，请检查Cookie配置')
+      setTimeout(() => nextTrack(), 1500)
+    }
   }
 }
 

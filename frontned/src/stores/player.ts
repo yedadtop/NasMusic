@@ -119,7 +119,9 @@ export const usePlayerStore = defineStore('player', () => {
     }
     currentTime.value = 0
     duration.value = track.duration || 0
-    fetchTrackDetail(track.id)
+    if (!track.is_bilibili) {
+      fetchTrackDetail(track.id)
+    }
   }
 
   function syncPlaylist(tracks: any[]) {

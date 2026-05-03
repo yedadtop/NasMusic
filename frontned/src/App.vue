@@ -88,7 +88,7 @@
 
       <div class="flex items-center cursor-pointer group flex-1 md:flex-none md:w-1/3 min-w-0 pr-3 h-full" @click="showPlayerDetail = true">
         <div class="relative w-11 h-11 sm:w-14 sm:h-14 bg-gray-100 rounded-[10px] shadow-sm mr-3 sm:mr-4 shrink-0 overflow-hidden group-hover:shadow-md transition-shadow">
-           <img v-if="player.currentTrack?.track_cover" :src="player.currentTrack.track_cover" alt="cover" class="w-full h-full object-cover">
+           <img v-if="player.currentTrack?.track_cover" :src="player.currentTrack.track_cover" alt="cover" class="w-full h-full object-cover" :referrerpolicy="player.currentTrack?.is_bilibili ? 'no-referrer' : undefined">
            <img v-else src="https://picsum.photos/150" alt="cover" class="w-full h-full object-cover">
            <div class="absolute inset-0 border border-black/5 rounded-[10px]"></div>
         </div>
@@ -189,6 +189,7 @@ import VolumeTooltip from './components/VolumeTooltip.vue'
 import { usePlayerStore } from './stores/player'
 import { Headset, Position, Setting, Search, Star, DArrowLeft, CaretRight, DArrowRight, Document, Operation, Refresh, Switch, Collection, VideoPause } from '@element-plus/icons-vue'
 import { STREAM_BASE_URL } from './api'
+import request from './api'
 
 const showPlayerDetail = ref(false)
 const searchKeyword = ref('')
@@ -343,6 +344,18 @@ const handleKeydown = (e) => {
 }
 
 let searchTimer = null
+
+const getStreamUrl = async (track) => {
+  if (track.is_bilibili) {
+    const res = await request.get('/scraper/bili/playurl/', { params: { bvid: track.bvid } })
+    if (res.data.audio_url) {
+      return `${STREAM_BASE_URL}/api/scraper/bili/proxy/?url=${encodeURIComponent(res.data.audio_url)}`
+    }
+    throw new Error('获取B站播放链接失败')
+  }
+  return `${STREAM_BASE_URL}/stream/${track.id}/`
+}
+
 const handleSearch = () => {
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
@@ -355,31 +368,35 @@ const handleSearch = () => {
   }, 300)
 }
 
-const handlePlayTrack = ({ track, index, tracks }) => {
+const handlePlayTrack = async ({ track, index, tracks, source }) => {
   const wasSearching = showSearch.value && searchKeyword.value
-   
+
   if (wasSearching) {
     showSearch.value = false
     searchKeyword.value = ''
   }
-  
+
   player.playTrack(track, index, tracks)
+
   if (audioRef.value) {
-    audioRef.value.src = `${STREAM_BASE_URL}/stream/${track.id}/`
-    audioRef.value.play()
-  }
-  
-  if (libraryRef.value) {
-    if (wasSearching) {
-      libraryRef.value.searchKeyword = ''
-      libraryRef.value.page = 1
-      libraryRef.value.allLoaded = false
-      libraryRef.value.fetchTracks().then(() => {
-        libraryRef.value.scrollToCurrentTrack()
-      })
-    } else {
-      libraryRef.value.scrollToCurrentTrack()
+    try {
+      const streamUrl = await getStreamUrl(track)
+      if (!streamUrl) throw new Error('无效的播放链接')
+      audioRef.value.src = streamUrl
+      audioRef.value.play()
+    } catch (error) {
+      console.error('获取播放链接出错:', error)
+      if (audioRef.value) audioRef.value.src = ''
+      player.isPlaying = false
+      if (track.is_bilibili) {
+        setTimeout(() => nextTrack(), 1000)
+      }
+      return
     }
+  }
+
+  if (libraryRef.value && route.path === '/' && !wasSearching) {
+    libraryRef.value.scrollToCurrentTrack?.()
   }
 }
 
@@ -407,12 +424,18 @@ const handleLoadedMetadata = () => {
   }
 }
 
-const handleEnded = () => {
-  if (!player.nextTrack()) {
+const handleEnded = async () => {
+  const hasNext = await player.nextTrack()
+  if (!hasNext) {
     player.isPlaying = false
   } else if (audioRef.value) {
-    audioRef.value.src = `${STREAM_BASE_URL}/stream/${player.currentTrack.id}/`
-    audioRef.value.play()
+    try {
+      audioRef.value.src = await getStreamUrl(player.currentTrack)
+      audioRef.value.play()
+    } catch (error) {
+      console.error('获取播放链接出错:', error)
+      player.isPlaying = false
+    }
   }
 }
 
@@ -440,12 +463,17 @@ const endDrag = () => {
   isDragging.value = false
 }
 
-const prevTrack = () => {
+const prevTrack = async () => {
   const wasPlaying = player.isPlaying
   if (player.prevTrack() && audioRef.value) {
-    audioRef.value.src = `${STREAM_BASE_URL}/stream/${player.currentTrack.id}/`
-    if (wasPlaying) {
-      audioRef.value.play()
+    try {
+      audioRef.value.src = await getStreamUrl(player.currentTrack)
+      if (wasPlaying) {
+        audioRef.value.play()
+      }
+    } catch (error) {
+      console.error('获取播放链接出错:', error)
+      player.isPlaying = false
     }
   }
 }
@@ -454,9 +482,14 @@ const nextTrack = async () => {
   const wasPlaying = player.isPlaying
   const hasNext = await player.nextTrack()
   if (hasNext && audioRef.value) {
-    audioRef.value.src = `${STREAM_BASE_URL}/stream/${player.currentTrack.id}/`
-    if (wasPlaying) {
-      audioRef.value.play()
+    try {
+      audioRef.value.src = await getStreamUrl(player.currentTrack)
+      if (wasPlaying) {
+        audioRef.value.play()
+      }
+    } catch (error) {
+      console.error('获取播放链接出错:', error)
+      player.isPlaying = false
     }
   }
 }
