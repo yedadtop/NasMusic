@@ -32,7 +32,7 @@
               v-for="(line, index) in parsedLyrics" 
               :key="index"
               style="word-break: keep-all; overflow-wrap: break-word;"
-              class="transition-all duration-[800ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] cursor-pointer block py-3 md:py-4 transform-gpu origin-center md:origin-left font-bold text-base md:text-[clamp(24px,3vw,34px)] leading-[1.4]"
+              class="transition-all duration-[800ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] cursor-pointer block py-3 md:py-4 transform-gpu origin-center md:origin-left font-bold text-[clamp(19px,4vw,24px)] md:text-[clamp(24px,3vw,34px)] leading-[1.4]"
               :class="getCurrentLyricClass(index)"
               :ref="el => setLyricRef(el, index)"
               @click="seekToLine(line.time)"
