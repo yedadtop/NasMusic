@@ -17,13 +17,6 @@
           刮削
         </button>
         <button
-          @click="activeTab = 'interfaces'"
-          class="pb-3 px-1 text-[17px] font-semibold border-b-2 transition-colors mr-6"
-          :class="activeTab === 'interfaces' ? 'border-[#0071e3] text-[#0071e3]' : 'border-transparent text-[#86868b] hover:text-[#1d1d1f]'"
-        >
-          接口
-        </button>
-        <button
           @click="activeTab = 'trash'"
           class="pb-3 px-1 text-[17px] font-semibold border-b-2 transition-colors"
           :class="activeTab === 'trash' ? 'border-[#0071e3] text-[#0071e3]' : 'border-transparent text-[#86868b] hover:text-[#1d1d1f]'"
@@ -274,10 +267,6 @@
       </section>
     </div>
 
-    <div v-show="activeTab === 'interfaces'" class="min-h-[600px]">
-      <InterfacesContent />
-    </div>
-
     <div v-show="activeTab === 'trash'" class="min-h-[600px]">
       <TrashContent />
     </div>
@@ -295,7 +284,6 @@ import AppleToast from '../components/AppleToast.vue'
 import AppleConfirmModal from '../components/AppleConfirmModal.vue'
 import request from '../api'
 
-const InterfacesContent = defineAsyncComponent(() => import('../components/InterfacesContent.vue'))
 const TrashContent = defineAsyncComponent(() => import('../components/TrashContent.vue'))
 const ScraperContent = defineAsyncComponent(() => import('../components/ScraperContent.vue'))
 
