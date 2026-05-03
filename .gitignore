@@ -133,3 +133,4 @@ __screenshots__/
 backend/exported_code.txt
 /backend/static_root/
 backend/exported_code.txt
+backend/library/migrations/0003_track_search_text.py

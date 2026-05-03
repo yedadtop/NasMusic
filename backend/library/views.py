@@ -38,7 +38,7 @@ class TrackViewSet(viewsets.ModelViewSet):
     serializer_class = TrackListSerializer
     pagination_class = StandardResultsSetPagination
     filter_backends = [SearchFilter]
-    search_fields = ['title', 'artists__name', 'album__title']
+    search_fields = ['search_text']
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -48,6 +48,8 @@ class TrackViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         cover_upload = serializer.validated_data.pop('cover_upload', None)
         track_instance = serializer.save()
+        track_instance.search_text = track_instance._build_search_text()
+        track_instance.save(update_fields=['search_text'])
 
         # 【新增】如果没有封面，自动提取音频内嵌封面
         if not track_instance.cover_thumbnail:

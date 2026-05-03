@@ -83,10 +83,13 @@ class Track(models.Model):
     duration = models.FloatField(default=0.0, verbose_name="时长(秒)")
     format = models.CharField(max_length=10, verbose_name="格式")
     added_at = models.DateTimeField(auto_now_add=True, verbose_name="添加时间")
+    search_text = models.CharField(max_length=2048, blank=True, default='', editable=False, db_index=True, verbose_name="搜索文本")
 
     def save(self, *args, **kwargs):
         if self.artist and not self.artist.pk: self.artist.save()
         if self.album and not self.album.pk: self.album.save()
+
+        self.search_text = self._build_search_text()
 
         if self.pk:
             try:
@@ -110,6 +113,24 @@ class Track(models.Model):
                 os.remove(old_path)
                 print(f"✅ 已删除孤立的封面文件: {old_path}")
             del self._old_cover_path_to_delete
+
+    def _build_search_text(self):
+        parts = []
+        if self.title:
+            parts.append(self.title)
+        if self.album:
+            parts.append(self.album.title)
+        artist_names = set()
+        if self.artist:
+            artist_names.add(self.artist.name)
+            
+        # ✅ 核心修复：必须确保有 pk 才能查询多对多字段
+        if self.pk: 
+            for artist in self.artists.all():
+                artist_names.add(artist.name)
+                
+        parts.extend(sorted(artist_names))
+        return ' '.join(parts)
 
 # --- 安全的清理信号逻辑 ---
 @receiver(pre_delete, sender=Track)
