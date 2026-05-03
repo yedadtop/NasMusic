@@ -219,7 +219,7 @@ class TrackScrapeLyricsView(APIView):
 
         has_lyrics_before = bool(track.lyrics and track.lyrics.strip())
 
-        success, message = fetch_and_embed_lyrics(track)
+        result = fetch_and_embed_lyrics(track)
 
         track.refresh_from_db()
         has_lyrics_after = bool(track.lyrics and track.lyrics.strip())
@@ -227,14 +227,15 @@ class TrackScrapeLyricsView(APIView):
         response_data = {
             "track_id": track.id,
             "track_title": track.title,
-            "success": success,
-            "message": message,
+            "success": result["success"],
+            "message": result["message"],
+            "source": result["source"],
             "had_lyrics_before": has_lyrics_before,
             "has_lyrics_after": has_lyrics_after,
             "lyrics_length": len(track.lyrics) if track.lyrics else 0
         }
 
-        if success:
+        if result["success"]:
             return Response(response_data, status=status.HTTP_200_OK)
         else:
             return Response(response_data, status=status.HTTP_404_NOT_FOUND)

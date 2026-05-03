@@ -90,7 +90,7 @@ def fetch_and_embed_cover(track):
 def fetch_and_embed_lyrics(track):
     """
     通过 LRCLIB 接口抓取歌词（优先取时间轴滚动歌词），自动简繁转换，并嵌入物理文件与数据库。
-    返回: (布尔值是否成功, 提示信息)
+    返回: dict with keys: success (bool), message (str), source ('local'|'lrclib'|None)
     """
     cc = OpenCC('t2s')
 
@@ -99,12 +99,50 @@ def fetch_and_embed_lyrics(track):
 
     if not title:
         print(f"[歌词刮削] 失败: 歌曲 (ID:{track.id}) 缺少标题")
-        return False, "歌曲缺少标题，无法进行搜索。"
+        return {"success": False, "message": "歌曲缺少标题，无法进行搜索。", "source": None}
 
     has_existing_lyrics = bool(track.lyrics and track.lyrics.strip())
     if has_existing_lyrics:
         print(f"[歌词刮削] 歌曲 '{track.title}' 已有歌词 (长度: {len(track.lyrics)} 字符)，跳过刮削")
-        return False, "歌曲已有歌词，已跳过刮削。"
+        return {"success": False, "message": "歌曲已有歌词，已跳过刮削。", "source": None}
+
+    audio = mutagen.File(track.file_path)
+    if audio is not None:
+        ext = track.format.lower()
+        local_lyrics = None
+
+        try:
+            if ext == 'mp3':
+                if getattr(audio, 'tags', None):
+                    for key in audio.tags.keys():
+                        if key.startswith('USLT'):
+                            uslt = audio.tags[key]
+                            local_lyrics = uslt.text if hasattr(uslt, 'text') else str(uslt)
+                            break
+            elif ext in ['flac', 'ogg']:
+                possible_keys = ['lyrics', 'unsyncedlyrics', 'syncedlyrics', 'lyric']
+                for key in possible_keys:
+                    lyrics_list = audio.get(key)
+                    if lyrics_list:
+                        local_lyrics = lyrics_list[0]
+                        break
+            elif ext == 'm4a':
+                lyrics_list = audio.get('\xa9lyr')
+                if lyrics_list:
+                    local_lyrics = lyrics_list[0]
+
+            if local_lyrics and str(local_lyrics).strip():
+                clean_lyrics = str(local_lyrics).strip()
+                if '||' in clean_lyrics[:15]:
+                    clean_lyrics = clean_lyrics.split('||', 1)[-1]
+
+                print(f"[歌词刮削] 从本地物理文件提取到歌词，长度: {len(clean_lyrics)} 字符")
+                simplified_lyrics = cc.convert(clean_lyrics)
+                track.lyrics = simplified_lyrics
+                track.save(update_fields=['lyrics'])
+                return {"success": True, "message": "已从本地物理文件恢复歌词", "source": "local"}
+        except Exception as e:
+            print(f"[歌词刮削] 读取本地文件歌词时发生异常: {e}")
 
     api_url = "https://lrclib.net/api/search"
     params = {
@@ -121,26 +159,21 @@ def fetch_and_embed_lyrics(track):
 
         if not data or len(data) == 0:
             print(f"[歌词刮削] LRCLIB 未找到匹配结果")
-            return False, "未找到匹配的歌词。"
+            return {"success": False, "message": "未找到匹配的歌词。", "source": None}
 
-        # 获取第一条最匹配的结果，优先使用带时间轴的 syncedLyrics
         best_match = data[0]
         raw_lyrics = best_match.get('syncedLyrics') or best_match.get('plainLyrics')
 
         if not raw_lyrics:
             print(f"[歌词刮削] 找到了歌曲信息，但暂无歌词内容")
-            return False, "该歌曲在曲库中暂无歌词内容。"
+            return {"success": False, "message": "该歌曲在曲库中暂无歌词内容。", "source": None}
 
-        # 将繁体歌词转换为简体
         simplified_lyrics = cc.convert(raw_lyrics)
         print(f"[歌词刮削] 成功获取歌词，长度: {len(simplified_lyrics)} 字符 (已转简体)")
 
-        # 1. 更新数据库中的歌词字段
         track.lyrics = simplified_lyrics
         track.save(update_fields=['lyrics'])
 
-        # 2. 将歌词嵌入到物理音频文件中 (复用你现有的 mutagen 逻辑)
-        audio = mutagen.File(track.file_path)
         if audio is not None:
             ext = track.format.lower()
 
@@ -157,11 +190,11 @@ def fetch_and_embed_lyrics(track):
             audio.save()
             print(f"[歌词刮削] 成功将歌词嵌入到物理文件: {track.file_path}")
 
-        return True, "成功刮削并嵌入歌词！"
+        return {"success": True, "message": "成功刮削并嵌入歌词！", "source": "lrclib"}
 
     except requests.RequestException as e:
         print(f"⚠️ LRCLIB 接口请求失败: {e}")
-        return False, f"请求歌词接口失败: {str(e)}"
+        return {"success": False, "message": f"请求歌词接口失败: {str(e)}", "source": None}
     except Exception as e:
         print(f"⚠️ 解析或写入歌词时发生异常: {e}")
-        return False, f"写入歌词时发生内部错误: {str(e)}"
+        return {"success": False, "message": f"写入歌词时发生内部错误: {str(e)}", "source": None}

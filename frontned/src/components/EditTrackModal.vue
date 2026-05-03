@@ -152,11 +152,14 @@ const scrapeLyrics = async (trackId) => {
   try {
     const res = await request.post(`/scraper/track/${trackId}/scrape_lyrics/`)
     if (res.data.success && res.data.has_lyrics_after) {
-      const trackRes = await request.get(`/tracks/${trackId}/`)
-      if (trackRes.data.lyrics) {
-        return trackRes.data.lyrics
+      if (res.data.lyrics_length > 0) {
+        const trackRes = await request.get(`/tracks/${trackId}/`)
+        if (trackRes.data.lyrics) {
+          return { lyrics: trackRes.data.lyrics, source: res.data.source }
+        }
       }
     }
+    return null
   } catch (error) {
     console.error('自动爬取歌词失败:', error)
   }
@@ -209,7 +212,8 @@ watch(() => props.modelValue, async (val) => {
       coverSuccess: false,
       lyricsSuccess: false,
       coverScraped: false,
-      lyricsScraped: false
+      lyricsScraped: false,
+      lyricsSource: null
     }
 
     if (!trackCover && props.track.id) {
@@ -232,26 +236,33 @@ watch(() => props.modelValue, async (val) => {
 
     if (!trackLyrics && props.track.id) {
       scrapeResults.lyricsScraped = true
-      const scrapedLyrics = await scrapeLyrics(props.track.id)
-      if (scrapedLyrics) {
-        form.value.lyrics = scrapedLyrics
+      const scrapeResult = await scrapeLyrics(props.track.id)
+      if (scrapeResult) {
+        form.value.lyrics = scrapeResult.lyrics
         scrapeResults.lyricsSuccess = true
+        scrapeResults.lyricsSource = scrapeResult.source
         if (player.currentTrack && player.currentTrack.id === props.track.id) {
-          player.currentTrack = { ...player.currentTrack, lyrics: scrapedLyrics }
+          player.currentTrack = { ...player.currentTrack, lyrics: scrapeResult.lyrics }
         }
-      } else {
-        showToast('歌词刮削失败', 'error')
       }
     }
 
     if (scrapeResults.coverScraped || scrapeResults.lyricsScraped) {
       await new Promise(resolve => setTimeout(resolve, 500))
       if (scrapeResults.coverSuccess && scrapeResults.lyricsSuccess) {
-        showToast('封面和歌词刮削成功', 'success')
+        if (scrapeResults.lyricsSource === 'local') {
+          showToast('封面刮削成功，歌词已从本地文件恢复', 'success')
+        } else {
+          showToast('封面和歌词刮削成功', 'success')
+        }
       } else if (scrapeResults.coverSuccess) {
         showToast('封面刮削成功', 'success')
       } else if (scrapeResults.lyricsSuccess) {
-        showToast('歌词刮削成功', 'success')
+        if (scrapeResults.lyricsSource === 'local') {
+          showToast('歌词已从本地文件恢复', 'success')
+        } else {
+          showToast('歌词刮削成功', 'success')
+        }
       }
     }
   }
