@@ -90,7 +90,7 @@
                 <span class="text-xs text-gray-500 truncate">{{ track.author }}</span>
               </div>
             </div>
-            <div class="w-16 sm:w-24 text-sm text-gray-500 text-right pr-2 sm:pr-4">{{ track.duration }}</div>
+            <!-- <div class="w-16 sm:w-24 text-sm text-gray-500 text-right pr-2 sm:pr-4">{{ track.original_duration || track.duration }}</div> -->
           </div>
         </div>
       </template>

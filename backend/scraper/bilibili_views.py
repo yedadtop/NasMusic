@@ -128,14 +128,17 @@ class BiliPlayUrlView(APIView):
         print(f"[BiliAPI] 音频流数量: {len(audio_streams)}, 视频流数量: {len(video_streams)}")
 
         best_audio = None
-        best_audio_size = 0
+        best_priority = 0
+        quality_priority = {30251: 5, 30250: 4, 30280: 3, 30232: 2, 30216: 1}
         for audio in audio_streams:
             audio_url = audio.get('baseUrl') or audio.get('src')
-            audio_size = audio.get('size', 0)
             audio_codec = audio.get('codecid') or audio.get('id') or 0
-            print(f"[BiliAPI] 检查音频流: codecid={audio_codec}, size={audio_size}, url={'有' if audio_url else '无'}")
-            if audio_url and audio_size > best_audio_size:
+            audio_size = audio.get('size', 0)
+            priority = quality_priority.get(audio_codec, 0)
+            print(f"[BiliAPI] 检查音频流: codecid={audio_codec}, size={audio_size}, priority={priority}, url={'有' if audio_url else '无'}")
+            if audio_url and priority > best_priority:
                 best_audio = audio
+                best_priority = priority
                 best_audio_size = audio_size
 
         if not best_audio:
@@ -143,6 +146,7 @@ class BiliPlayUrlView(APIView):
                 audio_url = audio.get('baseUrl') or audio.get('src')
                 if audio_url:
                     best_audio = audio
+                    audio_size = best_audio.get('size', 0)
                     break
 
         if not best_audio:
@@ -151,6 +155,10 @@ class BiliPlayUrlView(APIView):
         audio_url = best_audio.get('baseUrl') or best_audio.get('src')
         audio_codec = best_audio.get('codecid') or best_audio.get('id') or 0
         audio_size = best_audio.get('size', 0)
+        if audio_size == 0:
+            audio_size = best_audio.get('bandwidth', 0)
+            if audio_size == 0:
+                audio_size = best_audio.get('length', 0) * 128 / 8
 
         quality_desc = BILI_QUALITY_MAP.get(audio_codec, '未知')
         print(f"[BiliAPI] 音频码率: codecid={audio_codec}, 音质={quality_desc}, 大小={audio_size / 1024 / 1024:.2f}MB")
