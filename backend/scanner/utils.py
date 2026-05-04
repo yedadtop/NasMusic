@@ -233,20 +233,19 @@ def scan_local_directory(directory_path, task_id=None, force_reextract_cover=Fal
         # 路径未变化：增量扫描
         print(f"  ➕ 增量扫描模式")
 
-        # 【修复3】幽灵文件内存级比对：弃用存在斜杠陷阱的 Django ORM 查询
-        # 改为获取所有 Track 记录，在 Python 内存中用 normpath 比对
         valid_files_set = set(valid_files)
-        ghost_tracks = []
-        for t in Track.objects.all():
-            norm_file_path = os.path.normpath(t.file_path)
+        ghost_ids = []
+        for track_id, file_path in Track.objects.values_list('id', 'file_path').iterator(chunk_size=2000):
+            norm_file_path = os.path.normpath(file_path)
             if norm_file_path not in valid_files_set:
-                ghost_tracks.append(t)
-        deleted_count = len(ghost_tracks)
+                ghost_ids.append(track_id)
 
-        if ghost_tracks:
+        deleted_count = len(ghost_ids)
+
+        if ghost_ids:
             print(f"  👻 发现 {deleted_count} 首幽灵歌曲，开始清理...")
-            for t in ghost_tracks:
-                t._skip_physical_delete = True  # 跳过物理文件删除
+            for t in Track.objects.filter(id__in=ghost_ids).iterator():
+                t._skip_physical_delete = True
                 t.delete()
     # =================================================================
 
