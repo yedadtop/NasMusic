@@ -1,4 +1,5 @@
 import re
+import time
 import requests
 from django.http import StreamingHttpResponse
 from rest_framework import status
@@ -10,6 +11,31 @@ BILI_HEADERS = {
     'Referer': 'https://search.bilibili.com/',
 }
 
+BILI_QUALITY_MAP = {
+    30251: "Hi-Res 无损",
+    30250: "杜比全景声",
+    30280: "192K 高码率",
+    30232: "132K 标准",
+    30216: "64K 流畅",
+}
+
+MAX_RETRIES = 3
+RETRY_DELAY = 1
+
+
+def make_bili_request(url, timeout=10, retries=MAX_RETRIES):
+    for attempt in range(retries):
+        try:
+            response = requests.get(url, headers=get_bili_headers(), timeout=timeout)
+            response.raise_for_status()
+            return response.json(), None
+        except requests.RequestException as e:
+            if attempt < retries - 1:
+                time.sleep(RETRY_DELAY)
+                continue
+            return None, str(e)
+    return None, "最大重试次数已用尽"
+
 
 def get_bili_headers():
     headers = BILI_HEADERS.copy()
@@ -18,8 +44,10 @@ def get_bili_headers():
         sessdata_config = SystemConfig.objects.filter(key='bilibili_sessdata').first()
         if sessdata_config and sessdata_config.value:
             headers['Cookie'] = f'SESSDATA={sessdata_config.value}'
-    except Exception:
-        pass
+        else:
+            print(f"[BiliAPI] 未配置 SESSDATA，可能触发限流")
+    except Exception as e:
+        print(f"[BiliAPI] 获取 SESSDATA 失败: {e}")
     return headers
 
 
@@ -31,23 +59,22 @@ class BiliSearchView(APIView):
 
         search_url = f'https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword={requests.utils.quote(keyword)}&page=1&pagesize=20'
 
-        try:
-            response = requests.get(search_url, headers=get_bili_headers(), timeout=10)
-            response.raise_for_status()
-            data = response.json()
-        except requests.RequestException as e:
-            return Response({'message': f'请求B站搜索接口失败: {str(e)}'}, status=status.HTTP_502_BAD_GATEWAY)
+        data, error = make_bili_request(search_url)
+        if error:
+            return Response({'message': f'请求B站搜索接口失败: {error}'}, status=status.HTTP_502_BAD_GATEWAY)
 
         if data.get('code') != 0:
             return Response({'message': f'B站接口返回错误: {data.get("message", "未知错误")}'}, status=data.get('code', 400))
 
         results = []
         video_list = data.get('data', {}).get('result', [])
-        for item in video_list[:20]:
+        for item in video_list[:10]:
             bvid = item.get('bvid', '')
             title = re.sub(r'<[^>]+>', '', item.get('title', ''))
             author = item.get('author', '')
             pic = item.get('pic', '')
+            if pic:
+                pic = f'{pic}@320w_200h.webp'
             duration = item.get('duration', '')
 
             results.append({
@@ -74,12 +101,9 @@ class BiliPlayUrlView(APIView):
 
         pagelist_url = f'https://api.bilibili.com/x/player/pagelist?bvid={bvid}'
 
-        try:
-            pagelist_resp = requests.get(pagelist_url, headers=get_bili_headers(), timeout=10)
-            pagelist_resp.raise_for_status()
-            pagelist_data = pagelist_resp.json()
-        except requests.RequestException as e:
-            return Response({'message': f'请求B站pagelist接口失败: {str(e)}'}, status=status.HTTP_502_BAD_GATEWAY)
+        pagelist_data, error = make_bili_request(pagelist_url)
+        if error:
+            return Response({'message': f'请求B站pagelist接口失败: {error}'}, status=status.HTTP_502_BAD_GATEWAY)
 
         if pagelist_data.get('code') != 0:
             return Response({'message': f'获取视频分页失败: {pagelist_data.get("message", "未知错误")}'}, status=502)
@@ -92,12 +116,9 @@ class BiliPlayUrlView(APIView):
 
         playurl_url = f'https://api.bilibili.com/x/player/playurl?bvid={bvid}&cid={cid}&fnval=16&fnver=0&fourk=1'
 
-        try:
-            playurl_resp = requests.get(playurl_url, headers=get_bili_headers(), timeout=10)
-            playurl_resp.raise_for_status()
-            playurl_data = playurl_resp.json()
-        except requests.RequestException as e:
-            return Response({'message': f'请求B站playurl接口失败: {str(e)}'}, status=status.HTTP_502_BAD_GATEWAY)
+        playurl_data, error = make_bili_request(playurl_url)
+        if error:
+            return Response({'message': f'请求B站playurl接口失败: {error}'}, status=status.HTTP_502_BAD_GATEWAY)
 
         if playurl_data.get('code') != 0:
             return Response({'message': f'获取播放链接失败: {playurl_data.get("message", "未知错误")}'}, status=502)
@@ -106,11 +127,15 @@ class BiliPlayUrlView(APIView):
         audio_streams = dash.get('audio', [])
         video_streams = dash.get('video', [])
 
+        print(f"[BiliAPI] 音频流数量: {len(audio_streams)}, 视频流数量: {len(video_streams)}")
+
         best_audio = None
         best_audio_size = 0
         for audio in audio_streams:
             audio_url = audio.get('baseUrl') or audio.get('src')
             audio_size = audio.get('size', 0)
+            audio_codec = audio.get('codecid') or audio.get('id') or 0
+            print(f"[BiliAPI] 检查音频流: codecid={audio_codec}, size={audio_size}, url={'有' if audio_url else '无'}")
             if audio_url and audio_size > best_audio_size:
                 best_audio = audio
                 best_audio_size = audio_size
@@ -126,12 +151,15 @@ class BiliPlayUrlView(APIView):
             return Response({'message': '未找到可用的音频流'}, status=status.HTTP_404_NOT_FOUND)
 
         audio_url = best_audio.get('baseUrl') or best_audio.get('src')
-        audio_codec = best_audio.get('codecid', 0)
+        audio_codec = best_audio.get('codecid') or best_audio.get('id') or 0
         audio_size = best_audio.get('size', 0)
 
-        quality_desc = '未知'
+        quality_desc = BILI_QUALITY_MAP.get(audio_codec, '未知')
+        print(f"[BiliAPI] 音频码率: codecid={audio_codec}, 音质={quality_desc}, 大小={audio_size / 1024 / 1024:.2f}MB")
+
         for video in video_streams:
-            if video.get('codecid') == audio_codec:
+            video_codec = video.get('codecid') or video.get('id') or 0
+            if video_codec == audio_codec:
                 quality_desc = video.get('desc', quality_desc)
                 break
 
