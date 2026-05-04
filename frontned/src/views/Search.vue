@@ -171,7 +171,7 @@ const handleSearch = () => {
     }
 
     fetchTracks(currentController.signal)
-  }, 200)
+  }, 800)
 }
 
 const getCacheKey = (keyword, source) => `${source}_${keyword}`
