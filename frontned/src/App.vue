@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col h-screen w-screen bg-white text-gray-800 overflow-hidden font-sans overscroll-contain">
     <div class="flex flex-1 overflow-hidden" v-show="!isFullScreen">
-      <aside class="hidden md:flex flex-col w-16 bg-gray-100 rounded-2xl m-2 ml-1 shrink-0 items-center py-4 gap-1">
+      <aside class="hidden landscape:flex md:flex flex-col w-16 bg-gray-100 rounded-2xl m-2 ml-1 shrink-0 items-center py-4 gap-1">
         <router-link to="/" class="sidebar-icon group" active-class="sidebar-icon-active" exact-active-class="sidebar-icon-active">
           <Icon icon="mdi:music-box-multiple" class="w-6 h-6" />
           <span class="sidebar-tooltip">本地音乐</span>
@@ -25,7 +25,7 @@
       </aside>
 
       <main class="flex-1 flex flex-col min-w-0 bg-white relative">
-        <header class="h-14 sm:h-16 flex items-center justify-between px-4 sm:px-6 md:px-8 shrink-0 md:hidden">
+        <header class="h-14 sm:h-16 flex items-center justify-between px-4 sm:px-6 md:px-8 shrink-0 landscape:hidden md:hidden">
           <div class="flex items-center space-x-2 sm:space-x-4 md:space-x-6 shrink-0">
             <router-link to="/" class="mobile-nav-icon" active-class="mobile-nav-icon-active" exact-active-class="mobile-nav-icon-active">
               <Icon icon="mdi:music-box-multiple" class="w-6 h-6" />

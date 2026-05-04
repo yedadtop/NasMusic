@@ -7,15 +7,15 @@
           <span class="truncate">标题</span>
           <span v-if="sortBy === 'title'" class="ml-1 text-blue-500">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
         </div>
-        <div class="hidden sm:flex sm:w-24 md:w-1/4 items-center cursor-pointer hover:text-gray-700 transition truncate mx-2" @click="toggleSort('album_title')">
+        <div class="hidden sm:flex landscape:flex sm:w-24 md:w-1/4 items-center cursor-pointer hover:text-gray-700 transition truncate mx-2" @click="toggleSort('album_title')">
           <span class="truncate">专辑</span>
           <span v-if="sortBy === 'album_title'" class="ml-1 text-blue-500 shrink-0">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
         </div>
-        <div class="hidden md:flex md:w-1/6 items-center cursor-pointer hover:text-gray-700 transition" @click="toggleSort('added_at')">
+        <div class="hidden md:flex landscape:flex md:w-1/6 items-center cursor-pointer hover:text-gray-700 transition" @click="toggleSort('added_at')">
           <span>添加日期</span>
           <span v-if="sortBy === 'added_at'" class="ml-1 text-blue-500">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
         </div>
-        <div class="hidden lg:block w-20 text-center text-xs cursor-pointer hover:text-gray-700 transition" @click="toggleSort('format')">
+        <div class="hidden lg:block landscape:block w-20 text-center text-xs cursor-pointer hover:text-gray-700 transition" @click="toggleSort('format')">
           <span>格式</span>
           <span v-if="sortBy === 'format'" class="ml-1 text-blue-500">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
         </div>
@@ -43,9 +43,9 @@
           <span class="text-xs text-gray-500 truncate">{{ track.artist_name }}</span>
         </div>
       </div>
-      <div class="hidden sm:block w-24 md:w-1/4 text-sm text-gray-500 truncate mx-2">{{ track.album_title || '未知专辑' }}</div>
-      <div class="hidden md:block w-1/6 text-sm text-gray-500 truncate">{{ formatDate(track.added_at) }}</div>
-      <div class="hidden lg:block w-20 text-sm text-gray-500 text-center">{{ track.format || '-' }}</div>
+      <div class="hidden sm:block landscape:block w-24 md:w-1/4 text-sm text-gray-500 truncate mx-2">{{ track.album_title || '未知专辑' }}</div>
+      <div class="hidden md:block landscape:block w-1/6 text-sm text-gray-500 truncate">{{ formatDate(track.added_at) }}</div>
+      <div class="hidden lg:block landscape:block w-20 text-sm text-gray-500 text-center">{{ track.format || '-' }}</div>
       <div class="w-16 sm:w-24 text-sm text-gray-500 text-right pr-2 sm:pr-4">{{ formatDuration(track.duration) }}</div>
       <div class="relative">
         <button 

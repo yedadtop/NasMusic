@@ -10,11 +10,11 @@
       <div class="absolute inset-0 bg-black/50 md:bg-black/40"></div>
     </div>
 
-    <div class="relative z-10 flex flex-col md:flex-row w-full h-full mx-auto">
+    <div class="relative z-10 flex flex-col landscape:flex-row md:flex-row w-full h-full mx-auto">
       
       <!-- 歌词/封面 区域 -->
       <div 
-        class="w-full md:w-1/2 flex-1 md:h-full relative overflow-hidden order-1 md:order-2"
+        class="w-full landscape:w-1/2 md:w-1/2 flex-1 landscape:h-full md:h-full relative overflow-hidden order-1 landscape:order-2 md:order-2"
         style="mask-image: linear-gradient(180deg, transparent 0%, black 10%, black 90%, transparent 100%); -webkit-mask-image: linear-gradient(180deg, transparent 0%, black 10%, black 90%, transparent 100%); transform: translateZ(0);"
       >
         <transition name="fade-slow" mode="out-in">
@@ -24,7 +24,7 @@
           <!-- 状态B：有歌词时 -> 显示滚动歌词面板 -->
           <div 
             v-else-if="parsedLyrics && parsedLyrics.length > 0"
-            class="w-full h-full overflow-y-auto px-6 md:pl-12 md:pr-32 flex flex-col text-center md:text-left pb-[35vh] md:pb-[50vh] pt-[35vh] md:pt-[45vh] lyrics-scroll" 
+            class="w-full h-full overflow-y-auto px-6 landscape:px-12 md:pl-12 md:pr-32 flex flex-col text-center landscape:text-left md:text-left pb-[35vh] landscape:pb-[50vh] md:pb-[50vh] pt-[35vh] landscape:pt-[45vh] md:pt-[45vh] lyrics-scroll" 
             ref="lyricsContainer"
             @wheel.passive="handleUserInteraction"
             @touchstart.passive="handleUserInteraction"
@@ -34,7 +34,7 @@
               v-for="(line, index) in parsedLyrics" 
               :key="index"
               style="word-break: keep-all; overflow-wrap: break-word;"
-              class="transition-all duration-[800ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] cursor-pointer block py-3 md:py-4 transform-gpu origin-center md:origin-left font-bold text-[clamp(19px,4vw,24px)] md:text-[clamp(24px,3vw,34px)] leading-[1.4]"
+              class="transition-all duration-[800ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] cursor-pointer block py-3 md:py-4 transform-gpu origin-center md:origin-left font-bold text-[clamp(19px,4vw,24px)] landscape:text-[clamp(24px,3vw,34px)] md:text-[clamp(24px,3vw,34px)] leading-[1.4]"
               :class="getCurrentLyricClass(index)"
               :ref="el => setLyricRef(el, index)"
               @click="seekToLine(line.time)"
@@ -44,12 +44,12 @@
           </div>
 
           <!-- 状态C：无歌词时 -> 手机端居中显示大封面，电脑端仅显示提示 -->
-          <div v-else class="w-full h-full flex flex-col items-center md:items-start justify-center px-6 md:pl-12 md:pr-32">
-            <div class="md:hidden w-[70vw] max-w-[320px] aspect-square rounded-2xl overflow-hidden shadow-2xl mb-8 bg-black/20 transition-transform duration-500">
+          <div v-else class="w-full h-full flex flex-col items-center landscape:items-start md:items-start justify-center px-6 landscape:px-12 landscape:pr-32 md:pl-12 md:pr-32">
+            <div class="md:hidden landscape:hidden w-[70vw] max-w-[320px] aspect-square rounded-2xl overflow-hidden shadow-2xl mb-8 bg-black/20 transition-transform duration-500">
               <img v-if="player.currentTrack?.track_cover" :src="player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack.track_cover, 'large') : player.currentTrack.track_cover" alt="cover" class="w-full h-full object-cover" referrerpolicy="no-referrer" />
               <img v-else src="https://picsum.photos/600" alt="cover" class="w-full h-full object-cover" />
             </div>
-            <p class="text-white/50 text-center md:text-left text-lg md:text-3xl font-bold tracking-wider">
+            <p class="text-white/50 text-center landscape:text-left md:text-left text-lg landscape:text-3xl md:text-3xl font-bold tracking-wider">
               {{ player.currentTrack?.is_bilibili ? '在线音源暂无歌词' : '暂无歌词' }}
             </p>
           </div>
@@ -57,20 +57,23 @@
       </div>
 
       <!-- 播放控制区 -->
-      <div class="w-full md:w-1/2 h-auto md:h-full flex flex-col items-center justify-end md:justify-center px-6 md:px-12 pb-10 md:pb-10 pt-8 md:py-10 shrink-0 order-2 md:order-1 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent md:bg-none">
+      <!-- 播放控制区 -->
+      <div class="w-full landscape:w-1/2 md:w-1/2 h-auto landscape:h-full md:h-full flex flex-col items-center justify-end landscape:justify-center md:justify-center px-6 landscape:px-8 md:px-12 pb-10 landscape:pb-4 md:pb-10 pt-8 landscape:pt-4 md:py-10 shrink-0 order-2 landscape:order-1 md:order-1 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent landscape:bg-none md:bg-none">
         <div class="w-full max-w-[360px] flex flex-col">
           
-          <div class="hidden md:block w-full rounded-xl overflow-hidden bg-black/20 shrink-0 relative shadow-2xl transition-transform duration-500 hover:scale-[1.02]" style="aspect-ratio: 1 / 1;">
+          <!-- 修改 1：横屏下限制封面的最大宽度为 45vh，并通过 mx-auto 居中 -->
+          <div class="hidden landscape:block md:block landscape:w-[45vh] md:w-full mx-auto rounded-xl overflow-hidden bg-black/20 shrink-0 relative shadow-2xl transition-transform duration-500 hover:scale-[1.02]" style="aspect-ratio: 1 / 1;">
             <img v-if="player.currentTrack?.track_cover" :src="player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack.track_cover, 'large') : player.currentTrack.track_cover" alt="cover" class="w-full h-full object-cover" referrerpolicy="no-referrer" />
             <img v-else src="https://picsum.photos/600" alt="cover" class="w-full h-full object-cover" />
           </div>
 
-          <div class="mt-0 md:mt-8 flex justify-between items-center w-full">
+          <!-- 修改 2：压缩横屏下的 mt (margin-top) 间距，留出更多垂直空间 -->
+          <div class="mt-0 landscape:mt-3 md:mt-8 flex justify-between items-center w-full">
             <div class="flex flex-col truncate pr-4 text-left">
-              <h2 class="text-xl md:text-2xl font-bold truncate tracking-wide text-white drop-shadow-sm">
+              <h2 class="text-xl landscape:text-xl md:text-2xl font-bold truncate tracking-wide text-white drop-shadow-sm">
                 {{ player.currentTrack?.title || '未知歌曲' }}
               </h2>
-              <div class="text-sm md:text-base text-white/70 truncate mt-1 md:mt-1.5 font-medium">
+              <div class="text-sm landscape:text-sm md:text-base text-white/70 truncate mt-1 landscape:mt-1 md:mt-1.5 font-medium">
                 {{ player.currentTrack?.artist_name || '未知歌手' }}
               </div>
             </div>
@@ -79,7 +82,7 @@
                 <button class="hover:text-white transition" @click="showOptionsMenu = !showOptionsMenu"><Icon icon="mdi:dots-vertical" class="w-4 h-4 md:w-5 md:h-5" /></button>
                 <div 
                   v-if="showOptionsMenu"
-                  class="absolute right-0 top-full mt-2 bg-gray-800/90 backdrop-blur-sm rounded-lg shadow-xl py-2 min-w-[120px] z-50"
+                  class="absolute right-0 bottom-full mb-2 md:top-full md:mt-2 md:bottom-auto bg-gray-800/90 backdrop-blur-sm rounded-lg shadow-xl py-2 min-w-[120px] z-50"
                 >
                   <button 
                     class="flex items-center w-full px-4 py-2 text-sm text-white/80 hover:text-white hover:bg-white/10 transition"
@@ -88,14 +91,14 @@
                     <Icon icon="mdi:pencil" class="w-4 h-4 mr-2" />
                     修改
                   </button>
-
                 </div>
                 <div v-if="showOptionsMenu" class="fixed inset-0 z-40" @click="showOptionsMenu = false"></div>
               </div>
             </div>
           </div>
 
-          <div class="mt-5 md:mt-7 flex items-center justify-between w-full text-xs md:text-sm font-medium text-white/60 space-x-3 md:space-x-4">
+          <!-- 修改 3：同样压缩进度条在横屏下的顶部间距 -->
+          <div class="mt-5 landscape:mt-3 md:mt-7 flex items-center justify-between w-full text-xs landscape:text-xs md:text-sm font-medium text-white/60 space-x-3 landscape:space-x-3 md:space-x-4">
             <span class="w-8 text-left">{{ formatTime(player.currentTime) }}</span>
             <div 
               class="flex-1 h-1 md:h-1.5 bg-white/20 rounded-full cursor-pointer relative group flex items-center"
@@ -110,7 +113,8 @@
             <span class="w-8 text-right">{{ formatTime(player.duration) }}</span>
           </div>
 
-          <div class="mt-5 md:mt-6 flex items-center justify-between w-full px-1">
+          <!-- 修改 4：压缩控制按钮区域的顶部间距及按钮尺寸 -->
+          <div class="mt-5 landscape:mt-3 md:mt-6 flex items-center justify-between w-full px-1">
             <button @click="$emit('close')" class="text-white/60 hover:text-white transition p-2 hover:scale-110 focus-visible:outline-none">
               <Icon icon="mdi:chevron-down" class="w-5 h-5 md:w-6 md:h-6" />
             </button>
