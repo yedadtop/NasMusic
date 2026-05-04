@@ -36,21 +36,30 @@
     </div>
 
     <div class="relative z-10 flex-1 overflow-y-auto custom-scrollbar px-4 sm:px-6 md:px-8 pb-4 mt-4 min-h-0">
-      <div v-if="localLoading" class="flex items-center justify-center py-20">
-        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      
+      <!-- 1. 首次搜索全局 Loading (本地和B站都没有数据，且至少一个在加载) -->
+      <div v-if="(localLoading || biliLoading) && localTracks.length === 0 && biliTracks.length === 0" class="flex flex-col items-center justify-center py-20">
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-3"></div>
+        <span class="text-sm text-gray-500">
+          <template v-if="localLoading && biliLoading">正在搜索本地和B站音乐...</template>
+          <template v-else-if="localLoading">正在搜索本地音乐...</template>
+          <template v-else-if="biliLoading">正在搜索B站音乐...</template>
+        </span>
       </div>
 
-      <div v-else-if="localTracks.length === 0 && biliTracks.length === 0 && searchKeyword" class="text-center py-20 text-gray-400">
-        <div v-if="localLoading || biliLoading" class="flex flex-col items-center">
-          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-3"></div>
-          <span class="text-sm">正在搜索{{ localLoading && biliLoading ? '本地和B站' : localLoading ? '本地音乐' : 'B站音乐' }}...</span>
-        </div>
-        <span v-else>未找到匹配的歌曲</span>
+      <!-- 2. 完全无结果 -->
+      <div v-else-if="!localLoading && !biliLoading && localTracks.length === 0 && biliTracks.length === 0 && searchKeyword" class="text-center py-20 text-gray-400">
+        未找到匹配的歌曲
       </div>
 
+      <!-- 3. 结果展示区 -->
       <template v-else>
+        <!-- 本地音乐列表 -->
         <div v-if="localTracks.length > 0">
-          <div class="text-sm font-medium text-gray-500 mb-2 px-2">本地音乐</div>
+          <div class="text-sm font-medium text-gray-500 mb-2 px-2 flex items-center">
+            本地音乐
+            <span v-if="localLoading" class="ml-2 text-xs text-blue-500">加载中...</span>
+          </div>
           <div
             v-for="(track, index) in localTracks"
             :key="track.id"
@@ -75,8 +84,18 @@
           </div>
         </div>
 
+        <!-- B站单独加载提示 (本地已出结果，但B站还在加载) -->
+        <div v-if="biliLoading && biliTracks.length === 0" :class="{ 'mt-6': localTracks.length > 0 }" class="flex items-center justify-center py-6">
+          <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-pink-400"></div>
+          <span class="ml-3 text-sm text-gray-500">正在检索 Bilibili...</span>
+        </div>
+
+        <!-- B站音乐列表 -->
         <div v-if="biliTracks.length > 0" :class="{ 'mt-6': localTracks.length > 0 }">
-          <div class="text-sm font-medium text-gray-500 mb-2 px-2">Bilibili 在线</div>
+          <div class="text-sm font-medium text-gray-500 mb-2 px-2 flex items-center">
+            Bilibili 在线
+            <span v-if="biliLoading" class="ml-2 text-xs text-blue-500">加载中...</span>
+          </div>
           <div
             v-for="(track, index) in biliTracks"
             :key="track.id"
@@ -94,10 +113,16 @@
                 <span class="text-xs text-gray-500 truncate">{{ track.author }}</span>
               </div>
             </div>
-            <!-- <div class="w-16 sm:w-24 text-sm text-gray-500 text-right pr-2 sm:pr-4">{{ track.original_duration || track.duration }}</div> -->
           </div>
         </div>
+
+        <!-- 本地分页加载更多时的底部提示 -->
+        <div v-if="localLoading && localTracks.length > 0" class="flex items-center justify-center py-4">
+          <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+          <span class="ml-3 text-sm text-gray-500">正在加载更多...</span>
+        </div>
       </template>
+
     </div>
   </div>
 </template>
@@ -122,6 +147,8 @@ const allLoaded = ref(false)
 const searchInput = ref(null)
 const searchTimer = ref(null)
 let currentController = null
+const searchCache = new Map()
+const CACHE_TTL = 5 * 60 * 1000
 
 const handleSearch = () => {
   if (searchTimer.value) clearTimeout(searchTimer.value)
@@ -130,8 +157,33 @@ const handleSearch = () => {
     currentController = new AbortController()
     page.value = 1
     allLoaded.value = false
+
+    const keyword = searchKeyword.value.trim()
+    if (keyword) {
+      const cached = searchCache.get(keyword)
+      if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        localTracks.value = cached.localTracks
+        biliTracks.value = cached.biliTracks
+        localCount.value = cached.localCount
+        biliCount.value = cached.biliCount
+        return
+      }
+    }
+
     fetchTracks(currentController.signal)
-  }, 300)
+  }, 200)
+}
+
+const getCacheKey = (keyword, source) => `${source}_${keyword}`
+
+const setCache = (keyword, localData, biliData) => {
+  searchCache.set(keyword, {
+    localTracks: localData.tracks,
+    localCount: localData.count,
+    biliTracks: biliData.tracks,
+    biliCount: biliData.count,
+    timestamp: Date.now()
+  })
 }
 
 const localLoading = ref(false)
@@ -215,8 +267,23 @@ const fetchTracks = async (signal) => {
     biliTracks.value = []
   }
 
-  fetchLocalTracks(signal)
-  fetchBiliTracks(signal)
+  const keyword = searchKeyword.value.trim()
+
+  const localPromise = fetchLocalTracks(signal).then(() => ({
+    tracks: [...localTracks.value],
+    count: localCount.value
+  }))
+
+  const biliPromise = fetchBiliTracks(signal).then(() => ({
+    tracks: [...biliTracks.value],
+    count: biliCount.value
+  }))
+
+  const [localData, biliData] = await Promise.allSettled([localPromise, biliPromise])
+
+  if (localData.status === 'fulfilled' && biliData.status === 'fulfilled') {
+    setCache(keyword, localData.value, biliData.value)
+  }
 }
 
 const loadMore = () => {
