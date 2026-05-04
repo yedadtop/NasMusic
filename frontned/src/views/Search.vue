@@ -3,14 +3,14 @@
     <!-- 基础背景 -->
     <div class="absolute inset-0 bg-gradient-to-br from-gray-50 via-white to-blue-50"></div>
 
-    <!-- 整个页面作为单一滚动容器 -->
-    <div class="relative z-10 w-full h-full overflow-y-auto custom-scrollbar">
+    <!-- 整个页面作为单一滚动容器，添加了触底滚动监听 -->
+    <div class="relative z-10 w-full h-full overflow-y-auto custom-scrollbar" @scroll="handleScroll" ref="scrollContainer">
       
       <!-- 吸顶层：仅作为搜索框的悬浮容器 -->
       <div class="sticky top-0 z-30 w-full flex justify-center pt-4 sm:pt-6 px-4 pb-2">
         <div class="w-full max-w-2xl" ref="searchContainer">
           
-          <!-- 搜索框本体：降低了 bg-white 的不透明度，让毛玻璃更通透 -->
+          <!-- 搜索框本体：极简通透的毛玻璃效果 -->
           <div class="flex items-center bg-white/10 backdrop-blur-xl rounded-2xl shadow-lg border border-white/20 px-4 py-3 hover:bg-white/20 focus-within:bg-white/30 transition-colors">
             <Icon icon="mdi:magnify" class="w-6 h-6 text-gray-600 mr-3 shrink-0" />
             <input
@@ -146,13 +146,24 @@ const biliCount = ref(0)
 const searchKeyword = ref('')
 const allLoaded = ref(false)
 const searchInput = ref(null)
+const scrollContainer = ref(null) // 新增滚动容器引用
 const searchTimer = ref(null)
 let currentController = null
 const searchCache = new Map()
 const CACHE_TTL = 5 * 60 * 1000
 
+// 处理触底滚动，触发加载更多
+const handleScroll = (e) => {
+  const { scrollTop, clientHeight, scrollHeight } = e.target
+  // 当距离底部小于 50px 时，尝试加载下一页数据
+  if (scrollTop + clientHeight >= scrollHeight - 50) {
+    loadMore()
+  }
+}
+
 const handleSearch = () => {
   if (searchTimer.value) clearTimeout(searchTimer.value)
+  // 将防抖时间优化为 500ms
   searchTimer.value = setTimeout(() => {
     currentController?.abort()
     currentController = new AbortController()
@@ -172,7 +183,7 @@ const handleSearch = () => {
     }
 
     fetchTracks(currentController.signal)
-  }, 800)
+  }, 500)
 }
 
 const getCacheKey = (keyword, source) => `${source}_${keyword}`
@@ -288,6 +299,7 @@ const fetchTracks = async (signal) => {
 }
 
 const loadMore = () => {
+  // 确保前一次加载完成，并且还有数据可加载时才触发
   if (!allLoaded.value && !localLoading.value && localTracks.value.length > 0) {
     page.value++
     const controller = new AbortController()
