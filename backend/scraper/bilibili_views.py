@@ -22,6 +22,17 @@ BILI_QUALITY_MAP = {
 MAX_RETRIES = 3
 RETRY_DELAY = 1
 
+AUDIO_QUALITY_PRIORITY = {
+    30251: 5,  # Hi-Res 无损
+    30250: 4,  # 杜比全景声
+    30280: 3,  # 192K 高码率
+    30232: 2,  # 132K 标准
+    30216: 1,  # 64K 流畅
+}
+# - 默认模式 ( MANUAL_QUALITY_SELECTION = None )：按优先级自动选择最高音质
+# - 手动指定模式 ：将 MANUAL_QUALITY_SELECTION = 30216 设置为你要测试的 codec ID
+MANUAL_QUALITY_SELECTION = 30232
+
 
 def make_bili_request(url, timeout=10, retries=MAX_RETRIES):
     for attempt in range(retries):
@@ -129,7 +140,10 @@ class BiliPlayUrlView(APIView):
 
         best_audio = None
         best_priority = 0
-        quality_priority = {30251: 5, 30250: 4, 30280: 3, 30232: 2, 30216: 1}
+        quality_priority = AUDIO_QUALITY_PRIORITY.copy()
+        if isinstance(MANUAL_QUALITY_SELECTION, int) and MANUAL_QUALITY_SELECTION in quality_priority:
+            for codecid in quality_priority:
+                quality_priority[codecid] = 1 if codecid != MANUAL_QUALITY_SELECTION else 10
         for audio in audio_streams:
             audio_url = audio.get('baseUrl') or audio.get('src')
             audio_codec = audio.get('codecid') or audio.get('id') or 0
@@ -211,9 +225,20 @@ class BiliProxyStreamView(APIView):
             finally:
                 upstream.close()
 
-        response = StreamingHttpResponse(stream_response(), content_type='audio/mp4')
-        response['Content-Length'] = upstream.headers.get('Content-Length', 0)
-        response['Content-Range'] = upstream.headers.get('Content-Range', f'bytes 0-{int(response["Content-Length"]) - 1}/{response["Content-Length"]}')
+        # 1. 核心修复：必须把 B 站的 status_code (206) 透传给前端
+        response = StreamingHttpResponse(
+            stream_response(), 
+            status=upstream.status_code, 
+            content_type=upstream.headers.get('Content-Type', 'audio/mp4')
+        )
+        
+        # 2. 安全透传 headers：只有当上游真的返回了这些头时，才塞给前端
+        if 'Content-Length' in upstream.headers:
+            response['Content-Length'] = upstream.headers['Content-Length']
+            
+        if 'Content-Range' in upstream.headers:
+            response['Content-Range'] = upstream.headers['Content-Range']
+            
         response['Accept-Ranges'] = 'bytes'
         response['Access-Control-Allow-Origin'] = '*'
         response['Access-Control-Expose-Headers'] = 'Content-Range, Accept-Ranges'

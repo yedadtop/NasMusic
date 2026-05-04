@@ -1,128 +1,129 @@
 <template>
-  <div class="relative w-full h-full flex flex-col overflow-hidden">
+  <div class="relative w-full h-full overflow-hidden">
+    <!-- 基础背景 -->
     <div class="absolute inset-0 bg-gradient-to-br from-gray-50 via-white to-blue-50"></div>
 
-    <div class="relative z-10 flex-shrink-0 flex items-start justify-center pt-2 sm:pt-8 px-4">
-      <div class="w-full max-w-2xl">
-        <div
-          class="bg-white/80 backdrop-blur-2xl rounded-2xl shadow-2xl border border-white/50 p-1.5"
-          ref="searchContainer"
-        >
-          <div class="flex items-center bg-gray-100/80 rounded-xl px-4 py-3 backdrop-blur-md">
-            <Icon icon="mdi:magnify" class="w-6 h-6 text-gray-400 mr-3 shrink-0" />
+    <!-- 整个页面作为单一滚动容器 -->
+    <div class="relative z-10 w-full h-full overflow-y-auto custom-scrollbar">
+      
+      <!-- 吸顶层：仅作为搜索框的悬浮容器 -->
+      <div class="sticky top-0 z-30 w-full flex justify-center pt-4 sm:pt-6 px-4 pb-2">
+        <div class="w-full max-w-2xl" ref="searchContainer">
+          
+          <!-- 搜索框本体：降低了 bg-white 的不透明度，让毛玻璃更通透 -->
+          <div class="flex items-center bg-white/10 backdrop-blur-xl rounded-2xl shadow-lg border border-white/20 px-4 py-3 hover:bg-white/20 focus-within:bg-white/30 transition-colors">
+            <Icon icon="mdi:magnify" class="w-6 h-6 text-gray-600 mr-3 shrink-0" />
             <input
               type="text"
               placeholder="搜索歌曲、歌手或专辑..."
               v-model="searchKeyword"
               @input="handleSearch"
               ref="searchInput"
-              class="bg-transparent outline-none flex-1 text-lg text-gray-800 placeholder-gray-400"
+              class="bg-transparent outline-none flex-1 text-lg text-gray-800 placeholder-gray-500"
               autofocus
             >
             <button
               v-if="searchKeyword"
               @click="clearSearch"
-              class="ml-2 text-gray-400 hover:text-gray-600 transition p-1"
+              class="ml-2 text-gray-500 hover:text-gray-700 transition p-1"
             >
               <Icon icon="mdi:close-circle" class="w-5 h-5" />
             </button>
           </div>
-        </div>
 
-        <div v-if="searchKeyword" class="mt-4 text-center text-sm text-gray-400">
-          本地 {{ localCount }} 首 · B站 {{ biliCount }} 首
         </div>
       </div>
-    </div>
 
-    <div class="relative z-10 flex-1 overflow-y-auto custom-scrollbar px-4 sm:px-6 md:px-8 pb-4 mt-4 min-h-0">
-      
-      <!-- 1. 首次搜索全局 Loading (本地和B站都没有数据，且至少一个在加载) -->
-      <div v-if="(localLoading || biliLoading) && localTracks.length === 0 && biliTracks.length === 0" class="flex flex-col items-center justify-center py-20">
-        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-3"></div>
-        <span class="text-sm text-gray-500">
-          <template v-if="localLoading && biliLoading">正在搜索本地和B站音乐...</template>
-          <template v-else-if="localLoading">正在搜索本地音乐...</template>
-          <template v-else-if="biliLoading">正在搜索B站音乐...</template>
-        </span>
-      </div>
+      <!-- 列表内容展示区 -->
+      <div class="px-4 sm:px-6 md:px-8 pb-8 pt-4">
+        
+        <!-- 1. 首次搜索全局 Loading -->
+        <div v-if="(localLoading || biliLoading) && localTracks.length === 0 && biliTracks.length === 0" class="flex flex-col items-center justify-center py-20">
+          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-3"></div>
+          <span class="text-sm text-gray-500">
+            <template v-if="localLoading && biliLoading">正在搜索本地和B站音乐...</template>
+            <template v-else-if="localLoading">正在搜索本地音乐...</template>
+            <template v-else-if="biliLoading">正在搜索B站音乐...</template>
+          </span>
+        </div>
 
-      <!-- 2. 完全无结果 -->
-      <div v-else-if="!localLoading && !biliLoading && localTracks.length === 0 && biliTracks.length === 0 && searchKeyword" class="text-center py-20 text-gray-400">
-        未找到匹配的歌曲
-      </div>
+        <!-- 2. 完全无结果 -->
+        <div v-else-if="!localLoading && !biliLoading && localTracks.length === 0 && biliTracks.length === 0 && searchKeyword" class="text-center py-20 text-gray-500">
+          未找到匹配的歌曲
+        </div>
 
-      <!-- 3. 结果展示区 -->
-      <template v-else>
-        <!-- 本地音乐列表 -->
-        <div v-if="localTracks.length > 0">
-          <div class="text-sm font-medium text-gray-500 mb-2 px-2 flex items-center">
-            本地音乐
-            <span v-if="localLoading" class="ml-2 text-xs text-blue-500">加载中...</span>
-          </div>
-          <div
-            v-for="(track, index) in localTracks"
-            :key="track.id"
-            :data-track-id="track.id"
-            class="group flex items-center justify-between py-3 px-2 hover:bg-white/50 rounded-lg transition cursor-pointer border-b border-gray-100/50 backdrop-blur-sm"
-            :class="{ '!bg-blue-50/80': highlightedTrackId === track.id }"
-            @click="playTrack(track, index, 'local')"
-          >
-            <div class="flex items-center flex-1 min-w-0">
-              <div class="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded-md mr-3 sm:mr-4 shrink-0 overflow-hidden">
-                <img v-if="track.track_cover" :src="track.track_cover" alt="cover" loading="lazy" @error="$event.target.src = `https://picsum.photos/seed/${track.id}/100/100`" class="w-full h-full object-cover">
-              </div>
-              <div class="flex flex-col truncate min-w-0">
-                <span class="font-medium text-sm sm:text-base truncate">{{ track.title }}</span>
-                <span class="text-xs text-gray-500 truncate">{{ track.artist_name }}</span>
-              </div>
+        <!-- 3. 结果展示区 -->
+        <template v-else>
+          <!-- 本地音乐列表 -->
+          <div v-if="localTracks.length > 0">
+            <div class="text-sm font-medium text-gray-600 mb-2 px-2 flex items-center">
+              本地音乐
+              <span v-if="localLoading" class="ml-2 text-xs text-blue-500">加载中...</span>
             </div>
-            <div class="hidden sm:block w-24 md:w-1/4 text-sm text-gray-500 truncate mx-2">{{ track.album_title || '未知专辑' }}</div>
-            <div class="hidden md:block w-1/6 text-sm text-gray-500 truncate">{{ formatDate(track.added_at) }}</div>
-            <div class="hidden lg:block w-20 text-sm text-gray-500 text-center">{{ track.format || '-' }}</div>
-            <div class="w-16 sm:w-24 text-sm text-gray-500 text-right pr-2 sm:pr-4">{{ formatDuration(track.duration) }}</div>
-          </div>
-        </div>
-
-        <!-- B站单独加载提示 (本地已出结果，但B站还在加载) -->
-        <div v-if="biliLoading && biliTracks.length === 0" :class="{ 'mt-6': localTracks.length > 0 }" class="flex items-center justify-center py-6">
-          <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-pink-400"></div>
-          <span class="ml-3 text-sm text-gray-500">正在检索 Bilibili...</span>
-        </div>
-
-        <!-- B站音乐列表 -->
-        <div v-if="biliTracks.length > 0" :class="{ 'mt-6': localTracks.length > 0 }">
-          <div class="text-sm font-medium text-gray-500 mb-2 px-2 flex items-center">
-            Bilibili 在线
-            <span v-if="biliLoading" class="ml-2 text-xs text-blue-500">加载中...</span>
-          </div>
-          <div
-            v-for="(track, index) in biliTracks"
-            :key="track.id"
-            :data-track-id="track.id"
-            class="group flex items-center justify-between py-3 px-2 hover:bg-white/50 rounded-lg transition cursor-pointer border-b border-gray-100/50 backdrop-blur-sm"
-            :class="{ '!bg-blue-50/80': highlightedTrackId === track.id }"
-            @click="playTrack(track, index, 'bili')"
-          >
-            <div class="flex items-center flex-1 min-w-0">
-              <div class="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded-md mr-3 sm:mr-4 shrink-0 overflow-hidden">
-                <img v-if="track.track_cover" :src="track.is_bilibili ? getBiliImageUrl(track.track_cover, 'small') : track.track_cover" alt="cover" loading="lazy" referrerpolicy="no-referrer" @error="$event.target.src = `https://picsum.photos/seed/${track.id}/100/100`" class="w-full h-full object-cover">
+            <div
+              v-for="(track, index) in localTracks"
+              :key="track.id"
+              :data-track-id="track.id"
+              class="group flex items-center justify-between py-3 px-2 hover:bg-white/50 rounded-lg transition cursor-pointer border-b border-gray-100/50 backdrop-blur-sm"
+              :class="{ '!bg-blue-50/80': highlightedTrackId === track.id }"
+              @click="playTrack(track, index, 'local')"
+            >
+              <div class="flex items-center flex-1 min-w-0">
+                <div class="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded-md mr-3 sm:mr-4 shrink-0 overflow-hidden">
+                  <img v-if="track.track_cover" :src="track.track_cover" alt="cover" loading="lazy" @error="$event.target.src = `https://picsum.photos/seed/${track.id}/100/100`" class="w-full h-full object-cover">
+                </div>
+                <div class="flex flex-col truncate min-w-0">
+                  <span class="font-medium text-sm sm:text-base truncate">{{ track.title }}</span>
+                  <span class="text-xs text-gray-500 truncate">{{ track.artist_name }}</span>
+                </div>
               </div>
-              <div class="flex flex-col truncate min-w-0">
-                <span class="font-medium text-sm sm:text-base truncate">{{ track.title }}</span>
-                <span class="text-xs text-gray-500 truncate">{{ track.author }}</span>
+              <div class="hidden sm:block w-24 md:w-1/4 text-sm text-gray-500 truncate mx-2">{{ track.album_title || '未知专辑' }}</div>
+              <div class="hidden md:block w-1/6 text-sm text-gray-500 truncate">{{ formatDate(track.added_at) }}</div>
+              <div class="hidden lg:block w-20 text-sm text-gray-500 text-center">{{ track.format || '-' }}</div>
+              <div class="w-16 sm:w-24 text-sm text-gray-500 text-right pr-2 sm:pr-4">{{ formatDuration(track.duration) }}</div>
+            </div>
+          </div>
+
+          <!-- B站单独加载提示 -->
+          <div v-if="biliLoading && biliTracks.length === 0" :class="{ 'mt-6': localTracks.length > 0 }" class="flex items-center justify-center py-6">
+            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-pink-400"></div>
+            <span class="ml-3 text-sm text-gray-500">正在检索 Bilibili...</span>
+          </div>
+
+          <!-- B站音乐列表 -->
+          <div v-if="biliTracks.length > 0" :class="{ 'mt-6': localTracks.length > 0 }">
+            <div class="text-sm font-medium text-gray-600 mb-2 px-2 flex items-center">
+              Bilibili 在线
+              <span v-if="biliLoading" class="ml-2 text-xs text-blue-500">加载中...</span>
+            </div>
+            <div
+              v-for="(track, index) in biliTracks"
+              :key="track.id"
+              :data-track-id="track.id"
+              class="group flex items-center justify-between py-3 px-2 hover:bg-white/50 rounded-lg transition cursor-pointer border-b border-gray-100/50 backdrop-blur-sm"
+              :class="{ '!bg-blue-50/80': highlightedTrackId === track.id }"
+              @click="playTrack(track, index, 'bili')"
+            >
+              <div class="flex items-center flex-1 min-w-0">
+                <div class="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded-md mr-3 sm:mr-4 shrink-0 overflow-hidden">
+                  <img v-if="track.track_cover" :src="track.is_bilibili ? getBiliImageUrl(track.track_cover, 'small') : track.track_cover" alt="cover" loading="lazy" referrerpolicy="no-referrer" @error="$event.target.src = `https://picsum.photos/seed/${track.id}/100/100`" class="w-full h-full object-cover">
+                </div>
+                <div class="flex flex-col truncate min-w-0">
+                  <span class="font-medium text-sm sm:text-base truncate">{{ track.title }}</span>
+                  <span class="text-xs text-gray-500 truncate">{{ track.author }}</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <!-- 本地分页加载更多时的底部提示 -->
-        <div v-if="localLoading && localTracks.length > 0" class="flex items-center justify-center py-4">
-          <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
-          <span class="ml-3 text-sm text-gray-500">正在加载更多...</span>
-        </div>
-      </template>
+          <!-- 本地分页加载更多时的底部提示 -->
+          <div v-if="localLoading && localTracks.length > 0" class="flex items-center justify-center py-4">
+            <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+            <span class="ml-3 text-sm text-gray-500">正在加载更多...</span>
+          </div>
+        </template>
 
+      </div>
     </div>
   </div>
 </template>
