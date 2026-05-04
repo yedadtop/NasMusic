@@ -18,7 +18,7 @@
         style="mask-image: linear-gradient(180deg, transparent 0%, black 10%, black 90%, transparent 100%); -webkit-mask-image: linear-gradient(180deg, transparent 0%, black 10%, black 90%, transparent 100%); transform: translateZ(0);"
       >
         <transition name="fade-slow">
-          <!-- 状态A：详情数据加载中（仅本地音乐），保持透明占位以消除闪烁 -->
+          <!-- 状态A：详情数据加载中 -->
           <div v-if="isDetailLoading && !player.currentTrack?.is_bilibili" class="w-full h-full flex items-center justify-center"></div>
 
           <!-- 状态B：有歌词时 -> 显示滚动歌词面板 -->
@@ -43,7 +43,7 @@
             </p>
           </div>
 
-          <!-- 状态C：无歌词时 -> 手机端居中显示大封面，电脑端仅显示提示 -->
+          <!-- 状态C：无歌词时 -->
           <div v-else class="w-full h-full flex flex-col items-center landscape:items-start md:items-start justify-center px-6 landscape:px-12 landscape:pr-32 md:pl-12 md:pr-32">
             <div class="md:hidden landscape:hidden w-[70vw] max-w-[320px] aspect-square rounded-2xl overflow-hidden shadow-2xl mb-8 bg-black/20 transition-transform duration-500">
               <img v-if="player.currentTrack?.track_cover" :src="biliCoverBlobUrl || player.currentTrack?._coverUrlLarge || (player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack.track_cover, 'large') : player.currentTrack.track_cover)" alt="cover" class="w-full h-full object-cover" referrerpolicy="no-referrer" @error="$event.target.src = player.currentTrack?.track_cover || 'https://picsum.photos/600'" />
@@ -57,17 +57,14 @@
       </div>
 
       <!-- 播放控制区 -->
-      <!-- 播放控制区 -->
       <div class="w-full landscape:w-1/2 md:w-1/2 h-auto landscape:h-full md:h-full flex flex-col items-center justify-end landscape:justify-center md:justify-center px-6 landscape:px-8 md:px-12 pb-10 landscape:pb-4 md:pb-10 pt-8 landscape:pt-4 md:py-10 shrink-0 order-2 landscape:order-1 md:order-1 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent landscape:bg-none md:bg-none">
         <div class="w-full max-w-[360px] flex flex-col">
           
-          <!-- 修改 1：横屏下限制封面的最大宽度为 45vh，并通过 mx-auto 居中 -->
           <div class="hidden landscape:block md:block landscape:w-[45vh] md:w-full mx-auto rounded-xl overflow-hidden bg-black/20 shrink-0 relative shadow-2xl transition-transform duration-500 hover:scale-[1.02]" style="aspect-ratio: 1 / 1;">
             <img v-if="player.currentTrack?.track_cover" :src="biliCoverBlobUrl || player.currentTrack?._coverUrlLarge || (player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack.track_cover, 'large') : player.currentTrack.track_cover)" alt="cover" class="w-full h-full object-cover" referrerpolicy="no-referrer" @error="$event.target.src = player.currentTrack?.track_cover || 'https://picsum.photos/600'" />
             <img v-else src="https://picsum.photos/600" alt="cover" class="w-full h-full object-cover" />
           </div>
 
-          <!-- 修改 2：压缩横屏下的 mt (margin-top) 间距，留出更多垂直空间 -->
           <div class="mt-0 landscape:mt-3 md:mt-8 flex justify-between items-center w-full">
             <div class="flex flex-col truncate pr-4 text-left">
               <h2 class="text-xl landscape:text-xl md:text-2xl font-bold truncate tracking-wide text-white drop-shadow-sm">
@@ -97,7 +94,6 @@
             </div>
           </div>
 
-          <!-- 修改 3：同样压缩进度条在横屏下的顶部间距 -->
           <div class="mt-5 landscape:mt-3 md:mt-7 flex items-center justify-between w-full text-xs landscape:text-xs md:text-sm font-medium text-white/60 space-x-3 landscape:space-x-3 md:space-x-4">
             <span class="w-8 text-left">{{ formatTime(player.currentTime) }}</span>
             <div 
@@ -113,7 +109,6 @@
             <span class="w-8 text-right">{{ formatTime(player.duration) }}</span>
           </div>
 
-          <!-- 修改 4：压缩控制按钮区域的顶部间距及按钮尺寸 -->
           <div class="mt-5 landscape:mt-3 md:mt-6 flex items-center justify-between w-full px-1">
             <button @click="$emit('close')" class="text-white/60 hover:text-white transition p-2 hover:scale-110 focus-visible:outline-none">
               <Icon icon="mdi:chevron-down" class="w-5 h-5 md:w-6 md:h-6" />
@@ -168,13 +163,26 @@ const biliCoverBlobUrl = ref('')
 let isUserScrolling = false
 let scrollTimeout = null
 
-// 【修改1】把 isDetailLoading 的初始值设为更智能的判断
+let isSwitchingTrack = false
+
 const isDetailLoading = ref(false)
 let loadingTimeout = null
 
-// 【修改2】给 watch 加上 immediate: true，确保组件一打开就执行判断
-watch(() => player.currentTrack?.id, (newId) => {
-  // 如果没有歌，或者是 B 站音乐，直接取消 loading，立刻显示画面
+watch(() => player.currentTrack?.id, (newId, oldId) => {
+  if (newId !== oldId) {
+    isSwitchingTrack = true
+    isUserScrolling = false
+    
+    if (lyricsContainer.value) {
+      lyricsContainer.value.scrollTop = 0
+    }
+    lyricRefs.value = {}
+
+    setTimeout(() => {
+      isSwitchingTrack = false
+    }, 800)
+  }
+
   if (!newId || player.currentTrack?.is_bilibili) {
     isDetailLoading.value = false
     if (loadingTimeout) {
@@ -184,21 +192,16 @@ watch(() => player.currentTrack?.id, (newId) => {
     return
   }
   
-  // 只有本地音乐且详情没加载完时，才进入 loading 缓冲
   if (newId !== player.currentTrackDetail?.id) {
     isDetailLoading.value = true
-    
-    if (loadingTimeout) {
-      clearTimeout(loadingTimeout)
-      loadingTimeout = null
-    }
+    if (loadingTimeout) clearTimeout(loadingTimeout)
     loadingTimeout = setTimeout(() => {
       isDetailLoading.value = false
     }, 800)
   } else {
     isDetailLoading.value = false
   }
-}, { immediate: true }) // 核心：加上 immediate 选项
+}, { immediate: true })
 
 watch(() => player.currentTrackDetail?.id, (newDetailId) => {
   if (newDetailId === player.currentTrack?.id) {
@@ -249,9 +252,9 @@ onBeforeUpdate(() => {
 onMounted(async () => {
   await nextTick()
   if (currentLyricIndex.value >= 0) {
-    scrollToCenter(currentLyricIndex.value)
+    scrollToCenter(currentLyricIndex.value, 'auto')
   } else if (parsedLyrics.value.length > 0) {
-    scrollToCenter(0)
+    scrollToCenter(0, 'auto')
   }
   window.addEventListener('keydown', handleKeydown)
 })
@@ -271,7 +274,6 @@ onUnmounted(() => {
 
 const handleKeydown = (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
-  
   switch (e.code) {
     case 'Space':
     case 'KeyP':
@@ -334,22 +336,28 @@ const currentLyricIndex = computed(() => {
 })
 
 watch(currentLyricIndex, async (newIndex) => {
-  if (!isUserScrolling) {
+  if (!isUserScrolling && !isSwitchingTrack) {
     await nextTick()
     if (newIndex >= 0) {
       scrollToCenter(newIndex)
     } else if (newIndex === -1 && parsedLyrics.value.length > 0) {
-      scrollToCenter(0)
+      scrollToCenter(0, 'auto')
     }
   }
 })
 
 watch(parsedLyrics, async (newLyrics) => {
-  if (newLyrics && newLyrics.length > 0 && !isUserScrolling) {
+  isUserScrolling = false
+  if (scrollTimeout) {
+    clearTimeout(scrollTimeout)
+    scrollTimeout = null
+  }
+
+  if (newLyrics && newLyrics.length > 0) {
     await nextTick()
-    setTimeout(() => {
-      scrollToCenter(0)
-    }, 100)
+    if (lyricsContainer.value) {
+      lyricsContainer.value.scrollTop = 0
+    }
   }
 })
 
@@ -361,15 +369,13 @@ const handleUserInteraction = () => {
   }
   scrollTimeout = setTimeout(() => {
     isUserScrolling = false
-    if (currentLyricIndex.value >= 0) {
+    if (!isSwitchingTrack && currentLyricIndex.value >= 0) {
       scrollToCenter(currentLyricIndex.value)
-    } else if (parsedLyrics.value.length > 0) {
-      scrollToCenter(0)
     }
   }, 3000)
 }
 
-const scrollToCenter = (index) => {
+const scrollToCenter = (index, behavior = 'smooth') => {
   const el = lyricRefs.value[index]
   if (el && lyricsContainer.value) {
     const container = lyricsContainer.value
@@ -380,7 +386,7 @@ const scrollToCenter = (index) => {
     const scrollTarget = elementTop - (containerHeight / 2) + (elementHeight / 2)
     container.scrollTo({
       top: scrollTarget,
-      behavior: 'smooth'
+      behavior 
     })
   }
 }
@@ -417,11 +423,16 @@ const handleSeek = (e) => {
   player.audioElement.currentTime = percent * player.duration
 }
 
+// 修复点：切上一曲时，判断 player.isPlaying 状态，而不是强制 play()
 const prevTrack = async () => {
   if (player.prevTrack() && player.audioElement) {
     try {
       player.audioElement.src = await getStreamUrl(player.currentTrack)
-      player.audioElement.play().catch(() => {})
+      if (player.isPlaying) {
+        player.audioElement.play().catch(() => {})
+      } else {
+        player.audioElement.pause()
+      }
     } catch (error) {
       showToast('B站链接解析失败，请检查Cookie配置')
       setTimeout(() => nextTrack(), 1500)
@@ -429,11 +440,16 @@ const prevTrack = async () => {
   }
 }
 
+// 修复点：切下一曲时，判断 player.isPlaying 状态，而不是强制 play()
 const nextTrack = async () => {
   if (player.nextTrack() && player.audioElement) {
     try {
       player.audioElement.src = await getStreamUrl(player.currentTrack)
-      player.audioElement.play().catch(() => {})
+      if (player.isPlaying) {
+        player.audioElement.play().catch(() => {})
+      } else {
+        player.audioElement.pause()
+      }
     } catch (error) {
       showToast('B站链接解析失败，请检查Cookie配置')
       setTimeout(() => nextTrack(), 1500)
@@ -476,13 +492,11 @@ const handleTrackUpdated = (updatedTrack) => {
 .lyrics-scroll {
   -ms-overflow-style: none;
   scrollbar-width: none;
-  scroll-behavior: smooth;
 }
 .lyrics-scroll::-webkit-scrollbar {
   display: none;
 }
 
-/* 核心优化：慢切淡入淡出动画，让布局变更无比丝滑 */
 .fade-slow-enter-active,
 .fade-slow-leave-active {
   transition: opacity 0.3s ease;
