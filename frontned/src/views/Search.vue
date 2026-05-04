@@ -83,7 +83,7 @@
           >
             <div class="flex items-center flex-1 min-w-0">
               <div class="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded-md mr-3 sm:mr-4 shrink-0 overflow-hidden">
-                <img v-if="track.track_cover" :src="track.track_cover" alt="cover" loading="lazy" referrerpolicy="no-referrer" @error="$event.target.src = `https://picsum.photos/seed/${track.id}/100/100`" class="w-full h-full object-cover">
+                <img v-if="track.track_cover" :src="track.is_bilibili ? getBiliImageUrl(track.track_cover, 'small') : track.track_cover" alt="cover" loading="lazy" referrerpolicy="no-referrer" @error="$event.target.src = `https://picsum.photos/seed/${track.id}/100/100`" class="w-full h-full object-cover">
               </div>
               <div class="flex flex-col truncate min-w-0">
                 <span class="font-medium text-sm sm:text-base truncate">{{ track.title }}</span>
@@ -102,6 +102,7 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { Icon } from '@iconify/vue'
 import request from '../api'
+import { getBiliImageUrl } from '../api'
 
 const emit = defineEmits(['play'])
 

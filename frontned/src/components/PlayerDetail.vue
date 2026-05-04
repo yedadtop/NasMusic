@@ -5,7 +5,7 @@
     <div class="absolute inset-0 z-0 pointer-events-none transform-gpu translate-z-0">
       <div 
         class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 scale-125 blur-[80px] opacity-80 will-change-transform"
-        :style="{ backgroundImage: `url(${player.currentTrack?.track_cover || 'https://picsum.photos/600'})` }"
+        :style="{ backgroundImage: `url(${player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack?.track_cover, 'large') : player.currentTrack?.track_cover || 'https://picsum.photos/600'})` }"
       ></div>
       <div class="absolute inset-0 bg-black/50 md:bg-black/40"></div>
     </div>
@@ -51,7 +51,7 @@
         <div class="w-full max-w-[360px] flex flex-col">
           
           <div class="hidden md:block w-full rounded-xl overflow-hidden bg-black/20 shrink-0 relative shadow-2xl transition-transform duration-500 hover:scale-[1.02]" style="aspect-ratio: 1 / 1;">
-            <img v-if="player.currentTrack?.track_cover" :src="player.currentTrack.track_cover" alt="cover" class="w-full h-full object-cover" referrerpolicy="no-referrer" />
+            <img v-if="player.currentTrack?.track_cover" :src="player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack.track_cover, 'large') : player.currentTrack.track_cover" alt="cover" class="w-full h-full object-cover" referrerpolicy="no-referrer" />
             <img v-else src="https://picsum.photos/600" alt="cover" class="w-full h-full object-cover" />
           </div>
 
@@ -169,7 +169,7 @@ import { Icon } from '@iconify/vue'
 import { usePlayerStore } from '../stores/player'
 import EditTrackModal from './EditTrackModal.vue'
 import AppleToast from './AppleToast.vue'
-import { STREAM_BASE_URL } from '../api'
+import { STREAM_BASE_URL, getBiliImageUrl } from '../api'
 import request from '../api'
 
 const emit = defineEmits(['close', 'trackUpdated'])

@@ -68,13 +68,11 @@ class BiliSearchView(APIView):
 
         results = []
         video_list = data.get('data', {}).get('result', [])
-        for item in video_list[:10]:
+        for item in video_list[:20]:
             bvid = item.get('bvid', '')
             title = re.sub(r'<[^>]+>', '', item.get('title', ''))
             author = item.get('author', '')
             pic = item.get('pic', '')
-            if pic:
-                pic = f'{pic}@320w_200h.webp'
             duration = item.get('duration', '')
 
             results.append({
