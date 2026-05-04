@@ -41,7 +41,11 @@
       </div>
 
       <div v-else-if="localTracks.length === 0 && biliTracks.length === 0 && searchKeyword" class="text-center py-20 text-gray-400">
-        未找到匹配的歌曲
+        <div v-if="localLoading || biliLoading" class="flex flex-col items-center">
+          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-3"></div>
+          <span class="text-sm">正在搜索{{ localLoading && biliLoading ? '本地和B站' : localLoading ? '本地音乐' : 'B站音乐' }}...</span>
+        </div>
+        <span v-else>未找到匹配的歌曲</span>
       </div>
 
       <template v-else>
