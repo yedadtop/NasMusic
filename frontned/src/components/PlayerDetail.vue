@@ -263,6 +263,9 @@ const setLyricRef = (el, index) => {
 }
 
 const parsedLyrics = computed(() => {
+  if (!player.currentTrack) return []
+  if (player.currentTrack.is_bilibili) return []
+  
   const lyrics = player.currentTrackDetail?.lyrics
   if (!lyrics) return []
   

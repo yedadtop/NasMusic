@@ -36,7 +36,7 @@
     </div>
 
     <div class="relative z-10 flex-1 overflow-y-auto custom-scrollbar px-4 sm:px-6 md:px-8 pb-4 mt-4 min-h-0">
-      <div v-if="loading" class="flex items-center justify-center py-20">
+      <div v-if="localLoading" class="flex items-center justify-center py-20">
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
       </div>
 
@@ -107,7 +107,6 @@ const emit = defineEmits(['play'])
 
 const localTracks = ref([])
 const biliTracks = ref([])
-const loading = ref(false)
 const page = ref(1)
 const size = ref(50)
 const highlightedTrackId = ref(null)
@@ -130,8 +129,74 @@ const handleSearch = () => {
   }, 300)
 }
 
+const localLoading = ref(false)
+const biliLoading = ref(false)
+
+const fetchLocalTracks = async (signal) => {
+  if (localLoading.value) return
+  localLoading.value = true
+  try {
+    const params = {
+      page: page.value,
+      size: size.value,
+      ordering: '-added_at'
+    }
+    if (searchKeyword.value) {
+      params.search = searchKeyword.value
+    }
+
+    const localRes = await request.get('/tracks/', { params, signal }).catch(() => ({ data: { results: [], count: 0 } }))
+
+    const localResults = localRes.data.results || []
+
+    if (page.value > 1) {
+      localTracks.value = [...localTracks.value, ...localResults]
+    } else {
+      localTracks.value = localResults
+    }
+
+    localCount.value = localRes.data.count || localTracks.value.length
+
+    if (localResults.length < size.value || !localRes.data.next) {
+      allLoaded.value = true
+    }
+  } catch (error) {
+    if (error.name === 'CanceledError' || error.name === 'AbortError') return
+    console.error('获取本地歌曲列表失败:', error)
+  } finally {
+    localLoading.value = false
+  }
+}
+
+const fetchBiliTracks = async (signal) => {
+  biliLoading.value = true
+  try {
+    const keyword = searchKeyword.value.trim()
+    const biliRes = await request.get('/scraper/bili/search/', { params: { keyword }, signal }).catch(() => ({ data: { results: [], count: 0 } }))
+
+    const biliResults = (biliRes.data.results || []).map(item => ({
+      id: item.bvid,
+      title: item.title,
+      author: item.author,
+      artist_name: item.author,
+      track_cover: item.track_cover,
+      duration: 0,
+      is_bilibili: true,
+      bvid: item.bvid,
+      original_duration: item.duration
+    }))
+
+    biliTracks.value = biliResults
+    biliCount.value = biliRes.data.count || biliTracks.value.length
+  } catch (error) {
+    if (error.name === 'CanceledError' || error.name === 'AbortError') return
+    console.error('获取B站歌曲列表失败:', error)
+  } finally {
+    biliLoading.value = false
+  }
+}
+
 const fetchTracks = async (signal) => {
-  if (loading.value) return
   if (!searchKeyword.value.trim()) {
     localTracks.value = []
     biliTracks.value = []
@@ -145,59 +210,12 @@ const fetchTracks = async (signal) => {
     biliTracks.value = []
   }
 
-  loading.value = true
-  try {
-    const params = {
-      page: page.value,
-      size: size.value,
-      ordering: '-added_at'
-    }
-    if (searchKeyword.value) {
-      params.search = searchKeyword.value
-    }
-
-    const keyword = searchKeyword.value.trim()
-    const [localRes, biliRes] = await Promise.all([
-      request.get('/tracks/', { params, signal }).catch(() => ({ data: { results: [], count: 0 } })),
-      request.get('/scraper/bili/search/', { params: { keyword }, signal }).catch(() => ({ data: { results: [], count: 0 } }))
-    ])
-
-    const localResults = localRes.data.results || []
-    const biliResults = (biliRes.data.results || []).map(item => ({
-      id: item.bvid,
-      title: item.title,
-      author: item.author,
-      artist_name: item.author,
-      track_cover: item.track_cover,
-      duration: 0,
-      is_bilibili: true,
-      bvid: item.bvid,
-      original_duration: item.duration
-    }))
-
-    if (page.value > 1) {
-      localTracks.value = [...localTracks.value, ...localResults]
-    } else {
-      localTracks.value = localResults
-    }
-    biliTracks.value = biliResults
-
-    localCount.value = localRes.data.count || localTracks.value.length
-    biliCount.value = biliRes.data.count || biliTracks.value.length
-
-    if (localResults.length < size.value || !localRes.data.next) {
-      allLoaded.value = true
-    }
-  } catch (error) {
-    if (error.name === 'CanceledError' || error.name === 'AbortError') return
-    console.error('获取歌曲列表失败:', error)
-  } finally {
-    loading.value = false
-  }
+  fetchLocalTracks(signal)
+  fetchBiliTracks(signal)
 }
 
 const loadMore = () => {
-  if (!allLoaded.value && !loading.value && localTracks.value.length > 0) {
+  if (!allLoaded.value && !localLoading.value && localTracks.value.length > 0) {
     page.value++
     const controller = new AbortController()
     fetchTracks(controller.signal)
