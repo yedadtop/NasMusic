@@ -1,3 +1,4 @@
+import os
 import re
 import logging
 from django.http import StreamingHttpResponse
@@ -5,6 +6,11 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 import requests
+
+# --- 强制屏蔽系统代理，防止流量被错误地发往 frp 等内网穿透隧道 ---
+os.environ['http_proxy'] = ''
+os.environ['https_proxy'] = ''
+os.environ['all_proxy'] = ''
 
 # --- 引入 bilibili-api-python 核心组件 ---
 from bilibili_api import search, video, Credential, sync
@@ -67,10 +73,8 @@ class BiliSearchView(APIView):
         if not keyword:
             return Response({'message': 'keyword 参数不能为空'}, status=status.HTTP_400_BAD_REQUEST)
 
-        credential = get_bili_credential()
-
         try:
-            # 【核心】使用 bilibili_api 搜索，内置 Wbi 签名和风控处理
+            # 【搜索接口】无需 credential，让库底层自行处理公共搜索的 Wbi 签名
             data = sync(search.search_by_type(
                 keyword=keyword,
                 search_type=search.SearchObjectType.VIDEO,
@@ -113,17 +117,26 @@ class BiliPlayUrlView(APIView):
         credential = get_bili_credential()
 
         try:
-            # 【核心】构建 Video 对象
+            # 构建 Video 对象，并带上 Cookie 凭证
             v = video.Video(bvid=bvid, credential=credential)
 
-            # 【核心】获取播放流字典，会自动计算 Wbi 签名获取最新链接
+            # ---> 新增：获取歌曲(视频)详细信息，用于日志打印 <---
+            try:
+                video_info = sync(v.get_info())
+                song_title = video_info.get('title', '未知标题')
+                song_author = video_info.get('owner', {}).get('name', '未知UP主')
+                logger.info(f"[BiliAPI-Play] 正在提取歌曲信息: 《{song_title}》 - UP主: {song_author}")
+            except Exception as e:
+                song_title, song_author = "未知标题", "未知UP主"
+                logger.warning(f"[BiliAPI-Play] 获取歌曲基础信息失败: {e}")
+
+            # 获取播放流字典，会自动计算 Wbi 签名获取最新链接
             playurl_data = sync(v.get_download_url(page_index=0))
 
             dash = playurl_data.get('dash', {})
             audio_streams = dash.get('audio', [])
-            video_streams = dash.get('video', [])
 
-            logger.info(f"[BiliAPI-Play] 解析到音频流: {len(audio_streams)} 条")
+            logger.info(f"[BiliAPI-Play] 成功解析到音频流: {len(audio_streams)} 条候选线路")
 
             best_audio = None
             best_priority = 0
@@ -138,6 +151,10 @@ class BiliPlayUrlView(APIView):
                 audio_codec = audio.get('codecid') or audio.get('id') or 0
                 audio_size = audio.get('size', 0)
                 priority = quality_priority.get(audio_codec, 0)
+
+                # ---> 调试日志：打印所有探测到的音频流 <---
+                temp_desc = BILI_QUALITY_MAP.get(audio_codec, '未知')
+                logger.info(f"   --> 探测到候选流: 音质级别={audio_codec} ({temp_desc}), 优先级={priority}")
 
                 if audio_url and priority > best_priority:
                     best_audio = audio
@@ -160,8 +177,11 @@ class BiliPlayUrlView(APIView):
                     audio_size = best_audio.get('length', 0) * 128 / 8
 
             quality_desc = BILI_QUALITY_MAP.get(audio_codec, '未知')
+
+            # ---> 核心打印：明确指出最终选取的歌曲和音质结果 <---
             logger.info(
-                f"[BiliAPI-Play] 🏆 选定最优音频流: Codec={audio_codec} ({quality_desc}), Size={audio_size / 1024 / 1024:.2f}MB")
+                f"[BiliAPI-Play] 🏆 最终选定最优音频流 -> 《{song_title}》 | 音质: {quality_desc} (Codec:{audio_codec}) | 大小: {audio_size / 1024 / 1024:.2f}MB"
+            )
 
             return Response({
                 'success': True,
@@ -180,11 +200,6 @@ class BiliPlayUrlView(APIView):
 
 class BiliProxyStreamView(APIView):
     def get(self, request):
-        """
-        这个类保持不动！
-        因为 bilibili-api 提取出来的依然是原生的防盗链 URL，
-        必须通过这个代理接口拉流才能给前端播放。
-        """
         url = request.query_params.get('url', '').strip()
         if not url:
             return Response({'message': 'url 参数不能为空'}, status=status.HTTP_400_BAD_REQUEST)
