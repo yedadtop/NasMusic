@@ -1,14 +1,14 @@
 # scraper/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ScraperAPIViewSet, TrackScrapeView, BatchScrapeCoverView
+from .views import BilibiliCookieView, TrackScrapeView, BatchScrapeCoverView
 from .views import TrackScrapeLyricsView, BatchScrapeLyricsView
 from .bilibili_views import BiliSearchView, BiliPlayUrlView, BiliProxyStreamView
 
 router = DefaultRouter()
-router.register(r'apis', ScraperAPIViewSet, basename='scraper-api')
 
 urlpatterns = [
+    path('bilibili_cookie/', BilibiliCookieView.as_view(), name='bilibili-cookie'),
     path('', include(router.urls)),
     path('track/<int:track_id>/scrape/', TrackScrapeView.as_view(), name='track-scrape'),
     path('batch/scrape/', BatchScrapeCoverView.as_view(), name='batch-scrape-cover'),

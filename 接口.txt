@@ -458,119 +458,159 @@
 
 ---
 
-## 18. 获取所有刮削接口
+## 18. 获取 Bilibili Cookie
 
-- **接口地址**：`GET /api/scraper/apis/`
-- **功能描述**：返回所有已配置的刮削接口列表（支持分页）。
-- **Query 参数**（可选）：
-  - `page` (int): 请求的页码（默认 1）。
-  - `size` (int): 每页返回的数据条数（默认 50，最大 1000）。
-- **返回格式**：
+- **接口地址**：`GET /api/scraper/bilibili_cookie/`
+- **功能描述**：获取 Bilibili 登录凭证（SESSDATA）。
+- **返回格式**（HTTP 200 OK）：
   ```json
   {
-    "count": 2,
-    "next": null,
-    "previous": null,
-    "results": [
-      {
-        "id": 1,
-        "name": "iTunes API",
-        "url": "https://itunes.apple.com/search",
-        "is_active": true,
-        "priority": 0,
-        "created_at": "2026-04-30T12:00:00Z",
-        "updated_at": "2026-04-30T12:00:00Z"
-      }
-    ]
+    "key": "bilibili_sessdata",
+    "value": "xxxxxx...",
+    "description": "Bilibili登录Cookie",
+    "updated_at": "2026-05-04T12:00:00Z"
+  }
+  ```
+- **返回格式**（HTTP 404 Not Found，Cookie 不存在时）：
+  ```json
+  {
+    "key": "bilibili_sessdata",
+    "value": null,
+    "description": null
   }
   ```
 
 ---
 
-## 19. 创建刮削接口
+## 19. 创建/更新 Bilibili Cookie
 
-- **接口地址**：`POST /api/scraper/apis/`
-- **功能描述**：创建一个新的刮削接口配置。
+- **接口地址**：`POST /api/scraper/bilibili_cookie/`
+- **功能描述**：创建或更新 Bilibili 登录凭证（SESSDATA）。如果 Cookie 已存在则更新，不存在则创建。
 - **Body 参数**（JSON）：
   ```json
   {
-    "name": "iTunes API",
-    "url": "https://itunes.apple.com/search",
-    "is_active": true,
-    "priority": 0
+    "value": "xxxxxx...",
+    "description": "Bilibili登录Cookie"
   }
   ```
-  - `name` (string): **必填**。接口名称
-  - `url` (string): **必填**。接口地址 URL
-  - `is_active` (boolean): 可选，是否启用（默认 true）
-  - `priority` (int): 可选，优先级（默认 0，数字越小优先级越高）
-- **返回格式**（HTTP 201 Created）：
+  - `value` (string): **必填**。SESSDATA 值
+  - `description` (string): 可选。描述信息
+- **返回格式**（HTTP 201 Created，新建时）：
   ```json
   {
-    "id": 1,
-    "name": "iTunes API",
-    "url": "https://itunes.apple.com/search",
-    "is_active": true,
-    "priority": 0,
-    "created_at": "2026-04-30T12:00:00Z",
-    "updated_at": "2026-04-30T12:00:00Z"
+    "key": "bilibili_sessdata",
+    "value": "xxxxxx...",
+    "description": "Bilibili登录Cookie",
+    "updated_at": "2026-05-04T12:00:00Z",
+    "created": true
+  }
+  ```
+- **返回格式**（HTTP 200 OK，更新时）：
+  ```json
+  {
+    "key": "bilibili_sessdata",
+    "value": "xxxxxx...",
+    "description": "Bilibili登录Cookie",
+    "updated_at": "2026-05-04T12:30:00Z",
+    "created": false
+  }
+  ```
+- **错误返回**（HTTP 400 Bad Request）：
+  ```json
+  {
+    "message": "value 不能为空"
   }
   ```
 
 ---
 
-## 20. 获取刮削接口详情
+## 20. 完整更新 Bilibili Cookie
 
-- **接口地址**：`GET /api/scraper/apis/{id}/`
-- **功能描述**：获取指定刮削接口的详细信息。
-- **返回格式**：
-  ```json
-  {
-    "id": 1,
-    "name": "iTunes API",
-    "url": "https://itunes.apple.com/search",
-    "is_active": true,
-    "priority": 0,
-    "created_at": "2026-04-30T12:00:00Z",
-    "updated_at": "2026-04-30T12:00:00Z"
-  }
-  ```
-
----
-
-## 21. 更新刮削接口
-
-- **接口地址**：`PUT` 或 `PATCH /api/scraper/apis/{id}/`
-- **功能描述**：更新指定刮削接口的配置。
+- **接口地址**：`PUT /api/scraper/bilibili_cookie/`
+- **功能描述**：完整更新 Bilibili Cookie 的 value 和 description。
 - **Body 参数**（JSON）：
   ```json
   {
-    "name": "iTunes API (备份)",
-    "url": "https://itunes.apple.com/search",
-    "is_active": false,
-    "priority": 1
+    "value": "新的SESSDATA值",
+    "description": "新的描述"
+  }
+  ```
+  - `value` (string): **必填**。SESSDATA 值
+  - `description` (string): 可选。描述信息
+- **返回格式**（HTTP 200 OK）：
+  ```json
+  {
+    "key": "bilibili_sessdata",
+    "value": "新的SESSDATA值",
+    "description": "新的描述",
+    "updated_at": "2026-05-04T12:30:00Z"
+  }
+  ```
+- **错误返回**（HTTP 400 Bad Request）：
+  ```json
+  {
+    "message": "value 不能为空"
+  }
+  ```
+- **错误返回**（HTTP 404 Not Found）：
+  ```json
+  {
+    "message": "Cookie 不存在"
+  }
+  ```
+
+---
+
+## 21. 部分更新 Bilibili Cookie
+
+- **接口地址**：`PATCH /api/scraper/bilibili_cookie/`
+- **功能描述**：部分更新 Bilibili Cookie，只更新提供的字段。
+- **Body 参数**（JSON）：
+  ```json
+  {
+    "value": "新的SESSDATA值"
+  }
+  ```
+  或
+  ```json
+  {
+    "description": "新的描述"
   }
   ```
 - **返回格式**（HTTP 200 OK）：
   ```json
   {
-    "id": 1,
-    "name": "iTunes API (备份)",
-    "url": "https://itunes.apple.com/search",
-    "is_active": false,
-    "priority": 1,
-    "created_at": "2026-04-30T12:00:00Z",
-    "updated_at": "2026-04-30T12:30:00Z"
+    "key": "bilibili_sessdata",
+    "value": "新的SESSDATA值",
+    "description": "Bilibili登录Cookie",
+    "updated_at": "2026-05-04T12:30:00Z"
+  }
+  ```
+- **错误返回**（HTTP 404 Not Found）：
+  ```json
+  {
+    "message": "Cookie 不存在"
   }
   ```
 
 ---
 
-## 22. 删除刮削接口
+## 22. 删除 Bilibili Cookie
 
-- **接口地址**：`DELETE /api/scraper/apis/{id}/`
-- **功能描述**：删除指定的刮削接口配置。
-- **返回格式**（HTTP 204 No Content）
+- **接口地址**：`DELETE /api/scraper/bilibili_cookie/`
+- **功能描述**：删除 Bilibili 登录凭证。
+- **返回格式**（HTTP 204 No Content）：
+  ```json
+  {
+    "message": "Cookie 已删除"
+  }
+  ```
+- **错误返回**（HTTP 404 Not Found）：
+  ```json
+  {
+    "message": "Cookie 不存在"
+  }
+  ```
 
 ---
 

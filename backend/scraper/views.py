@@ -2,24 +2,107 @@
 import threading
 import json
 from django.db import models
-from rest_framework import viewsets, status
+from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from library.models import Track
-from .models import ScraperAPI
-from .serializers import ScraperAPISerializer
-from .utils import fetch_and_embed_cover, fetch_and_embed_lyrics
-from scanner.models import ScanTask
+from scanner.models import ScanTask, SystemConfig
 import os
 from django.db import close_old_connections
 
-class ScraperAPIViewSet(viewsets.ModelViewSet):
+BILIBILI_COOKIE_KEY = 'bilibili_sessdata'
+
+
+class BilibiliCookieView(APIView):
     """
-    刮削接口的增删改查视图
+    Bilibili Cookie 的增删查改接口
+    key 固定为 'bilibili_sessdata'
     """
-    queryset = ScraperAPI.objects.all()
-    serializer_class = ScraperAPISerializer
+
+    def get(self, request):
+        config = SystemConfig.objects.filter(key=BILIBILI_COOKIE_KEY).first()
+        if config:
+            return Response({
+                "key": config.key,
+                "value": config.value,
+                "description": config.description,
+                "updated_at": config.updated_at
+            })
+        return Response({"key": BILIBILI_COOKIE_KEY, "value": None, "description": None}, status=status.HTTP_404_NOT_FOUND)
+
+    def post(self, request):
+        value = request.data.get('value')
+        description = request.data.get('description', '')
+
+        if not value:
+            return Response({"message": "value 不能为空"}, status=status.HTTP_400_BAD_REQUEST)
+
+        config, created = SystemConfig.objects.update_or_create(
+            key=BILIBILI_COOKIE_KEY,
+            defaults={'value': value, 'description': description}
+        )
+        return Response({
+            "key": config.key,
+            "value": config.value,
+            "description": config.description,
+            "updated_at": config.updated_at,
+            "created": created
+        }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    def put(self, request):
+        value = request.data.get('value')
+        description = request.data.get('description')
+
+        if not value:
+            return Response({"message": "value 不能为空"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            config = SystemConfig.objects.get(key=BILIBILI_COOKIE_KEY)
+        except SystemConfig.DoesNotExist:
+            return Response({"message": "Cookie 不存在"}, status=status.HTTP_404_NOT_FOUND)
+
+        config.value = value
+        if description is not None:
+            config.description = description
+        config.save()
+
+        return Response({
+            "key": config.key,
+            "value": config.value,
+            "description": config.description,
+            "updated_at": config.updated_at
+        })
+
+    def patch(self, request):
+        description = request.data.get('description')
+
+        try:
+            config = SystemConfig.objects.get(key=BILIBILI_COOKIE_KEY)
+        except SystemConfig.DoesNotExist:
+            return Response({"message": "Cookie 不存在"}, status=status.HTTP_404_NOT_FOUND)
+
+        if 'value' in request.data:
+            config.value = request.data['value']
+        if description is not None:
+            config.description = description
+        config.save()
+
+        return Response({
+            "key": config.key,
+            "value": config.value,
+            "description": config.description,
+            "updated_at": config.updated_at
+        })
+
+    def delete(self, request):
+        try:
+            config = SystemConfig.objects.get(key=BILIBILI_COOKIE_KEY)
+            config.delete()
+            return Response({"message": "Cookie 已删除"}, status=status.HTTP_204_NO_CONTENT)
+        except SystemConfig.DoesNotExist:
+            return Response({"message": "Cookie 不存在"}, status=status.HTTP_404_NOT_FOUND)
+from .utils import fetch_and_embed_cover, fetch_and_embed_lyrics
 
 
 class TrackScrapeView(APIView):
