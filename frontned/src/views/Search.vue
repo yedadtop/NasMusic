@@ -129,7 +129,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onActivated, onDeactivated, nextTick } from 'vue'
 import { Icon } from '@iconify/vue'
 import request from '../api'
 import { getBiliImageUrl } from '../api'
@@ -146,8 +146,9 @@ const biliCount = ref(0)
 const searchKeyword = ref('')
 const allLoaded = ref(false)
 const searchInput = ref(null)
-const scrollContainer = ref(null) // 新增滚动容器引用
+const scrollContainer = ref(null)
 const searchTimer = ref(null)
+const scrollPosition = ref(0)
 let currentController = null
 const searchCache = new Map()
 const CACHE_TTL = 5 * 60 * 1000
@@ -332,14 +333,21 @@ const clearSearch = () => {
   searchInput.value?.focus()
 }
 
-onMounted(async () => {
-  await nextTick()
-  searchInput.value?.focus()
+onActivated(() => {
+  requestAnimationFrame(() => {
+    if (scrollContainer.value) {
+      scrollContainer.value.scrollTop = scrollPosition.value
+    }
+    searchInput.value?.focus()
+  })
 })
 
-onUnmounted(() => {
+onDeactivated(() => {
   if (searchTimer.value) {
     clearTimeout(searchTimer.value)
+  }
+  if (scrollContainer.value) {
+    scrollPosition.value = scrollContainer.value.scrollTop
   }
   currentController?.abort()
 })

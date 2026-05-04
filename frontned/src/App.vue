@@ -71,7 +71,9 @@
         <div class="flex-1 overflow-y-auto custom-scrollbar">
           <router-view v-slot="{ Component }">
             <transition name="fade" mode="out-in">
-              <component :is="Component" ref="libraryRef" @play="handlePlayTrack" />
+              <keep-alive include="Search">
+                <component :is="Component" ref="libraryRef" @play="handlePlayTrack" />
+              </keep-alive>
             </transition>
           </router-view>
         </div>
