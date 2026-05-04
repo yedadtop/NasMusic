@@ -266,17 +266,29 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
 
         # 合并完成后的 Mutagen 标签解析与入库逻辑
         try:
+            print(f"[DEBUG] 开始处理文件: {dest_path}")
             audio_easy = mutagen.File(dest_path, easy=True)
+            print(f"[DEBUG] audio_easy (easy): {audio_easy}")
             if audio_easy is None:
                 audio_easy = mutagen.File(dest_path)
+                print(f"[DEBUG] audio_easy (raw): {audio_easy}")
+            if audio_easy is None:
+                raise Exception(f"无法解析音频文件: {dest_path}")
 
+            print(f"[DEBUG] 开始提取标签信息")
             title = _get_tag_value(audio_easy, 'title', default=Path(filename).stem)
+            print(f"[DEBUG] title: {title}")
             raw_artist_string = _get_tag_value(audio_easy, 'artist', default='Unknown Artist')
+            print(f"[DEBUG] raw_artist_string: {raw_artist_string}")
             album_title = _get_tag_value(audio_easy, 'album', default='Unknown Album')
+            print(f"[DEBUG] album_title: {album_title}")
             duration = getattr(audio_easy.info, 'length', 0.0) if hasattr(audio_easy, 'info') else 0.0
+            print(f"[DEBUG] duration: {duration}")
             format_str = Path(dest_path).suffix.lower().lstrip('.')
+            print(f"[DEBUG] format_str: {format_str}")
 
             audio_raw = mutagen.File(dest_path)
+            print(f"[DEBUG] audio_raw: {audio_raw}")
             lyrics_text = ''
             if audio_raw and hasattr(audio_raw, 'tags') and audio_raw.tags:
                 for key in audio_raw.tags.keys():
@@ -284,13 +296,19 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
                         lyrics_text = audio_raw.tags[key].text
                         break
                 if not lyrics_text:
-                    if 'lyrics' in audio_raw:
+                    tags_keys = list(audio_raw.tags.keys())
+                    print(f"[DEBUG] audio_raw tags keys: {tags_keys}")
+                    if 'lyrics' in tags_keys:
                         lyrics_text = str(audio_raw['lyrics'][0])
-                    elif '\xa9lyr' in audio_raw:
+                    elif '\xa9lyr' in tags_keys:
                         lyrics_text = str(audio_raw['\xa9lyr'][0])
+            print(f"[DEBUG] lyrics_text length: {len(lyrics_text)}")
 
+            print(f"[DEBUG] 开始处理 Artist")
             primary_artist_obj, _ = Artist.objects.get_or_create(name=raw_artist_string)
+            print(f"[DEBUG] primary_artist_obj: {primary_artist_obj}")
 
+            print(f"[DEBUG] 开始处理 Album")
             album_obj = Album.objects.filter(title=album_title).first()
             if not album_obj:
                 if album_title == 'Unknown Album':
@@ -298,7 +316,9 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
                     album_obj = Album.objects.create(title=album_title, artist=unknown_artist)
                 else:
                     album_obj = Album.objects.create(title=album_title, artist=primary_artist_obj)
+            print(f"[DEBUG] album_obj: {album_obj}")
 
+            print(f"[DEBUG] 开始创建 Track")
             track_obj = Track.objects.create(
                 title=title,
                 artist=primary_artist_obj,
@@ -308,13 +328,17 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
                 duration=duration,
                 format=format_str
             )
+            print(f"[DEBUG] track_obj created: {track_obj.id}")
 
             artist_names = parse_artists(raw_artist_string)
+            print(f"[DEBUG] artist_names: {artist_names}")
             all_artist_objs = [Artist.objects.get_or_create(name=n)[0] for n in artist_names]
             track_obj.artists.set(all_artist_objs)
             track_obj.save()
+            print(f"[DEBUG] track_obj artists set done")
 
             extract_and_save_thumbnail(dest_path, track_obj)
+            print(f"[DEBUG] extract_and_save_thumbnail done")
 
             return Response({
                 'success': True,
@@ -324,6 +348,9 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
+            import traceback
+            print(f"[ERROR] 文件处理详细错误: {str(e)}")
+            print(f"[ERROR] 详细堆栈: {traceback.format_exc()}")
             if os.path.exists(dest_path):
                 try:
                     os.remove(dest_path)
