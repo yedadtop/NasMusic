@@ -2,6 +2,8 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import request from '../api'
 
+const MAX_SHUFFLE_HISTORY = 100
+
 export const usePlayerStore = defineStore('player', () => {
   const currentTrack = ref(null)
   const currentTrackDetail = ref(null)
@@ -72,7 +74,7 @@ export const usePlayerStore = defineStore('player', () => {
       indices[i] = indices[j]!
       indices[j] = temp
     }
-    return indices
+    return indices.slice(0, 100)
   }
 
   function togglePlayMode() {
@@ -87,6 +89,21 @@ export const usePlayerStore = defineStore('player', () => {
       shuffleOrder.value = []
       shuffleHistory.value = []
     }
+  }
+
+  function resetPlayer() {
+    currentTrack.value = null
+    currentTrackDetail.value = null
+    playlist.value = []
+    currentIndex.value = -1
+    isPlaying.value = false
+    currentTime.value = 0
+    duration.value = 0
+    playMode.value = 'sequential'
+    shuffleOrder.value = []
+    shuffleHistory.value = []
+    loadMoreCallback.value = null
+    isLoadingMore.value = false
   }
 
   async function fetchTrackDetail(id: string | number) {
@@ -106,6 +123,9 @@ export const usePlayerStore = defineStore('player', () => {
       shuffleHistory.value = []
     } else if (index >= 0) {
       if (playMode.value === 'shuffle' && currentIndex.value !== -1) {
+        if (shuffleHistory.value.length >= MAX_SHUFFLE_HISTORY) {
+          shuffleHistory.value.shift()
+        }
         shuffleHistory.value.push(currentIndex.value)
       }
       currentIndex.value = index
@@ -156,6 +176,9 @@ export const usePlayerStore = defineStore('player', () => {
     const wasPlaying = isPlaying.value
     if (playMode.value === 'shuffle') {
       if (shuffleOrder.value.length > 0) {
+        if (shuffleHistory.value.length >= MAX_SHUFFLE_HISTORY) {
+          shuffleHistory.value.shift()
+        }
         shuffleHistory.value.push(currentIndex.value)
         const nextIndex = shuffleOrder.value.shift()
         if (nextIndex === undefined) return false
@@ -244,6 +267,7 @@ export const usePlayerStore = defineStore('player', () => {
     setVolume,
     setAudioElement,
     setLoadMoreCallback,
-    checkAndLoadMore
+    checkAndLoadMore,
+    resetPlayer
   }
 })

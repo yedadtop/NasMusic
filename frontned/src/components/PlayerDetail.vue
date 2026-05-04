@@ -176,21 +176,24 @@ watch(() => player.currentTrack?.id, (newId) => {
     isDetailLoading.value = false
     return
   }
-  // 切换为本地歌曲时，开启 Loading 占位，等待详情 API 响应
   isDetailLoading.value = true
   
-  if (loadingTimeout) clearTimeout(loadingTimeout)
-  // 兜底机制：最多等待 800ms，防止网络波动导致卡死在占位状态
+  if (loadingTimeout) {
+    clearTimeout(loadingTimeout)
+    loadingTimeout = null
+  }
   loadingTimeout = setTimeout(() => {
     isDetailLoading.value = false
   }, 800)
 })
 
 watch(() => player.currentTrackDetail?.id, (newDetailId) => {
-  // 当详情 API 返回，且 ID 匹配当前播放歌曲时，解除 Loading 并展现正确布局
   if (newDetailId === player.currentTrack?.id) {
     isDetailLoading.value = false
-    if (loadingTimeout) clearTimeout(loadingTimeout)
+    if (loadingTimeout) {
+      clearTimeout(loadingTimeout)
+      loadingTimeout = null
+    }
   }
 })
 
@@ -227,8 +230,15 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
-  if (scrollTimeout) clearTimeout(scrollTimeout)
-  if (loadingTimeout) clearTimeout(loadingTimeout)
+  if (scrollTimeout) {
+    clearTimeout(scrollTimeout)
+    scrollTimeout = null
+  }
+  if (loadingTimeout) {
+    clearTimeout(loadingTimeout)
+    loadingTimeout = null
+  }
+  lyricRefs.value = {}
 })
 
 const handleKeydown = (e) => {
@@ -317,7 +327,10 @@ watch(parsedLyrics, async (newLyrics) => {
 
 const handleUserInteraction = () => {
   isUserScrolling = true
-  if (scrollTimeout) clearTimeout(scrollTimeout)
+  if (scrollTimeout) {
+    clearTimeout(scrollTimeout)
+    scrollTimeout = null
+  }
   scrollTimeout = setTimeout(() => {
     isUserScrolling = false
     if (currentLyricIndex.value >= 0) {
@@ -406,7 +419,10 @@ const seekToLine = (time) => {
     player.setCurrentTime(time)
     
     isUserScrolling = false
-    if (scrollTimeout) clearTimeout(scrollTimeout)
+    if (scrollTimeout) {
+      clearTimeout(scrollTimeout)
+      scrollTimeout = null
+    }
   }
 }
 

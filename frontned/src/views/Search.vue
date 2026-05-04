@@ -150,8 +150,21 @@ const scrollContainer = ref(null)
 const searchTimer = ref(null)
 const scrollPosition = ref(0)
 let currentController = null
-const searchCache = new Map()
+const MAX_CACHE_SIZE = 20
 const CACHE_TTL = 5 * 60 * 1000
+const searchCache = new Map()
+const FALLBACK_IMAGE_BASE = 'https://picsum.photos/seed'
+
+const getFallbackImageUrl = (id) => `${FALLBACK_IMAGE_BASE}/${id}/100/100`
+
+const cleanExpiredCache = () => {
+  const now = Date.now()
+  for (const [key, value] of searchCache.entries()) {
+    if (now - value.timestamp > CACHE_TTL) {
+      searchCache.delete(key)
+    }
+  }
+}
 
 // 处理触底滚动，触发加载更多
 const handleScroll = (e) => {
@@ -163,10 +176,15 @@ const handleScroll = (e) => {
 }
 
 const handleSearch = () => {
-  if (searchTimer.value) clearTimeout(searchTimer.value)
-  // 将防抖时间优化为 500ms
+  if (searchTimer.value) {
+    clearTimeout(searchTimer.value)
+    searchTimer.value = null
+  }
   searchTimer.value = setTimeout(() => {
-    currentController?.abort()
+    if (currentController) {
+      currentController.abort()
+      currentController = null
+    }
     currentController = new AbortController()
     page.value = 1
     allLoaded.value = false
@@ -190,6 +208,11 @@ const handleSearch = () => {
 const getCacheKey = (keyword, source) => `${source}_${keyword}`
 
 const setCache = (keyword, localData, biliData) => {
+  cleanExpiredCache()
+  if (searchCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = searchCache.keys().next().value
+    if (firstKey !== undefined) searchCache.delete(firstKey)
+  }
   searchCache.set(keyword, {
     localTracks: localData.tracks,
     localCount: localData.count,
@@ -268,16 +291,16 @@ const fetchBiliTracks = async (signal) => {
 
 const fetchTracks = async (signal) => {
   if (!searchKeyword.value.trim()) {
-    localTracks.value = []
-    biliTracks.value = []
+    localTracks.value.length = 0
+    biliTracks.value.length = 0
     localCount.value = 0
     biliCount.value = 0
     return
   }
 
   if (page.value === 1) {
-    localTracks.value = []
-    biliTracks.value = []
+    localTracks.value.length = 0
+    biliTracks.value.length = 0
   }
 
   const keyword = searchKeyword.value.trim()
@@ -326,10 +349,12 @@ const formatDate = (dateStr) => {
 
 const clearSearch = () => {
   searchKeyword.value = ''
-  localTracks.value = []
-  biliTracks.value = []
+  localTracks.value.length = 0
+  biliTracks.value.length = 0
   localCount.value = 0
   biliCount.value = 0
+  page.value = 1
+  allLoaded.value = false
   searchInput.value?.focus()
 }
 
@@ -345,11 +370,15 @@ onActivated(() => {
 onDeactivated(() => {
   if (searchTimer.value) {
     clearTimeout(searchTimer.value)
+    searchTimer.value = null
   }
   if (scrollContainer.value) {
     scrollPosition.value = scrollContainer.value.scrollTop
   }
-  currentController?.abort()
+  if (currentController) {
+    currentController.abort()
+    currentController = null
+  }
 })
 </script>
 
