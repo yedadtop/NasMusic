@@ -5,7 +5,7 @@
     <div class="absolute inset-0 z-0 pointer-events-none transform-gpu translate-z-0">
       <div 
         class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 scale-125 blur-[80px] opacity-80 will-change-transform"
-        :style="{ backgroundImage: `url(${player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack?.track_cover, 'large') : player.currentTrack?.track_cover || 'https://picsum.photos/600'})` }"
+        :style="{ backgroundImage: `url(${player.currentTrack?._coverUrlLarge || (player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack?.track_cover, 'large') : player.currentTrack?.track_cover) || 'https://picsum.photos/600'})` }"
       ></div>
       <div class="absolute inset-0 bg-black/50 md:bg-black/40"></div>
     </div>
@@ -46,7 +46,7 @@
           <!-- 状态C：无歌词时 -> 手机端居中显示大封面，电脑端仅显示提示 -->
           <div v-else class="w-full h-full flex flex-col items-center landscape:items-start md:items-start justify-center px-6 landscape:px-12 landscape:pr-32 md:pl-12 md:pr-32">
             <div class="md:hidden landscape:hidden w-[70vw] max-w-[320px] aspect-square rounded-2xl overflow-hidden shadow-2xl mb-8 bg-black/20 transition-transform duration-500">
-              <img v-if="player.currentTrack?.track_cover" :src="player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack.track_cover, 'large') : player.currentTrack.track_cover" alt="cover" class="w-full h-full object-cover" referrerpolicy="no-referrer" />
+              <img v-if="player.currentTrack?.track_cover" :src="player.currentTrack?._coverUrlLarge || (player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack.track_cover, 'large') : player.currentTrack.track_cover)" alt="cover" class="w-full h-full object-cover" referrerpolicy="no-referrer" />
               <img v-else src="https://picsum.photos/600" alt="cover" class="w-full h-full object-cover" />
             </div>
             <p class="text-white/50 text-center landscape:text-left md:text-left text-lg landscape:text-3xl md:text-3xl font-bold tracking-wider">
@@ -63,7 +63,7 @@
           
           <!-- 修改 1：横屏下限制封面的最大宽度为 45vh，并通过 mx-auto 居中 -->
           <div class="hidden landscape:block md:block landscape:w-[45vh] md:w-full mx-auto rounded-xl overflow-hidden bg-black/20 shrink-0 relative shadow-2xl transition-transform duration-500 hover:scale-[1.02]" style="aspect-ratio: 1 / 1;">
-            <img v-if="player.currentTrack?.track_cover" :src="player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack.track_cover, 'large') : player.currentTrack.track_cover" alt="cover" class="w-full h-full object-cover" referrerpolicy="no-referrer" />
+            <img v-if="player.currentTrack?.track_cover" :src="player.currentTrack?._coverUrlLarge || (player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack.track_cover, 'large') : player.currentTrack.track_cover)" alt="cover" class="w-full h-full object-cover" referrerpolicy="no-referrer" />
             <img v-else src="https://picsum.photos/600" alt="cover" class="w-full h-full object-cover" />
           </div>
 

@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import request from '../api'
+import { getBiliImageUrl } from '../api'
 
 const MAX_SHUFFLE_HISTORY = 100
 
@@ -134,6 +135,10 @@ export const usePlayerStore = defineStore('player', () => {
       }
     }
     currentTrack.value = track
+    if (track.is_bilibili && track.track_cover) {
+      track._coverUrlSmall = getBiliImageUrl(track.track_cover, 'small')
+      track._coverUrlLarge = getBiliImageUrl(track.track_cover, 'large')
+    }
     if (!preservePlayingState) {
       isPlaying.value = true
     }
