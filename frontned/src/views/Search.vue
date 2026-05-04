@@ -318,7 +318,9 @@ const fetchTracks = async (signal) => {
   const [localData, biliData] = await Promise.allSettled([localPromise, biliPromise])
 
   if (localData.status === 'fulfilled' && biliData.status === 'fulfilled') {
-    setCache(keyword, localData.value, biliData.value)
+    if (localData.value.count > 0 || biliData.value.count > 0) {
+      setCache(keyword, localData.value, biliData.value)
+    }
   }
 }
 
