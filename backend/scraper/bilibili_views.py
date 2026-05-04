@@ -31,7 +31,7 @@ AUDIO_QUALITY_PRIORITY = {
 }
 # - 默认模式 ( MANUAL_QUALITY_SELECTION = None )：按优先级自动选择最高音质
 # - 手动指定模式 ：将 MANUAL_QUALITY_SELECTION = 30216 设置为你要测试的 codec ID
-MANUAL_QUALITY_SELECTION = 30232
+MANUAL_QUALITY_SELECTION = None
 
 
 def make_bili_request(url, timeout=10, retries=MAX_RETRIES):
