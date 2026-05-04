@@ -9,7 +9,7 @@ BASE_DIR = SCRIPT_DIR
 OUTPUT_FILE = os.path.join(BASE_DIR, "exported_code.txt")
 
 APPS = ['library', 'scanner', 'stream', 'scraper']
-FILES = ['models.py', 'views.py', 'serializers.py', 'admin.py', 'utils.py']
+FILES = ['models.py', 'views.py', 'serializers.py', 'admin.py', 'utils.py', 'bilibili_views.py']
 
 
 def get_available_apps():
@@ -28,41 +28,35 @@ def select_apps():
     for i, app in enumerate(available, 1):
         print(f"  {i}. {app}")
     print("-" * 40)
-    print("\n选择要导出的 APP:")
-    print("  - 输入 'all': 导出所有 APP")
-    print("  - 输入数字编号 (如 1,3): 导出指定的 APP")
-    print("  - 输入 app 名称 (如 library,scanner): 导出指定的 APP")
+    print(f"\n按回车将导出所有 APP [{', '.join(available)}]")
+    print("或输入数字编号 (如 1,3) / app 名称 (如 library,scraper) 选择特定 APP:")
 
-    while True:
-        choice = input("\n请输入选择: ").strip()
-        if not choice:
-            print("❌ 输入不能为空，请重新输入")
-            continue
+    choice = input("\n请输入选择 (直接回车导出全部): ").strip()
 
-        if choice.lower() == 'all':
+    if not choice:
+        return available
+
+    selected = []
+    parts = [p.strip() for p in choice.split(',')]
+
+    for part in parts:
+        if part.isdigit():
+            idx = int(part) - 1
+            if 0 <= idx < len(available):
+                selected.append(available[idx])
+            else:
+                print(f"❌ 无效的编号: {part}，将导出全部")
+                return available
+        elif part in available:
+            selected.append(part)
+        else:
+            print(f"❌ 无效的 APP 名称: {part}，将导出全部")
             return available
 
-        selected = []
-        parts = [p.strip() for p in choice.split(',')]
+    if not selected:
+        return available
 
-        for part in parts:
-            if part.isdigit():
-                idx = int(part) - 1
-                if 0 <= idx < len(available):
-                    selected.append(available[idx])
-                else:
-                    print(f"❌ 无效的编号: {part}，请重新输入")
-                    break
-            elif part in available:
-                selected.append(part)
-            else:
-                print(f"❌ 无效的 APP 名称: {part}，请重新输入")
-                break
-        else:
-            if selected:
-                return selected
-
-    return available
+    return selected
 
 
 def export_code(selected_apps=None):
