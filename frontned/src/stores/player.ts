@@ -4,6 +4,30 @@ import request from '../api'
 import { getBiliImageUrl } from '../api'
 
 const MAX_SHUFFLE_HISTORY = 100
+const biliCoverCache = new Map<string, string>()
+
+async function preloadBiliCover(coverUrl: string, bvid: string): Promise<string> {
+  if (biliCoverCache.has(bvid)) {
+    return biliCoverCache.get(bvid)!
+  }
+  try {
+    const response = await fetch(coverUrl, { referrerPolicy: 'no-referrer' })
+    const blob = await response.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    biliCoverCache.set(bvid, blobUrl)
+    return blobUrl
+  } catch (error) {
+    console.error('预加载B站封面失败:', error)
+    return coverUrl
+  }
+}
+
+function clearBiliCoverCache() {
+  for (const blobUrl of biliCoverCache.values()) {
+    URL.revokeObjectURL(blobUrl)
+  }
+  biliCoverCache.clear()
+}
 
 export const usePlayerStore = defineStore('player', () => {
   const currentTrack = ref(null)
@@ -105,6 +129,7 @@ export const usePlayerStore = defineStore('player', () => {
     shuffleHistory.value = []
     loadMoreCallback.value = null
     isLoadingMore.value = false
+    clearBiliCoverCache()
   }
 
   async function fetchTrackDetail(id: string | number) {
@@ -138,6 +163,7 @@ export const usePlayerStore = defineStore('player', () => {
     if (track.is_bilibili && track.track_cover) {
       track._coverUrlSmall = getBiliImageUrl(track.track_cover, 'small')
       track._coverUrlLarge = getBiliImageUrl(track.track_cover, 'large')
+      preloadBiliCover(track._coverUrlLarge, track.bvid)
     }
     if (!preservePlayingState) {
       isPlaying.value = true
@@ -273,6 +299,8 @@ export const usePlayerStore = defineStore('player', () => {
     setAudioElement,
     setLoadMoreCallback,
     checkAndLoadMore,
-    resetPlayer
+    resetPlayer,
+    preloadBiliCover,
+    biliCoverCache
   }
 })

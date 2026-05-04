@@ -5,7 +5,7 @@
     <div class="absolute inset-0 z-0 pointer-events-none transform-gpu translate-z-0">
       <div 
         class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 scale-125 blur-[80px] opacity-80 will-change-transform"
-        :style="{ backgroundImage: `url(${player.currentTrack?._coverUrlLarge || (player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack?.track_cover, 'large') : player.currentTrack?.track_cover) || 'https://picsum.photos/600'})` }"
+        :style="{ backgroundImage: `url(${biliCoverBlobUrl || player.currentTrack?._coverUrlLarge || (player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack?.track_cover, 'large') : player.currentTrack?.track_cover) || 'https://picsum.photos/600'})` }"
       ></div>
       <div class="absolute inset-0 bg-black/50 md:bg-black/40"></div>
     </div>
@@ -17,9 +17,9 @@
         class="w-full landscape:w-1/2 md:w-1/2 flex-1 landscape:h-full md:h-full relative overflow-hidden order-1 landscape:order-2 md:order-2"
         style="mask-image: linear-gradient(180deg, transparent 0%, black 10%, black 90%, transparent 100%); -webkit-mask-image: linear-gradient(180deg, transparent 0%, black 10%, black 90%, transparent 100%); transform: translateZ(0);"
       >
-        <transition name="fade-slow" mode="out-in">
-          <!-- 状态A：详情数据加载中，保持透明占位以消除闪烁 -->
-          <div v-if="isDetailLoading" class="w-full h-full flex items-center justify-center"></div>
+        <transition name="fade-slow">
+          <!-- 状态A：详情数据加载中（仅本地音乐），保持透明占位以消除闪烁 -->
+          <div v-if="isDetailLoading && !player.currentTrack?.is_bilibili" class="w-full h-full flex items-center justify-center"></div>
 
           <!-- 状态B：有歌词时 -> 显示滚动歌词面板 -->
           <div 
@@ -46,7 +46,7 @@
           <!-- 状态C：无歌词时 -> 手机端居中显示大封面，电脑端仅显示提示 -->
           <div v-else class="w-full h-full flex flex-col items-center landscape:items-start md:items-start justify-center px-6 landscape:px-12 landscape:pr-32 md:pl-12 md:pr-32">
             <div class="md:hidden landscape:hidden w-[70vw] max-w-[320px] aspect-square rounded-2xl overflow-hidden shadow-2xl mb-8 bg-black/20 transition-transform duration-500">
-              <img v-if="player.currentTrack?.track_cover" :src="player.currentTrack?._coverUrlLarge || (player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack.track_cover, 'large') : player.currentTrack.track_cover)" alt="cover" class="w-full h-full object-cover" referrerpolicy="no-referrer" />
+              <img v-if="player.currentTrack?.track_cover" :src="biliCoverBlobUrl || player.currentTrack?._coverUrlLarge || (player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack.track_cover, 'large') : player.currentTrack.track_cover)" alt="cover" class="w-full h-full object-cover" referrerpolicy="no-referrer" @error="$event.target.src = player.currentTrack?.track_cover || 'https://picsum.photos/600'" />
               <img v-else src="https://picsum.photos/600" alt="cover" class="w-full h-full object-cover" />
             </div>
             <p class="text-white/50 text-center landscape:text-left md:text-left text-lg landscape:text-3xl md:text-3xl font-bold tracking-wider">
@@ -63,7 +63,7 @@
           
           <!-- 修改 1：横屏下限制封面的最大宽度为 45vh，并通过 mx-auto 居中 -->
           <div class="hidden landscape:block md:block landscape:w-[45vh] md:w-full mx-auto rounded-xl overflow-hidden bg-black/20 shrink-0 relative shadow-2xl transition-transform duration-500 hover:scale-[1.02]" style="aspect-ratio: 1 / 1;">
-            <img v-if="player.currentTrack?.track_cover" :src="player.currentTrack?._coverUrlLarge || (player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack.track_cover, 'large') : player.currentTrack.track_cover)" alt="cover" class="w-full h-full object-cover" referrerpolicy="no-referrer" />
+            <img v-if="player.currentTrack?.track_cover" :src="biliCoverBlobUrl || player.currentTrack?._coverUrlLarge || (player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack.track_cover, 'large') : player.currentTrack.track_cover)" alt="cover" class="w-full h-full object-cover" referrerpolicy="no-referrer" @error="$event.target.src = player.currentTrack?.track_cover || 'https://picsum.photos/600'" />
             <img v-else src="https://picsum.photos/600" alt="cover" class="w-full h-full object-cover" />
           </div>
 
@@ -163,29 +163,42 @@ const lyricRefs = ref({})
 const toastVisible = ref(false)
 const toastMessage = ref('')
 const toastType = ref('success')
+const biliCoverBlobUrl = ref('')
 
 let isUserScrolling = false
 let scrollTimeout = null
 
-// 新增：局部缓冲状态，用于抹平网络请求延迟导致的 UI 闪烁
+// 【修改1】把 isDetailLoading 的初始值设为更智能的判断
 const isDetailLoading = ref(false)
 let loadingTimeout = null
 
+// 【修改2】给 watch 加上 immediate: true，确保组件一打开就执行判断
 watch(() => player.currentTrack?.id, (newId) => {
+  // 如果没有歌，或者是 B 站音乐，直接取消 loading，立刻显示画面
   if (!newId || player.currentTrack?.is_bilibili) {
     isDetailLoading.value = false
+    if (loadingTimeout) {
+      clearTimeout(loadingTimeout)
+      loadingTimeout = null
+    }
     return
   }
-  isDetailLoading.value = true
   
-  if (loadingTimeout) {
-    clearTimeout(loadingTimeout)
-    loadingTimeout = null
-  }
-  loadingTimeout = setTimeout(() => {
+  // 只有本地音乐且详情没加载完时，才进入 loading 缓冲
+  if (newId !== player.currentTrackDetail?.id) {
+    isDetailLoading.value = true
+    
+    if (loadingTimeout) {
+      clearTimeout(loadingTimeout)
+      loadingTimeout = null
+    }
+    loadingTimeout = setTimeout(() => {
+      isDetailLoading.value = false
+    }, 800)
+  } else {
     isDetailLoading.value = false
-  }, 800)
-})
+  }
+}, { immediate: true }) // 核心：加上 immediate 选项
 
 watch(() => player.currentTrackDetail?.id, (newDetailId) => {
   if (newDetailId === player.currentTrack?.id) {
@@ -196,6 +209,21 @@ watch(() => player.currentTrackDetail?.id, (newDetailId) => {
     }
   }
 })
+
+watch(() => player.currentTrack, async (track) => {
+  if (track?.is_bilibili && track.track_cover) {
+    const cachedUrl = player.biliCoverCache.get(track.bvid)
+    if (cachedUrl) {
+      biliCoverBlobUrl.value = cachedUrl
+    } else {
+      const coverUrl = getBiliImageUrl(track.track_cover, 'large')
+      const blobUrl = await player.preloadBiliCover(coverUrl, track.bvid)
+      biliCoverBlobUrl.value = blobUrl
+    }
+  } else {
+    biliCoverBlobUrl.value = ''
+  }
+}, { immediate: true })
 
 const showToast = (message, type = 'error') => {
   toastMessage.value = message

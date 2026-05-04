@@ -90,7 +90,7 @@
 
       <div class="flex items-center cursor-pointer group flex-1 md:flex-none md:w-1/3 min-w-0 pr-3 h-full" @click="showPlayerDetail = true">
         <div class="relative w-11 h-11 sm:w-14 sm:h-14 bg-gray-100 rounded-[10px] shadow-sm mr-3 sm:mr-4 shrink-0 overflow-hidden group-hover:shadow-md transition-shadow">
-           <img v-if="player.currentTrack?.track_cover && player.currentTrack.track_cover !== ''" :src="player.currentTrack?._coverUrlSmall || (player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack.track_cover, 'small') : player.currentTrack.track_cover)" alt="cover" class="w-full h-full object-cover" referrerpolicy="no-referrer" @error="$event.target.src = `https://picsum.photos/seed/${player.currentTrack.id}/100/100`">
+           <img v-if="player.currentTrack?.track_cover && player.currentTrack.track_cover !== ''" :src="player.currentTrack?.is_bilibili ? (player.biliCoverCache.get(player.currentTrack.bvid) || player.currentTrack?._coverUrlSmall || getBiliImageUrl(player.currentTrack.track_cover, 'small')) : (player.currentTrack?._coverUrlSmall || player.currentTrack.track_cover)" alt="cover" class="w-full h-full object-cover" referrerpolicy="no-referrer" @error="$event.target.src = `https://picsum.photos/seed/${player.currentTrack.id}/100/100`">
            <img v-else src="https://picsum.photos/150" alt="cover" class="w-full h-full object-cover">
            <div class="absolute inset-0 border border-black/5 rounded-[10px]"></div>
         </div>
