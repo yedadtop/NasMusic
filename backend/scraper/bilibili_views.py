@@ -1,6 +1,15 @@
 import re
 import time
 import requests
+import socket
+import requests.packages.urllib3.util.connection as urllib3_cn
+
+# 【新增补丁】强制 requests 放弃 IPv6，只使用 IPv4
+def allowed_gai_family():
+    return socket.AF_INET
+
+urllib3_cn.allowed_gai_family = allowed_gai_family
+
 from django.http import StreamingHttpResponse
 from rest_framework import status
 from rest_framework.views import APIView
