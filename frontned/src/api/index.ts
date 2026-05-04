@@ -16,7 +16,7 @@ export const BILI_IMAGE_SIZES = {
 }
 
 export function getBiliImageUrl(url: string, size: 'small' | 'large' = 'small'): string {
-  if (!url) return url
+  if (!url || typeof url !== 'string') return ''
   if (!url.includes('hdslb.com')) return url
   const suffix = BILI_IMAGE_SIZES[size] || BILI_IMAGE_SIZES.small
   return url.includes('@') ? url.replace(/@.*\.webp$/, suffix) : `${url}${suffix}`

@@ -1,7 +1,7 @@
 <template>
   <div class="fixed inset-0 z-50 flex text-white selection:bg-white/20 font-sans overflow-hidden bg-gray-900">
     
-    <!-- 优化1：动态高斯模糊背景增加硬件加速，开启独立图层避免重绘 -->
+    <!-- 动态高斯模糊背景 -->
     <div class="absolute inset-0 z-0 pointer-events-none transform-gpu translate-z-0">
       <div 
         class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 scale-125 blur-[80px] opacity-80 will-change-transform"
@@ -12,22 +12,24 @@
 
     <div class="relative z-10 flex flex-col md:flex-row w-full h-full mx-auto">
       
-      <!-- 歌词区结构重构 -->
-      <!-- 优化2：将 mask-image 移至不滚动的父级外壳，避免滚动时全局重绘遮罩 -->
+      <!-- 歌词/封面 区域 -->
       <div 
         class="w-full md:w-1/2 flex-1 md:h-full relative overflow-hidden order-1 md:order-2"
         style="mask-image: linear-gradient(180deg, transparent 0%, black 10%, black 90%, transparent 100%); -webkit-mask-image: linear-gradient(180deg, transparent 0%, black 10%, black 90%, transparent 100%); transform: translateZ(0);"
       >
-        <!-- 优化3：内层作为纯粹的滚动容器，高频滚动事件增加 .passive 修饰符 -->
-        <div 
-          class="w-full h-full overflow-y-auto px-6 md:pl-12 md:pr-32 flex flex-col text-center md:text-left pb-[35vh] md:pb-[50vh] pt-[35vh] md:pt-[45vh] lyrics-scroll" 
-          ref="lyricsContainer"
-          @wheel.passive="handleUserInteraction"
-          @touchstart.passive="handleUserInteraction"
-          @touchmove.passive="handleUserInteraction"
-        >
-          <template v-if="parsedLyrics && parsedLyrics.length > 0">
-            <!-- 优化4：增加换行规则、行高、上下 padding，并将 transition-all 改为明确属性 -->
+        <transition name="fade-slow" mode="out-in">
+          <!-- 状态A：详情数据加载中，保持透明占位以消除闪烁 -->
+          <div v-if="isDetailLoading" class="w-full h-full flex items-center justify-center"></div>
+
+          <!-- 状态B：有歌词时 -> 显示滚动歌词面板 -->
+          <div 
+            v-else-if="parsedLyrics && parsedLyrics.length > 0"
+            class="w-full h-full overflow-y-auto px-6 md:pl-12 md:pr-32 flex flex-col text-center md:text-left pb-[35vh] md:pb-[50vh] pt-[35vh] md:pt-[45vh] lyrics-scroll" 
+            ref="lyricsContainer"
+            @wheel.passive="handleUserInteraction"
+            @touchstart.passive="handleUserInteraction"
+            @touchmove.passive="handleUserInteraction"
+          >
             <p 
               v-for="(line, index) in parsedLyrics" 
               :key="index"
@@ -39,15 +41,23 @@
             >
               {{ line.text }}
             </p>
-          </template>
-          <p v-else-if="player.currentTrack?.is_bilibili" class="text-white/40 text-2xl md:text-3xl font-bold mt-[10vh]">在线音源暂无歌词</p>
-          <p v-else class="text-white/40 text-2xl md:text-3xl font-bold mt-[10vh]">暂无歌词</p>
-        </div>
+          </div>
+
+          <!-- 状态C：无歌词时 -> 手机端居中显示大封面，电脑端仅显示提示 -->
+          <div v-else class="w-full h-full flex flex-col items-center md:items-start justify-center px-6 md:pl-12 md:pr-32">
+            <div class="md:hidden w-[70vw] max-w-[320px] aspect-square rounded-2xl overflow-hidden shadow-2xl mb-8 bg-black/20 transition-transform duration-500">
+              <img v-if="player.currentTrack?.track_cover" :src="player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack.track_cover, 'large') : player.currentTrack.track_cover" alt="cover" class="w-full h-full object-cover" referrerpolicy="no-referrer" />
+              <img v-else src="https://picsum.photos/600" alt="cover" class="w-full h-full object-cover" />
+            </div>
+            <p class="text-white/50 text-center md:text-left text-lg md:text-3xl font-bold tracking-wider">
+              {{ player.currentTrack?.is_bilibili ? '在线音源暂无歌词' : '暂无歌词' }}
+            </p>
+          </div>
+        </transition>
       </div>
 
-      <!-- 播放控制区 (保持原有逻辑，不做破坏性修改) -->
+      <!-- 播放控制区 -->
       <div class="w-full md:w-1/2 h-auto md:h-full flex flex-col items-center justify-end md:justify-center px-6 md:px-12 pb-10 md:pb-10 pt-8 md:py-10 shrink-0 order-2 md:order-1 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent md:bg-none">
-        
         <div class="w-full max-w-[360px] flex flex-col">
           
           <div class="hidden md:block w-full rounded-xl overflow-hidden bg-black/20 shrink-0 relative shadow-2xl transition-transform duration-500 hover:scale-[1.02]" style="aspect-ratio: 1 / 1;">
@@ -80,11 +90,7 @@
                   </button>
 
                 </div>
-                <div 
-                  v-if="showOptionsMenu"
-                  class="fixed inset-0 z-40"
-                  @click="showOptionsMenu = false"
-                ></div>
+                <div v-if="showOptionsMenu" class="fixed inset-0 z-40" @click="showOptionsMenu = false"></div>
               </div>
             </div>
           </div>
@@ -105,39 +111,20 @@
           </div>
 
           <div class="mt-5 md:mt-6 flex items-center justify-between w-full px-1">
-            <button @click="$emit('close')" class="text-white/60 hover:text-white transition p-2 hover:scale-110">
+            <button @click="$emit('close')" class="text-white/60 hover:text-white transition p-2 hover:scale-110 focus-visible:outline-none">
               <Icon icon="mdi:chevron-down" class="w-5 h-5 md:w-6 md:h-6" />
             </button>
-            
-            <button 
-              class="text-white hover:text-white/80 active:scale-90 transition-all p-2"
-              :class="{ 'opacity-30 cursor-not-allowed': !player.hasPrev }"
-              @click="prevTrack"
-            >
+            <button class="text-white hover:text-white/80 active:scale-90 transition-all p-2 focus-visible:outline-none" :class="{ 'opacity-30 cursor-not-allowed': !player.hasPrev }" @click="prevTrack">
               <Icon icon="mdi:skip-previous" class="w-6 h-6 md:w-7 md:h-7" />
             </button>
-            
-            <button 
-              class="text-white hover:scale-105 active:scale-95 transition-all flex items-center justify-center w-12 h-12 md:w-14 md:h-14 drop-shadow-md"
-              @click="togglePlay"
-            >
+            <button class="text-white hover:scale-105 active:scale-95 transition-all flex items-center justify-center w-12 h-12 md:w-14 md:h-14 drop-shadow-md focus-visible:outline-none" @click="togglePlay">
               <Icon v-if="!player.isPlaying" icon="mdi:play" class="w-10 h-10 md:w-12 md:h-12" />
               <Icon v-else icon="mdi:pause" class="w-10 h-10 md:w-12 md:h-12" />
             </button>
-            
-            <button 
-              class="text-white hover:text-white/80 active:scale-90 transition-all p-2"
-              :class="{ 'opacity-30 cursor-not-allowed': !player.hasNext }"
-              @click="nextTrack"
-            >
+            <button class="text-white hover:text-white/80 active:scale-90 transition-all p-2 focus-visible:outline-none" :class="{ 'opacity-30 cursor-not-allowed': !player.hasNext }" @click="nextTrack">
               <Icon icon="mdi:skip-next" class="w-6 h-6 md:w-7 md:h-7" />
             </button>
-
-            <button
-              class="text-white/60 hover:text-white transition p-2 hover:scale-110"
-              :class="{ 'text-blue-400': player.playMode === 'shuffle' || player.playMode === 'single' }"
-              @click="player.togglePlayMode()"
-            >
+            <button class="text-white/60 hover:text-white transition p-2 hover:scale-110 focus-visible:outline-none" :class="{ 'text-blue-400': player.playMode === 'shuffle' || player.playMode === 'single' }" @click="player.togglePlayMode()">
               <Icon v-if="player.playMode === 'shuffle'" icon="mdi:shuffle-variant" class="w-5 h-5" />
               <Icon v-else-if="player.playMode === 'single'" icon="mdi:repeat-once" class="w-5 h-5" />
               <Icon v-else icon="mdi:repeat" class="w-5 h-5" />
@@ -149,17 +136,8 @@
       
     </div>
 
-    <EditTrackModal 
-      v-model="showEditModal" 
-      :track="player.currentTrack"
-      @success="handleTrackUpdated"
-    />
-
-    <AppleToast 
-      v-model="toastVisible"
-      :message="toastMessage"
-      :type="toastType"
-    />
+    <EditTrackModal v-model="showEditModal" :track="player.currentTrack" @success="handleTrackUpdated" />
+    <AppleToast v-model="toastVisible" :message="toastMessage" :type="toastType" />
   </div>
 </template>
 
@@ -184,6 +162,33 @@ const toastType = ref('success')
 
 let isUserScrolling = false
 let scrollTimeout = null
+
+// 新增：局部缓冲状态，用于抹平网络请求延迟导致的 UI 闪烁
+const isDetailLoading = ref(false)
+let loadingTimeout = null
+
+watch(() => player.currentTrack?.id, (newId) => {
+  if (!newId || player.currentTrack?.is_bilibili) {
+    isDetailLoading.value = false
+    return
+  }
+  // 切换为本地歌曲时，开启 Loading 占位，等待详情 API 响应
+  isDetailLoading.value = true
+  
+  if (loadingTimeout) clearTimeout(loadingTimeout)
+  // 兜底机制：最多等待 800ms，防止网络波动导致卡死在占位状态
+  loadingTimeout = setTimeout(() => {
+    isDetailLoading.value = false
+  }, 800)
+})
+
+watch(() => player.currentTrackDetail?.id, (newDetailId) => {
+  // 当详情 API 返回，且 ID 匹配当前播放歌曲时，解除 Loading 并展现正确布局
+  if (newDetailId === player.currentTrack?.id) {
+    isDetailLoading.value = false
+    if (loadingTimeout) clearTimeout(loadingTimeout)
+  }
+})
 
 const showToast = (message, type = 'error') => {
   toastMessage.value = message
@@ -219,6 +224,7 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
   if (scrollTimeout) clearTimeout(scrollTimeout)
+  if (loadingTimeout) clearTimeout(loadingTimeout)
 })
 
 const handleKeydown = (e) => {
@@ -227,32 +233,17 @@ const handleKeydown = (e) => {
   switch (e.code) {
     case 'Space':
     case 'KeyP':
-      e.preventDefault()
-      e.stopPropagation()
-      togglePlay()
-      break
+      e.preventDefault(); e.stopPropagation(); togglePlay(); break
     case 'KeyQ':
     case 'ArrowLeft':
-      e.preventDefault()
-      e.stopPropagation()
-      prevTrack()
-      break
+      e.preventDefault(); e.stopPropagation(); prevTrack(); break
     case 'KeyE':
     case 'ArrowRight':
-      e.preventDefault()
-      e.stopPropagation()
-      nextTrack()
-      break
+      e.preventDefault(); e.stopPropagation(); nextTrack(); break
     case 'KeyM':
-      e.preventDefault()
-      e.stopPropagation()
-      player.togglePlayMode()
-      break
+      e.preventDefault(); e.stopPropagation(); player.togglePlayMode(); break
     case 'KeyZ':
-      e.preventDefault()
-      e.stopPropagation()
-      emit('close')
-      break
+      e.preventDefault(); e.stopPropagation(); emit('close'); break
   }
 }
 
@@ -441,5 +432,15 @@ const handleTrackUpdated = (updatedTrack) => {
 }
 .lyrics-scroll::-webkit-scrollbar {
   display: none;
+}
+
+/* 核心优化：慢切淡入淡出动画，让布局变更无比丝滑 */
+.fade-slow-enter-active,
+.fade-slow-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-slow-enter-from,
+.fade-slow-leave-to {
+  opacity: 0;
 }
 </style>

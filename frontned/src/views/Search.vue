@@ -180,7 +180,7 @@ const fetchBiliTracks = async (signal) => {
       title: item.title,
       author: item.author,
       artist_name: item.author,
-      track_cover: item.track_cover,
+      track_cover: item.pic || item.cover || item.track_cover || '',
       duration: 0,
       is_bilibili: true,
       bvid: item.bvid,
