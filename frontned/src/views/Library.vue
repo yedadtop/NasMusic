@@ -142,6 +142,7 @@ let observer = null
 
 // 新增：用于存放重试的定时器
 let retryTimer = null
+let clickHandler = null
 
 const totalPages = computed(() => Math.ceil(totalCount.value / size.value))
 
@@ -266,12 +267,12 @@ watch(loading, (isLoading) => {
 
 onMounted(() => {
   fetchTracks()
-  document.addEventListener('click', () => {
+  clickHandler = () => {
     showingMoreMenu.value = null
-  })
+  }
+  document.addEventListener('click', clickHandler)
 })
 
-// 新增：组件卸载时清理定时器，防止内存泄漏和无效请求
 onUnmounted(() => {
   if (retryTimer) {
     clearTimeout(retryTimer)
@@ -279,6 +280,10 @@ onUnmounted(() => {
   if (observer) {
     observer.disconnect()
     observer = null
+  }
+  if (clickHandler) {
+    document.removeEventListener('click', clickHandler)
+    clickHandler = null
   }
 })
 

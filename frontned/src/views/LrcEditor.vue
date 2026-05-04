@@ -380,6 +380,7 @@ const loadTrackData = async () => {
 
 const parseRawText = () => {
   if (!rawText.value.trim()) return
+  lineRefs.value = []
   const lines = rawText.value.split('\n')
   lyrics.value = lines.map(line => {
     const match = line.match(/^\[(\d{2}:\d{2}(?::\d{2}(?:\.\d{2,3})?|\.\d{2,3}))\](.*)/)

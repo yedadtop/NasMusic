@@ -393,11 +393,13 @@ const uploadFile = async (item) => {
 
     item.status = 'completed'
     item.progress = 100
+    item.file = null
     showToast(`${item.filename} 上传成功`, 'success')
 
   } catch (err) {
     item.status = 'error'
     item.error = err.response?.data?.error || err.message || '上传失败'
+    item.file = null
     showToast(`${item.filename} 上传失败: ${item.error}`, 'error')
   }
 
@@ -414,6 +416,7 @@ const cancelUpload = async (item) => {
       console.error('取消上传失败', e)
     }
   }
+  item.file = null
   uploadQueue.value = uploadQueue.value.filter(u => u.id !== item.id)
 }
 
