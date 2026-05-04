@@ -87,7 +87,7 @@ class BiliSearchView(APIView):
             return Response({'message': f'B站接口返回错误: {data.get("message", "未知错误")}'}, status=data.get('code', 400))
 
         results = []
-        video_list = data.get('data', {}).get('result', [])
+        video_list = data.get('data', {}).get('result') or []
         for item in video_list[:20]:
             bvid = item.get('bvid', '')
             title = re.sub(r'<[^>]+>', '', item.get('title', ''))
