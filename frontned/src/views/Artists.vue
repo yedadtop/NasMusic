@@ -25,7 +25,8 @@
             :alt="artist.name"
             loading="lazy"
             @error="$event.target.src = `https://picsum.photos/seed/${artist.id}/200/200`"
-            class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 lazy-image"
+            @load="onImageLoad"
           >
           <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 rounded-xl"></div>
           <div class="absolute inset-0 flex items-center justify-center rounded-full">
@@ -52,7 +53,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import request from '../api'
 
@@ -61,7 +62,7 @@ const router = useRouter()
 const artists = ref([])
 const loading = ref(false)
 const page = ref(1)
-const size = ref(50)
+const size = ref(21)
 const totalCount = ref(0)
 const hasMore = ref(false)
 const sentinel = ref(null)
@@ -119,9 +120,19 @@ const getAvatarUrl = (artist) => {
   return `https://picsum.photos/seed/${artist.id}/200/200`
 }
 
+const onImageLoad = (event) => {
+  event.target.classList.add('loaded')
+}
+
 onMounted(() => {
   fetchArtists()
   nextTick(setupObserver)
+})
+
+watch(sentinel, (newVal) => {
+  if (newVal) {
+    setupObserver()
+  }
 })
 
 onUnmounted(() => {
@@ -137,4 +148,6 @@ onUnmounted(() => {
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(0, 0, 0, 0.1); border-radius: 20px; }
 .custom-scrollbar { scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.1) transparent; }
+.lazy-image { opacity: 0; transition: opacity 0.4s ease-in-out; }
+.lazy-image.loaded { opacity: 1; }
 </style>
