@@ -88,6 +88,8 @@ import AppleToast from './AppleToast.vue'
 import AppleConfirmModal from './AppleConfirmModal.vue'
 import request from '../api'
 
+const emit = defineEmits(['track-restored'])
+
 const toastVisible = ref(false)
 const toastMessage = ref('')
 const toastType = ref('success')
@@ -137,6 +139,55 @@ const openRestoreAllConfirm = () => {
   showConfirmModal.value = true
 }
 
+const pollScanStatus = async (taskId) => {
+  const maxAttempts = 60
+  let attempts = 0
+  
+  return new Promise((resolve, reject) => {
+    const checkStatus = async () => {
+      try {
+        const res = await request.get('/scanner/status/', { params: { task_id: taskId } })
+        const task = res.data
+        
+        if (task.status === 'completed') {
+          if (task.added_count > 0) {
+            showToast(`扫描完成，新增 ${task.added_count} 首歌曲`, 'success')
+          } else if (task.updated_count > 0) {
+            showToast(`扫描完成，更新 ${task.updated_count} 首歌曲`, 'success')
+          } else {
+            showToast('扫描完成，未发现新歌曲', 'info')
+          }
+          emit('track-restored')
+          resolve()
+        } else if (task.status === 'error') {
+          showToast('扫描出错: ' + (task.error_message || '未知错误'), 'error')
+          reject(new Error(task.error_message))
+        } else {
+          if (attempts < maxAttempts) {
+            attempts++
+            setTimeout(checkStatus, 2000)
+          } else {
+            showToast('扫描超时', 'warning')
+            emit('track-restored')
+            resolve()
+          }
+        }
+      } catch (error) {
+        console.error('查询扫描状态失败:', error)
+        if (attempts < maxAttempts) {
+          attempts++
+          setTimeout(checkStatus, 2000)
+        } else {
+          showToast('查询扫描状态失败', 'error')
+          emit('track-restored')
+          resolve()
+        }
+      }
+    }
+    checkStatus()
+  })
+}
+
 const fetchTrashFiles = async () => {
   try {
     loadingTrash.value = true
@@ -156,9 +207,15 @@ const fetchTrashFiles = async () => {
 
 const restoreFile = async (path) => {
   try {
-    await request.post('/scanner/trash/', { paths: [path] })
-    showToast('文件已恢复', 'success')
-    await fetchTrashFiles()
+    const res = await request.post('/scanner/trash/', { paths: [path] })
+    
+    if (res.data.scan_triggered) {
+      showToast(`${res.data.message}，正在后台扫描...`, 'success')
+      await pollScanStatus(res.data.scan_task_id)
+    } else {
+      showToast(res.data.message, 'success')
+      await fetchTrashFiles()
+    }
   } catch (error) {
     console.error('恢复失败:', error)
     showToast('恢复失败', 'error')
@@ -168,9 +225,15 @@ const restoreFile = async (path) => {
 const restoreAllFiles = async () => {
   try {
     restoringAll.value = true
-    await request.post('/scanner/trash/', { restore_all: true })
-    showToast('已恢复全部文件', 'success')
-    await fetchTrashFiles()
+    const res = await request.post('/scanner/trash/', { restore_all: true })
+    
+    if (res.data.scan_triggered) {
+      showToast(`${res.data.message}，正在后台扫描...`, 'success')
+      await pollScanStatus(res.data.scan_task_id)
+    } else {
+      showToast(res.data.message, 'success')
+      await fetchTrashFiles()
+    }
   } catch (error) {
     console.error('恢复全部失败:', error)
     showToast('恢复失败', 'error')

@@ -263,6 +263,18 @@ watch(() => route.path, (newPath) => {
   }
 })
 
+watch(() => player.refreshLibraryTrigger, () => {
+  if (route.path === '/' && libraryRef.value) {
+    libraryRef.value.searchKeyword = ''
+    libraryRef.value.page = 1
+    libraryRef.value.allLoaded = false
+    libraryRef.value.fetchTracks()
+    if (libraryRef.value.tracks) {
+      player.syncPlaylist(libraryRef.value.tracks)
+    }
+  }
+})
+
 const handleClickOutside = (e) => {
   if (showSearch.value && searchContainer.value && !searchContainer.value.contains(e.target)) {
     closeSearch()

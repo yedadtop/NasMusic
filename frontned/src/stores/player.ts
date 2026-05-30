@@ -44,6 +44,7 @@ export const usePlayerStore = defineStore('player', () => {
   const shuffleHistory = ref<number[]>([])
   const loadMoreCallback = ref<(() => Promise<void>) | null>(null)
   const isLoadingMore = ref(false)
+  const refreshLibraryTrigger = ref(0)
 
   const progress = computed(() => {
     if (!duration.value) return 0
@@ -130,6 +131,10 @@ export const usePlayerStore = defineStore('player', () => {
     loadMoreCallback.value = null
     isLoadingMore.value = false
     clearBiliCoverCache()
+  }
+
+  function triggerLibraryRefresh() {
+    refreshLibraryTrigger.value++
   }
 
   async function fetchTrackDetail(id: string | number) {
@@ -329,6 +334,7 @@ export const usePlayerStore = defineStore('player', () => {
     hasPrev,
     hasNext,
     isLoadingMore,
+    refreshLibraryTrigger,
     fetchTrackDetail,
     fetchBilibiliLyrics,
     playTrack,
@@ -345,6 +351,7 @@ export const usePlayerStore = defineStore('player', () => {
     setLoadMoreCallback,
     checkAndLoadMore,
     resetPlayer,
+    triggerLibraryRefresh,
     preloadBiliCover,
     biliCoverCache
   }

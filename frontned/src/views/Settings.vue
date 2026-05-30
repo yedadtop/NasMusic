@@ -275,7 +275,7 @@
     </div>
 
     <div v-show="activeTab === 'trash'" class="min-h-[600px]">
-      <TrashContent />
+      <TrashContent @track-restored="handleTrackRestored" />
     </div>
 
     <div v-show="activeTab === 'cookie'" class="min-h-[600px]">
@@ -294,10 +294,17 @@ import { FolderOpened, Loading, CircleCheck, Upload, Close } from '@element-plus
 import AppleToast from '../components/AppleToast.vue'
 import AppleConfirmModal from '../components/AppleConfirmModal.vue'
 import request from '../api'
+import { usePlayerStore } from '../stores/player'
+
+const playerStore = usePlayerStore()
 
 const TrashContent = defineAsyncComponent(() => import('../components/TrashContent.vue'))
 const ScraperContent = defineAsyncComponent(() => import('../components/ScraperContent.vue'))
 const CookieContent = defineAsyncComponent(() => import('../components/CookieContent.vue'))
+
+const handleTrackRestored = () => {
+  playerStore.triggerLibraryRefresh()
+}
 
 const activeTab = ref('settings')
 

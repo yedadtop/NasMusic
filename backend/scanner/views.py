@@ -138,6 +138,30 @@ class TrashManagerView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         result = restore_trash_files(paths_list=paths if paths else None, restore_all=restore_all)
+
+        if result['restored'] > 0:
+            music_path = get_music_path()
+            scan_task_id = None
+            scan_triggered = False
+
+            if music_path:
+                active_task = ScanTask.objects.filter(status__in=['pending', 'running']).first()
+                if not active_task:
+                    scan_task = ScanTask.objects.create(target_path=music_path)
+                    run_scan_async(music_path, scan_task.id)
+                    scan_task_id = scan_task.id
+                    scan_triggered = True
+                else:
+                    scan_task_id = active_task.id
+
+            return Response({
+                "message": f"成功恢复 {result['restored']} 个文件，扫描任务已自动触发",
+                "restored": result['restored'],
+                "failed": result['failed'],
+                "scan_triggered": scan_triggered,
+                "scan_task_id": scan_task_id
+            }, status=status.HTTP_200_OK)
+
         return Response({
             "message": f"成功恢复 {result['restored']} 个文件",
             "restored": result['restored'],
