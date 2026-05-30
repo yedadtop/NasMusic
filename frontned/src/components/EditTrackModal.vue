@@ -337,6 +337,7 @@ const handleSave = async () => {
       track_cover: coverPreview.value || props.track.track_cover
     }
     emit('success', updatedTrack)
+    showToast('歌曲信息更新成功', 'success')
     handleClose()
   } catch (error) {
     console.error('保存失败:', error)
