@@ -32,36 +32,8 @@ AUDIO_QUALITY_PRIORITY = {
 MANUAL_QUALITY_SELECTION = None
 
 
-def parse_cookie_string(cookie_str):
-    """将拼接的 Cookie 字符串解析为字典，供 Credential 使用"""
-    cookies = {}
-    if not cookie_str:
-        return cookies
-    for item in cookie_str.split(';'):
-        if '=' in item:
-            k, v = item.split('=', 1)
-            cookies[k.strip()] = v.strip()
-    return cookies
-
-
 def get_bili_credential():
-    """获取并构造 Bilibili 凭证对象"""
-    try:
-        from scanner.models import SystemConfig
-        sessdata_config = SystemConfig.objects.filter(key='bilibili_sessdata').first()
-        if sessdata_config and sessdata_config.value:
-            cookie_dict = parse_cookie_string(sessdata_config.value)
-            # Credential 需要明确的字段
-            return Credential(
-                sessdata=cookie_dict.get('SESSDATA', ''),
-                bili_jct=cookie_dict.get('bili_jct', ''),
-                buvid3=cookie_dict.get('buvid3', ''),
-                dedeuserid=cookie_dict.get('DedeUserID', '')
-            )
-    except Exception as e:
-        logger.error(f"[BiliAPI-Auth] 构建凭证异常: {e}")
-
-    logger.warning("[BiliAPI-Auth] 未找到有效的 Cookie，正在使用无登录凭证发起请求！")
+    """获取 Bilibili 凭证对象"""
     return Credential()
 
 
@@ -117,7 +89,7 @@ class BiliPlayUrlView(APIView):
         credential = get_bili_credential()
 
         try:
-            # 构建 Video 对象，并带上 Cookie 凭证
+            # 构建 Video 对象
             v = video.Video(bvid=bvid, credential=credential)
 
             # ---> 新增：获取歌曲(视频)详细信息，用于日志打印 <---

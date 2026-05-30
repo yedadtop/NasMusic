@@ -442,7 +442,7 @@ const prevTrack = async () => {
         player.audioElement.pause()
       }
     } catch (error) {
-      showToast('B站链接解析失败，请检查Cookie配置')
+      showToast('B站链接解析失败，请稍后重试')
       setTimeout(() => nextTrack(), 1500)
     }
   }
@@ -459,7 +459,7 @@ const nextTrack = async () => {
         player.audioElement.pause()
       }
     } catch (error) {
-      showToast('B站链接解析失败，请检查Cookie配置')
+      showToast('B站链接解析失败，请稍后重试')
       setTimeout(() => nextTrack(), 1500)
     }
   }

@@ -10,15 +10,8 @@
           设置
         </button>
         <button
-          @click="activeTab = 'cookie'"
-          class="pb-3 px-1 text-[17px] font-semibold border-b-2 transition-colors mr-6"
-          :class="activeTab === 'cookie' ? 'border-[#0071e3] text-[#0071e3]' : 'border-transparent text-[#86868b] hover:text-[#1d1d1f]'"
-        >
-          Cookie
-        </button>
-        <button
           @click="activeTab = 'scraper'"
-          class="pb-3 px-1 text-[17px] font-semibold border-b-2 transition-colors mr-6"
+          class="pb-3 px-1 text-[17px] font-semibold border-b-2 transition-colors"
           :class="activeTab === 'scraper' ? 'border-[#0071e3] text-[#0071e3]' : 'border-transparent text-[#86868b] hover:text-[#1d1d1f]'"
         >
           刮削
@@ -278,10 +271,6 @@
       <TrashContent @track-restored="handleTrackRestored" />
     </div>
 
-    <div v-show="activeTab === 'cookie'" class="min-h-[600px]">
-      <CookieContent />
-    </div>
-
     <div v-show="activeTab === 'scraper'" class="min-h-[600px]">
       <ScraperContent @task-started="handleTaskStarted" />
     </div>
@@ -300,7 +289,6 @@ const playerStore = usePlayerStore()
 
 const TrashContent = defineAsyncComponent(() => import('../components/TrashContent.vue'))
 const ScraperContent = defineAsyncComponent(() => import('../components/ScraperContent.vue'))
-const CookieContent = defineAsyncComponent(() => import('../components/CookieContent.vue'))
 
 const handleTrackRestored = () => {
   playerStore.triggerLibraryRefresh()
