@@ -31,7 +31,7 @@ function clearBiliCoverCache() {
 
 export const usePlayerStore = defineStore('player', () => {
   const currentTrack = ref(null)
-  const currentTrackDetail = ref(null)
+  const currentTrackDetail = ref<any | null>(null)
   const playlist = ref<any[]>([])
   const currentIndex = ref(-1)
   const isPlaying = ref(false)
