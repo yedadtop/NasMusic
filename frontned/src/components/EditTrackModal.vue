@@ -43,13 +43,19 @@
           <div class="form-section">
             <div class="form-label-row">
               <label class="form-label">歌词</label>
-              <button class="lrc-editor-btn" @click="goToLrcEditor">详细编辑</button>
+              <div class="lyrics-actions">
+                <button class="scrape-btn" @click="handleScrapeLyrics" :disabled="scrapeLoading">
+                  <span v-if="scrapeLyricsLoading" class="loading-spinner"></span>
+                  <span v-else>刮削歌词</span>
+                </button>
+                <button class="lrc-editor-btn" @click="goToLrcEditor">详细编辑</button>
+              </div>
             </div>
             <textarea
               v-model="form.lyrics"
               class="form-textarea"
               rows="6"
-              placeholder="输入歌词（LRC格式）"
+              placeholder="输入歌词（LRC格式）或点击刮削歌词按钮获取"
             />
           </div>
 
@@ -72,7 +78,13 @@
                   @change="handleCoverSelect" 
                   class="file-input"
                 />
-                <button class="change-cover-btn" @click="selectFile">更换封面</button>
+                <div class="cover-btns">
+                  <button class="scrape-btn" @click="handleScrapeCover" :disabled="scrapeLoading">
+                    <span v-if="scrapeCoverLoading" class="loading-spinner"></span>
+                    <span v-else>刮削封面</span>
+                  </button>
+                  <button class="change-cover-btn" @click="selectFile">更换封面</button>
+                </div>
               </div>
             </div>
           </div>
@@ -107,6 +119,9 @@ const emit = defineEmits(['update:modelValue', 'success'])
 const player = usePlayerStore()
 const dialogVisible = ref(false)
 const saving = ref(false)
+const scrapeLoading = ref(false)
+const scrapeCoverLoading = ref(false)
+const scrapeLyricsLoading = ref(false)
 const fileInput = ref(null)
 const form = ref({
   title: '',
@@ -167,11 +182,59 @@ const scrapeLyrics = async (trackId) => {
   return null
 }
 
+const handleScrapeCover = async () => {
+  if (!props.track?.id) return
+  scrapeLoading.value = true
+  scrapeCoverLoading.value = true
+  try {
+    const scrapedCover = await scrapeCover(props.track.id)
+    if (scrapedCover) {
+      coverPreview.value = scrapedCover
+      if (player.currentTrack && player.currentTrack.id === props.track.id) {
+        player.currentTrack = { ...player.currentTrack, track_cover: scrapedCover }
+      }
+      const playlistIndex = player.playlist.findIndex(t => t.id === props.track.id)
+      if (playlistIndex !== -1) {
+        player.playlist[playlistIndex] = { ...player.playlist[playlistIndex], track_cover: scrapedCover }
+      }
+      showToast('封面刮削成功', 'success')
+    } else {
+      showToast('封面刮削失败', 'error')
+    }
+  } finally {
+    scrapeLoading.value = false
+    scrapeCoverLoading.value = false
+  }
+}
+
+const handleScrapeLyrics = async () => {
+  if (!props.track?.id) return
+  scrapeLoading.value = true
+  scrapeLyricsLoading.value = true
+  try {
+    const scrapeResult = await scrapeLyrics(props.track.id)
+    if (scrapeResult?.error) {
+      showToast(scrapeResult.error, 'error')
+    } else if (scrapeResult) {
+      form.value.lyrics = scrapeResult.lyrics
+      if (player.currentTrack && player.currentTrack.id === props.track.id) {
+        player.currentTrack = { ...player.currentTrack, lyrics: scrapeResult.lyrics }
+      }
+      if (scrapeResult.source === 'local') {
+        showToast('歌词已从本地文件恢复', 'success')
+      } else {
+        showToast('歌词刮削成功', 'success')
+      }
+    }
+  } finally {
+    scrapeLoading.value = false
+    scrapeLyricsLoading.value = false
+  }
+}
+
 watch(() => props.modelValue, async (val) => {
   dialogVisible.value = val
   if (val && props.track) {
-    let trackCover = ''
-    let trackLyrics = ''
     if (props.track.id === player.currentTrack?.id && player.currentTrackDetail) {
       form.value = {
         title: player.currentTrackDetail.title || props.track.title || '',
@@ -179,8 +242,7 @@ watch(() => props.modelValue, async (val) => {
         album_title: player.currentTrackDetail.album_title || props.track.album_title || '',
         lyrics: player.currentTrackDetail.lyrics || ''
       }
-      trackCover = player.currentTrackDetail.track_cover || props.track.track_cover || ''
-      trackLyrics = player.currentTrackDetail.lyrics || ''
+      coverPreview.value = player.currentTrackDetail.track_cover || props.track.track_cover || ''
     } else {
       form.value = {
         title: props.track.title || '',
@@ -188,86 +250,22 @@ watch(() => props.modelValue, async (val) => {
         album_title: props.track.album_title || '',
         lyrics: ''
       }
-      trackCover = props.track.track_cover || ''
-      trackLyrics = ''
+      coverPreview.value = props.track.track_cover || ''
       if (props.track.id) {
         try {
           const res = await request.get(`/tracks/${props.track.id}/`)
           if (res.data.lyrics) {
-            trackLyrics = res.data.lyrics
             form.value.lyrics = res.data.lyrics
           }
           if (res.data.track_cover) {
-            trackCover = res.data.track_cover
+            coverPreview.value = res.data.track_cover
           }
         } catch (error) {
           console.error('获取歌曲详情失败:', error)
         }
       }
     }
-
-    coverPreview.value = trackCover
     coverFile.value = null
-
-    const scrapeResults = {
-      coverSuccess: false,
-      lyricsSuccess: false,
-      coverScraped: false,
-      lyricsScraped: false,
-      lyricsSource: null
-    }
-
-    if (!trackCover && props.track.id) {
-      scrapeResults.coverScraped = true
-      const scrapedCover = await scrapeCover(props.track.id)
-      if (scrapedCover) {
-        coverPreview.value = scrapedCover
-        scrapeResults.coverSuccess = true
-        if (player.currentTrack && player.currentTrack.id === props.track.id) {
-          player.currentTrack = { ...player.currentTrack, track_cover: scrapedCover }
-        }
-        const playlistIndex = player.playlist.findIndex(t => t.id === props.track.id)
-        if (playlistIndex !== -1) {
-          player.playlist[playlistIndex] = { ...player.playlist[playlistIndex], track_cover: scrapedCover }
-        }
-      } else {
-        showToast('封面刮削失败', 'error')
-      }
-    }
-
-    if (!trackLyrics && props.track.id) {
-      scrapeResults.lyricsScraped = true
-      const scrapeResult = await scrapeLyrics(props.track.id)
-      if (scrapeResult?.error) {
-        showToast(scrapeResult.error, 'error')
-      } else if (scrapeResult) {
-        form.value.lyrics = scrapeResult.lyrics
-        scrapeResults.lyricsSuccess = true
-        scrapeResults.lyricsSource = scrapeResult.source
-        if (player.currentTrack && player.currentTrack.id === props.track.id) {
-          player.currentTrack = { ...player.currentTrack, lyrics: scrapeResult.lyrics }
-        }
-      }
-    }
-
-    if (scrapeResults.coverScraped || scrapeResults.lyricsScraped) {
-      await new Promise(resolve => setTimeout(resolve, 500))
-      if (scrapeResults.coverSuccess && scrapeResults.lyricsSuccess) {
-        if (scrapeResults.lyricsSource === 'local') {
-          showToast('封面刮削成功，歌词已从本地文件恢复', 'success')
-        } else {
-          showToast('封面和歌词刮削成功', 'success')
-        }
-      } else if (scrapeResults.coverSuccess) {
-        showToast('封面刮削成功', 'success')
-      } else if (scrapeResults.lyricsSuccess) {
-        if (scrapeResults.lyricsSource === 'local') {
-          showToast('歌词已从本地文件恢复', 'success')
-        } else {
-          showToast('歌词刮削成功', 'success')
-        }
-      }
-    }
   }
 })
 
@@ -517,6 +515,59 @@ const handleSave = async () => {
   background: rgba(0, 122, 255, 0.2);
 }
 
+.lyrics-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.cover-btns {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.scrape-btn {
+  font-size: 13px;
+  font-weight: 500;
+  color: #007AFF;
+  background: rgba(0, 122, 255, 0.1);
+  border: none;
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 70px;
+  height: 28px;
+}
+
+.scrape-btn:hover:not(:disabled) {
+  background: rgba(0, 122, 255, 0.2);
+}
+
+.scrape-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.loading-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(0, 122, 255, 0.3);
+  border-top-color: #007AFF;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .form-item {
   margin-bottom: 16px;
 }
@@ -645,26 +696,24 @@ const handleSave = async () => {
 }
 
 .change-cover-btn {
-  padding: 10px 24px;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 500;
-  color: #ffffff;
-  background: linear-gradient(180deg, #007AFF 0%, #0066CC 100%);
+  color: #007AFF;
+  background: rgba(0, 122, 255, 0.1);
   border: none;
-  border-radius: 10px;
+  border-radius: 6px;
+  padding: 4px 12px;
   cursor: pointer;
   transition: all 0.15s ease;
-  box-shadow: 0 1px 3px rgba(0, 122, 255, 0.3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 70px;
+  height: 28px;
 }
 
 .change-cover-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.4);
-}
-
-.change-cover-btn:active {
-  transform: translateY(0);
-  box-shadow: 0 1px 2px rgba(0, 122, 255, 0.2);
+  background: rgba(0, 122, 255, 0.2);
 }
 
 @media (max-width: 480px) {
