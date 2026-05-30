@@ -141,6 +141,47 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
+  async function fetchBilibiliLyrics(title: string) {
+    if (!title) {
+      currentTrackDetail.value = null
+      return
+    }
+
+    try {
+      const res = await request.post('/scraper/lyrics/bilibili/', { title })
+      if (res.data.success && res.data.lyrics) {
+        currentTrackDetail.value = {
+          id: `bilibili_${Date.now()}`,
+          title: res.data.parsed_song_name || title,
+          artist_name: res.data.parsed_artist_name || '',
+          lyrics: res.data.lyrics,
+          is_bilibili: true
+        }
+        console.log(`[播放器] B站歌曲歌词获取成功: ${res.data.parsed_song_name} - ${res.data.parsed_artist_name}`)
+      } else {
+        currentTrackDetail.value = {
+          id: `bilibili_${Date.now()}`,
+          title: title,
+          artist_name: '',
+          lyrics: '',
+          is_bilibili: true
+        }
+        if (res.data.message && res.data.message !== '成功获取歌词') {
+          console.log(`[播放器] B站歌曲歌词获取失败: ${res.data.message}`)
+        }
+      }
+    } catch (error) {
+      console.error('获取B站歌曲歌词失败:', error)
+      currentTrackDetail.value = {
+        id: `bilibili_${Date.now()}`,
+        title: title,
+        artist_name: '',
+        lyrics: '',
+        is_bilibili: true
+      }
+    }
+  }
+
   function playTrack(track: any, index = -1, tracks: any[] = [], preservePlayingState = false) {
     if (tracks.length > 0) {
       playlist.value = tracks
@@ -172,6 +213,8 @@ export const usePlayerStore = defineStore('player', () => {
     duration.value = track.duration || 0
     if (!track.is_bilibili) {
       fetchTrackDetail(track.id)
+    } else {
+      fetchBilibiliLyrics(track.title)
     }
   }
 
@@ -286,6 +329,7 @@ export const usePlayerStore = defineStore('player', () => {
     hasNext,
     isLoadingMore,
     fetchTrackDetail,
+    fetchBilibiliLyrics,
     playTrack,
     syncPlaylist,
     prevTrack,

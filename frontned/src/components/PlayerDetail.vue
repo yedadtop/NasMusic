@@ -50,7 +50,7 @@
               <img v-else src="https://picsum.photos/600" alt="cover" class="w-full h-full object-cover" />
             </div>
             <p class="text-white/50 text-center landscape:text-left md:text-left text-lg landscape:text-3xl md:text-3xl font-bold tracking-wider">
-              {{ player.currentTrack?.is_bilibili ? '在线音源暂无歌词' : '暂无歌词' }}
+              {{ player.currentTrack?.is_bilibili ? '正在获取歌词...' : '暂无歌词' }}
             </p>
           </div>
         </transition>
@@ -183,7 +183,16 @@ watch(() => player.currentTrack?.id, (newId, oldId) => {
     }, 800)
   }
 
-  if (!newId || player.currentTrack?.is_bilibili) {
+  if (!newId) {
+    isDetailLoading.value = false
+    if (loadingTimeout) {
+      clearTimeout(loadingTimeout)
+      loadingTimeout = null
+    }
+    return
+  }
+  
+  if (player.currentTrack?.is_bilibili) {
     isDetailLoading.value = false
     if (loadingTimeout) {
       clearTimeout(loadingTimeout)
@@ -299,7 +308,6 @@ const setLyricRef = (el, index) => {
 
 const parsedLyrics = computed(() => {
   if (!player.currentTrack) return []
-  if (player.currentTrack.is_bilibili) return []
   
   const lyrics = player.currentTrackDetail?.lyrics
   if (!lyrics) return []
