@@ -175,9 +175,6 @@
                 active-text="中英翻译"
               />
             </el-tooltip>
-            <span v-if="isMobile" class="text-xs text-blue-600 font-mono font-bold bg-blue-50 px-2 py-1 rounded">
-              {{ formatTime(currentTime) }}
-            </span>
             <span class="text-xs md:text-sm font-bold text-gray-500 hidden md:inline">共 {{ lyrics.filter(l => !l.deleted).length }} 行</span>
             <el-switch v-model="autoScroll" size="small" active-text="跟随预览" />
           </div>
@@ -196,7 +193,7 @@
             :ref="el => { if (el) lineRefs[index] = el }"
             @click="setEditIndex(index, false)"
             :class="[
-              'group flex items-center p-2 md:p-3 mb-2 md:mb-3 rounded-xl transition-all duration-200 border-2 cursor-pointer',
+              'group flex items-start p-2 md:p-3 mb-2 md:mb-3 rounded-xl transition-all duration-200 border-2 cursor-pointer',
               editIndex === index 
                 ? 'bg-blue-50 border-blue-400 shadow-sm md:shadow-md transform md:scale-[1.01]' 
                 : item.deleted
@@ -205,7 +202,7 @@
             ]"
           >
             <!-- 时间显示：纯文本块 -->
-            <div class="w-16 md:w-24 shrink-0 flex items-center justify-center md:justify-start">
+            <div class="w-14 md:w-24 shrink-0 flex items-center justify-center md:justify-start pt-1 md:pt-0">
               <div 
                 class="font-mono text-xs md:text-sm px-1.5 py-1 rounded transition-colors cursor-pointer select-none"
                 :class="[
@@ -217,35 +214,54 @@
               </div>
             </div>
 
-            <!-- 歌词文本 -->
-            <div class="flex-1 px-2 md:px-4 min-w-0 flex items-center gap-2">
-              <input 
-                v-model="item.text" 
-                :disabled="item.deleted"
-                class="flex-1 bg-transparent border-none outline-none text-[15px] md:text-lg transition-colors placeholder-gray-300"
-                :class="{'font-bold text-gray-600': playingIndex === index, 'text-gray-700': playingIndex !== index}"
-                @focus="setEditIndex(index, false)"
-                @click.stop
-                placeholder="在此输入歌词..."
-              />
-              
-              <!-- 翻译歌词输入框 -->
-              <div v-if="chineseAsTranslation" class="flex items-center gap-2 w-40 md:w-56 shrink-0">
-                <span class="text-xs text-gray-400 font-bold shrink-0">译:</span>
+            <!-- 中间内容区：歌词 + 翻译（flex-1占满空间） -->
+            <div class="flex-1 flex flex-col min-w-0">
+              <!-- 歌词文本 - PC端并排显示，移动端单独一行 -->
+              <div class="w-full md:w-auto md:flex-1 px-2 md:px-4 min-w-0 flex items-center gap-2">
                 <input 
-                  v-model="item.translation" 
+                  v-model="item.text" 
                   :disabled="item.deleted"
-                  class="flex-1 bg-blue-50/50 border border-blue-100 rounded px-2 py-1 text-[13px] md:text-sm outline-none transition-colors placeholder-blue-200"
-                  :class="{'font-medium text-blue-700': item.translation, 'text-blue-400': !item.translation}"
+                  class="w-full md:flex-1 bg-transparent border-none outline-none text-[15px] md:text-lg transition-colors placeholder-gray-300"
+                  :class="{'font-bold text-gray-600': playingIndex === index, 'text-gray-700': playingIndex !== index}"
                   @focus="setEditIndex(index, false)"
                   @click.stop
-                  placeholder="中文翻译..."
+                  placeholder="在此输入歌词..."
                 />
+                
+                <!-- PC端翻译歌词输入框 - 移动端隐藏 -->
+                <div v-if="chineseAsTranslation && !isMobile" class="flex items-center gap-1 md:gap-2 min-w-0 md:min-w-[200px] md:max-w-56 shrink-0">
+                  <span class="hidden md:inline text-xs text-gray-400 font-bold shrink-0">译:</span>
+                  <input 
+                    v-model="item.translation" 
+                    :disabled="item.deleted"
+                    class="flex-1 bg-blue-50/50 border border-blue-100 rounded px-2 py-1 text-[13px] md:text-sm outline-none transition-colors placeholder-blue-200 min-w-0"
+                    :class="{'font-medium text-blue-700': item.translation, 'text-blue-400': !item.translation}"
+                    @focus="setEditIndex(index, false)"
+                    @click.stop
+                    placeholder="翻译..."
+                  />
+                </div>
+              </div>
+
+              <!-- 移动端翻译歌词 - 独立一行显示 -->
+              <div v-if="chineseAsTranslation && isMobile" class="w-full px-2 mt-1">
+                <div class="flex items-center gap-2 bg-blue-50/30 rounded-lg px-3 py-1.5 border border-blue-100/50">
+                  <span class="text-xs text-blue-400 font-bold shrink-0">译:</span>
+                  <input 
+                    v-model="item.translation" 
+                    :disabled="item.deleted"
+                    class="flex-1 bg-transparent border-none outline-none text-[13px] transition-colors placeholder-blue-200 min-w-0"
+                    :class="{'font-medium text-blue-700': item.translation, 'text-blue-400': !item.translation}"
+                    @focus="setEditIndex(index, false)"
+                    @click.stop
+                    placeholder="翻译..."
+                  />
+                </div>
               </div>
             </div>
 
-            <!-- 操作按钮 -->
-            <div class="flex justify-end gap-2 md:gap-3 shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" :class="{'md:opacity-100': editIndex === index}">
+            <!-- 操作按钮 - 固定在右侧 -->
+            <div class="flex items-center gap-1 md:gap-2 shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity ml-auto" :class="{'md:opacity-100': editIndex === index}">
               <div v-if="!item.deleted" @click.stop="previewLine(item.time)" class="p-1.5 md:p-1 rounded-md hover:bg-gray-100 cursor-pointer">
                 <el-icon class="text-lg md:text-xl text-gray-400 hover:text-blue-500"><VideoPlay /></el-icon>
               </div>
