@@ -20,7 +20,7 @@
       </div>
 
       <p class="text-[15px] text-[#86868b] mb-6 leading-relaxed">
-        管理已删除的音乐文件。可以恢复误删的文件，或彻底删除以释放磁盘空间。
+        回收站中的文件将在 14 天后自动删除。文件被删除前可以随时恢复。
       </p>
 
       <div class="flex flex-col sm:flex-row gap-4 mb-6">
@@ -42,18 +42,8 @@
             @click="openRestoreAllConfirm"
             class="w-full custom-apple-button"
           >
+            <Icon icon="mdi:restore" class="w-4 h-4 mr-2" />
             恢复全部
-          </el-button>
-        </div>
-        <div v-if="trashFiles.length > 0" class="w-full sm:w-auto">
-          <el-button
-            type="danger"
-            :loading="deletingAll"
-            @click="openDeleteAllConfirm"
-            class="w-full custom-apple-button !bg-[#ff3b30]"
-          >
-            <Icon icon="mdi:delete" class="w-4 h-4 mr-2" />
-            清空回收站
           </el-button>
         </div>
       </div>
@@ -72,6 +62,9 @@
           <div class="flex-1 min-w-0 mr-4">
             <div class="text-[14px] font-medium truncate">{{ file.filename }}</div>
             <div class="text-[12px] text-[#86868b] truncate">{{ file.original_dir }}</div>
+            <div :class="file.days_remaining > 0 ? 'text-[#ff9500]' : 'text-[#ff3b30]'" class="text-[12px] mt-1">
+              {{ file.days_remaining }} 天
+            </div>
           </div>
           <div class="flex gap-2 shrink-0">
             <el-button
@@ -80,14 +73,6 @@
               class="!rounded-[8px] !px-3 !py-1.5 !text-[13px] !border-[#34c759] !text-[#34c759] hover:!bg-[#34c759] hover:!text-white"
             >
               恢复
-            </el-button>
-            <el-button
-              size="small"
-              type="danger"
-              @click="openDeleteConfirm(file)"
-              class="!rounded-[8px] !px-3 !py-1.5 !text-[13px] !bg-[#ff3b30] !border-[#ff3b30]"
-            >
-              删除
             </el-button>
           </div>
         </div>
@@ -117,7 +102,6 @@ const showTrashList = ref(false)
 const trashFiles = ref([])
 const loadingTrash = ref(false)
 const restoringAll = ref(false)
-const deletingAll = ref(false)
 
 const showConfirmModal = ref(false)
 const confirmTitle = ref('')
@@ -132,10 +116,6 @@ const handleConfirm = async () => {
     await restoreFile(confirmFile.value.trash_path)
   } else if (confirmAction.value === 'restoreAll') {
     await restoreAllFiles()
-  } else if (confirmAction.value === 'delete') {
-    await deleteFile(confirmFile.value.trash_path)
-  } else if (confirmAction.value === 'deleteAll') {
-    await deleteAllFiles()
   }
 }
 
@@ -157,30 +137,15 @@ const openRestoreAllConfirm = () => {
   showConfirmModal.value = true
 }
 
-const openDeleteConfirm = (file) => {
-  confirmTitle.value = '物理删除！！'
-  confirmMessage.value = `确定要彻底删除 "${file.filename}" 吗？此操作不可恢复！！！`
-  confirmConfirmText.value = '删除'
-  confirmAction.value = 'delete'
-  confirmFile.value = file
-  showConfirmModal.value = true
-}
-
-const openDeleteAllConfirm = () => {
-  confirmTitle.value = '清空回收站'
-  confirmMessage.value = `确定要彻底删除回收站中的全部 ${trashFiles.value.length} 个文件吗？此操作不可恢复！`
-  confirmConfirmText.value = '清空'
-  confirmAction.value = 'deleteAll'
-  confirmFile.value = null
-  showConfirmModal.value = true
-}
-
 const fetchTrashFiles = async () => {
   try {
     loadingTrash.value = true
     const res = await request.get('/scanner/trash/')
     trashFiles.value = res.data.files || []
     showTrashList.value = true
+    if (res.data.auto_cleaned > 0) {
+      showToast(`已自动清理 ${res.data.auto_cleaned} 个过期文件`, 'info')
+    }
   } catch (error) {
     console.error('获取回收站失败:', error)
     showToast('获取回收站失败', 'error')
@@ -211,31 +176,6 @@ const restoreAllFiles = async () => {
     showToast('恢复失败', 'error')
   } finally {
     restoringAll.value = false
-  }
-}
-
-const deleteFile = async (path) => {
-  try {
-    await request.delete('/scanner/trash/', { data: { paths: [path] } })
-    showToast('文件已彻底删除', 'success')
-    await fetchTrashFiles()
-  } catch (error) {
-    console.error('删除失败:', error)
-    showToast('删除失败', 'error')
-  }
-}
-
-const deleteAllFiles = async () => {
-  try {
-    deletingAll.value = true
-    await request.delete('/scanner/trash/', { data: { delete_all: true } })
-    showToast('已清空回收站', 'success')
-    await fetchTrashFiles()
-  } catch (error) {
-    console.error('清空失败:', error)
-    showToast('清空失败', 'error')
-  } finally {
-    deletingAll.value = false
   }
 }
 </script>

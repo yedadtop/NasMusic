@@ -375,12 +375,22 @@ def get_trash_files():
                     original_dir = os.path.dirname(root_norm)
                 else:
                     original_dir = os.path.dirname(os.path.dirname(file_path))
+                
+                from datetime import timedelta
+                if deleted_time:
+                    expire_date = deleted_time + timedelta(days=14)
+                    remaining = expire_date - datetime.now()
+                    days_remaining = max(0, remaining.days)
+                else:
+                    days_remaining = 14
+                
                 trash_files.append({
                     'filename': filename,
                     'trash_path': file_path,
                     'original_dir': original_dir,
                     'file_size': file_size,
-                    'deleted_time': deleted_time
+                    'deleted_time': deleted_time,
+                    'days_remaining': days_remaining
                 })
 
     return trash_files
@@ -442,6 +452,54 @@ def restore_trash_files(paths_list=None, restore_all=False):
     return {'restored': restored_count, 'failed': failed}
 
 
+def auto_cleanup_expired_trash_files():
+    """
+    自动清理超过14天的垃圾文件
+    返回: {'deleted': 删除数量, 'failed': 失败列表}
+    """
+    from datetime import timedelta
+    
+    trash_files = get_trash_files()
+    expired_files = []
+    
+    for file_info in trash_files:
+        if file_info['days_remaining'] == 0:
+            expired_files.append(file_info['trash_path'])
+    
+    if not expired_files:
+        return {'deleted': 0, 'failed': []}
+    
+    deleted_count = 0
+    failed = []
+    trash_dirs_cleaned = set()
+    
+    for trash_path in expired_files:
+        norm_trash = os.path.normpath(trash_path)
+        if not _is_trash_path(norm_trash):
+            failed.append({'path': trash_path, 'reason': 'Invalid trash path'})
+            continue
+        
+        if not os.path.isfile(norm_trash):
+            failed.append({'path': trash_path, 'reason': 'File not found'})
+            continue
+        
+        try:
+            os.remove(norm_trash)
+            deleted_count += 1
+            trash_dirs_cleaned.add(os.path.dirname(norm_trash))
+        except Exception as e:
+            failed.append({'path': trash_path, 'reason': str(e)})
+    
+    for trash_dir in trash_dirs_cleaned:
+        try:
+            if os.path.isdir(trash_dir) and not os.listdir(trash_dir):
+                os.rmdir(trash_dir)
+        except Exception:
+            pass
+    
+    return {'deleted': deleted_count, 'failed': failed}
+
+
 def delete_trash_files(paths_list=None, delete_all=False):
     if delete_all:
         paths_list = [f['trash_path'] for f in get_trash_files()]
@@ -470,7 +528,6 @@ def delete_trash_files(paths_list=None, delete_all=False):
         except Exception as e:
             failed.append({'path': trash_path, 'reason': str(e)})
 
-    # Clean up empty .trash folders
     for trash_dir in trash_dirs_cleaned:
         try:
             if os.path.isdir(trash_dir) and not os.listdir(trash_dir):
