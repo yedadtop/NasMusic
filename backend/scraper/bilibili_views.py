@@ -125,7 +125,7 @@ class BiliPlayUrlView(APIView):
                 video_info = sync(v.get_info())
                 song_title = video_info.get('title', '未知标题')
                 song_author = video_info.get('owner', {}).get('name', '未知UP主')
-                logger.info(f"[BiliAPI-Play] 正在提取歌曲信息: 《{song_title}》 - UP主: {song_author}")
+                logger.warning(f"[BiliAPI-Play] 正在提取歌曲信息: 《{song_title}》 - UP主: {song_author}")
             except Exception as e:
                 song_title, song_author = "未知标题", "未知UP主"
                 logger.warning(f"[BiliAPI-Play] 获取歌曲基础信息失败: {e}")
@@ -136,7 +136,7 @@ class BiliPlayUrlView(APIView):
             dash = playurl_data.get('dash', {})
             audio_streams = dash.get('audio', [])
 
-            logger.info(f"[BiliAPI-Play] 成功解析到音频流: {len(audio_streams)} 条候选线路")
+            logger.warning(f"[BiliAPI-Play] 成功解析到音频流: {len(audio_streams)} 条候选线路")
 
             best_audio = None
             best_priority = 0
@@ -150,11 +150,12 @@ class BiliPlayUrlView(APIView):
                 audio_url = audio.get('baseUrl') or audio.get('src')
                 audio_codec = audio.get('codecid') or audio.get('id') or 0
                 audio_size = audio.get('size', 0)
+                bandwidth = audio.get('bandwidth', 0)
+                bitrate_kbps = round(bandwidth / 1000) if bandwidth else 0
                 priority = quality_priority.get(audio_codec, 0)
 
-                # ---> 调试日志：打印所有探测到的音频流 <---
                 temp_desc = BILI_QUALITY_MAP.get(audio_codec, '未知')
-                logger.info(f"   --> 探测到候选流: 音质级别={audio_codec} ({temp_desc}), 优先级={priority}")
+                logger.warning(f"   --> 探测到候选流: 音质级别={audio_codec} ({temp_desc}), 码率: {bitrate_kbps}Kbps, 优先级={priority}")
 
                 if audio_url and priority > best_priority:
                     best_audio = audio
@@ -170,6 +171,7 @@ class BiliPlayUrlView(APIView):
             audio_url = best_audio.get('baseUrl') or best_audio.get('src')
             audio_codec = best_audio.get('codecid') or best_audio.get('id') or 0
             audio_size = best_audio.get('size', 0)
+            bandwidth = best_audio.get('bandwidth', 0)
 
             if audio_size == 0:
                 audio_size = best_audio.get('bandwidth', 0)
@@ -177,10 +179,10 @@ class BiliPlayUrlView(APIView):
                     audio_size = best_audio.get('length', 0) * 128 / 8
 
             quality_desc = BILI_QUALITY_MAP.get(audio_codec, '未知')
+            bitrate_kbps = round(bandwidth / 1000) if bandwidth else 0
 
-            # ---> 核心打印：明确指出最终选取的歌曲和音质结果 <---
-            logger.info(
-                f"[BiliAPI-Play] 🏆 最终选定最优音频流 -> 《{song_title}》 | 音质: {quality_desc} (Codec:{audio_codec}) | 大小: {audio_size / 1024 / 1024:.2f}MB"
+            logger.warning(
+                f"[BiliAPI-Play] 🏆 最终选定最优音频流 -> 《{song_title}》 | 音质: {quality_desc} (Codec:{audio_codec}) | 码率: {bitrate_kbps}Kbps | 大小: {audio_size / 1024 / 1024:.2f}MB"
             )
 
             return Response({
@@ -191,6 +193,7 @@ class BiliPlayUrlView(APIView):
                 'quality_desc': quality_desc,
                 'audio_size': audio_size,
                 'audio_codecid': audio_codec,
+                'bitrate': bitrate_kbps,
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
