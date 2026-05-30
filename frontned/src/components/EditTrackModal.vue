@@ -322,6 +322,12 @@ const handleSave = async () => {
       }
     })
 
+    if (res.data.success === false) {
+      const errorMsg = res.data.errors?.join('\n') || res.data.message || '保存失败'
+      showToast(errorMsg, 'error')
+      return
+    }
+
     const updatedTrack = {
       ...props.track,
       title: form.value.title,

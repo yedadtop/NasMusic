@@ -51,7 +51,6 @@ class TrackViewSet(viewsets.ModelViewSet):
         track_instance.search_text = track_instance._build_search_text()
         track_instance.save(update_fields=['search_text'])
 
-        # 【新增】如果没有封面，自动提取音频内嵌封面
         if not track_instance.cover_thumbnail:
             try:
                 extract_and_save_thumbnail(track_instance.file_path, track_instance)
@@ -72,6 +71,8 @@ class TrackViewSet(viewsets.ModelViewSet):
             except Exception as e:
                 print(f"API图片上传处理失败: {e}")
 
+        write_errors = []
+        
         try:
             audio_easy = mutagen.File(track_instance.file_path, easy=True)
             if audio_easy is not None:
@@ -79,21 +80,56 @@ class TrackViewSet(viewsets.ModelViewSet):
                 audio_easy['artist'] = track_instance.artist.name if track_instance.artist else 'Unknown Artist'
                 audio_easy['album'] = track_instance.album.title if track_instance.album else ''
                 audio_easy.save()
-
-            audio_raw = mutagen.File(track_instance.file_path)
-            if audio_raw is not None and track_instance.lyrics:
-                ext = track_instance.format.lower()
-                if ext == 'mp3':
-                    if getattr(audio_raw, 'tags', None) is None:
-                        audio_raw.add_tags()
-                    audio_raw.tags.setall("USLT", [USLT(encoding=3, lang='eng', desc='', text=track_instance.lyrics)])
-                elif ext in ['flac', 'ogg']:
-                    audio_raw["lyrics"] = track_instance.lyrics
-                elif ext == 'm4a':
-                    audio_raw['\xa9lyr'] = track_instance.lyrics
-                audio_raw.save()
+        except PermissionError:
+            write_errors.append(f"无文件写入权限: {track_instance.file_path}")
         except Exception as e:
-            print(f"物理文件标签写入失败: {e}")
+            write_errors.append(f"标签写入失败 (title/artist/album): {str(e)}")
+
+        try:
+            if track_instance.lyrics:
+                audio_raw = mutagen.File(track_instance.file_path)
+                if audio_raw is not None:
+                    ext = track_instance.format.lower()
+                    if ext == 'mp3':
+                        if getattr(audio_raw, 'tags', None) is None:
+                            audio_raw.add_tags()
+                        audio_raw.tags.setall("USLT", [USLT(encoding=3, lang='eng', desc='', text=track_instance.lyrics)])
+                    elif ext in ['flac', 'ogg']:
+                        audio_raw["lyrics"] = track_instance.lyrics
+                    elif ext == 'm4a':
+                        audio_raw['\xa9lyr'] = track_instance.lyrics
+                    audio_raw.save()
+        except PermissionError:
+            write_errors.append(f"无歌词写入权限: {track_instance.file_path}")
+        except Exception as e:
+            write_errors.append(f"歌词写入失败: {str(e)}")
+
+        if write_errors:
+            return None, write_errors
+        
+        return track_instance, []
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        
+        result, errors = self.perform_update(serializer)
+        
+        if errors:
+            return Response({
+                'success': False,
+                'message': '部分操作失败',
+                'errors': errors,
+                'track_id': instance.id
+            }, status=status.HTTP_207_multi_status)
+        
+        return Response({
+            'success': True,
+            'message': '歌曲信息更新成功',
+            'track_id': instance.id
+        })
 
 
 class ArtistViewSet(viewsets.ModelViewSet):
@@ -270,9 +306,6 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
             audio_easy = mutagen.File(dest_path, easy=True)
             print(f"[DEBUG] audio_easy (easy): {audio_easy}")
             if audio_easy is None:
-                audio_easy = mutagen.File(dest_path)
-                print(f"[DEBUG] audio_easy (raw): {audio_easy}")
-            if audio_easy is None:
                 raise Exception(f"无法解析音频文件: {dest_path}")
 
             print(f"[DEBUG] 开始提取标签信息")
@@ -287,22 +320,8 @@ class ChunkedUploadViewSet(viewsets.ViewSet):
             format_str = Path(dest_path).suffix.lower().lstrip('.')
             print(f"[DEBUG] format_str: {format_str}")
 
-            audio_raw = mutagen.File(dest_path)
-            print(f"[DEBUG] audio_raw: {audio_raw}")
-            lyrics_text = ''
-            if audio_raw and hasattr(audio_raw, 'tags') and audio_raw.tags:
-                for key in audio_raw.tags.keys():
-                    if key.startswith('USLT'):
-                        lyrics_text = audio_raw.tags[key].text
-                        break
-                if not lyrics_text:
-                    tags_keys = list(audio_raw.tags.keys())
-                    print(f"[DEBUG] audio_raw tags keys: {tags_keys}")
-                    if 'lyrics' in tags_keys:
-                        lyrics_text = str(audio_raw['lyrics'][0])
-                    elif '\xa9lyr' in tags_keys:
-                        lyrics_text = str(audio_raw['\xa9lyr'][0])
-            print(f"[DEBUG] lyrics_text length: {len(lyrics_text)}")
+            lyrics_text = _get_tag_value(audio_easy, 'lyrics', default='')
+            print(f"[DEBUG] lyrics_text from easy mode: {len(lyrics_text)} chars")
 
             print(f"[DEBUG] 开始处理 Artist")
             primary_artist_obj, _ = Artist.objects.get_or_create(name=raw_artist_string)

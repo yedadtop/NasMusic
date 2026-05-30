@@ -168,6 +168,13 @@
           </div>
           
           <div class="flex items-center space-x-3">
+            <el-tooltip content="中英翻译：开启后，中文歌词将作为翻译，自动与上一句原文时间对齐" placement="bottom">
+              <el-switch 
+                v-model="chineseAsTranslation" 
+                size="small"
+                active-text="中英翻译"
+              />
+            </el-tooltip>
             <span v-if="isMobile" class="text-xs text-blue-600 font-mono font-bold bg-blue-50 px-2 py-1 rounded">
               {{ formatTime(currentTime) }}
             </span>
@@ -211,16 +218,30 @@
             </div>
 
             <!-- 歌词文本 -->
-            <div class="flex-1 px-2 md:px-4 min-w-0 flex items-center">
+            <div class="flex-1 px-2 md:px-4 min-w-0 flex items-center gap-2">
               <input 
                 v-model="item.text" 
                 :disabled="item.deleted"
-                class="w-full bg-transparent border-none outline-none text-[15px] md:text-lg transition-colors placeholder-gray-300"
+                class="flex-1 bg-transparent border-none outline-none text-[15px] md:text-lg transition-colors placeholder-gray-300"
                 :class="{'font-bold text-gray-600': playingIndex === index, 'text-gray-700': playingIndex !== index}"
                 @focus="setEditIndex(index, false)"
                 @click.stop
                 placeholder="在此输入歌词..."
               />
+              
+              <!-- 翻译歌词输入框 -->
+              <div v-if="chineseAsTranslation" class="flex items-center gap-2 w-40 md:w-56 shrink-0">
+                <span class="text-xs text-gray-400 font-bold shrink-0">译:</span>
+                <input 
+                  v-model="item.translation" 
+                  :disabled="item.deleted"
+                  class="flex-1 bg-blue-50/50 border border-blue-100 rounded px-2 py-1 text-[13px] md:text-sm outline-none transition-colors placeholder-blue-200"
+                  :class="{'font-medium text-blue-700': item.translation, 'text-blue-400': !item.translation}"
+                  @focus="setEditIndex(index, false)"
+                  @click.stop
+                  placeholder="中文翻译..."
+                />
+              </div>
             </div>
 
             <!-- 操作按钮 -->
@@ -337,6 +358,7 @@ const autoScroll = ref(false)
 const toastVisible = ref(false)
 const toastMessage = ref('')
 const toastType = ref('success')
+const chineseAsTranslation = ref(false)
 
 const showToast = (message, type = 'success') => {
   toastVisible.value = false
@@ -378,20 +400,98 @@ const loadTrackData = async () => {
   }
 }
 
+const isChineseText = (text = '') => /[\u4e00-\u9fa5]/.test(text)
+
+const createLyricLine = ({ time, timeStr, text = '', translation = '', translationTime = null, translationTimeStr = '' }) => ({
+  time,
+  timeStr,
+  text,
+  translation,
+  translationTime,
+  translationTimeStr,
+  deleted: false
+})
+
+const repairBilingualEntries = (entries) => {
+  const result = []
+  let lastOriginalIndex = -1
+
+  entries.forEach((entry) => {
+    if (!entry.isChinese) {
+      result.push(createLyricLine({
+        time: entry.time,
+        timeStr: entry.timeStr,
+        text: entry.content
+      }))
+      lastOriginalIndex = result.length - 1
+      return
+    }
+
+    if (lastOriginalIndex >= 0 && !result[lastOriginalIndex].translation) {
+      result[lastOriginalIndex].translation = entry.content
+      result[lastOriginalIndex].translationTime = entry.time
+      result[lastOriginalIndex].translationTimeStr = entry.timeStr
+      return
+    }
+
+    result.push(createLyricLine({
+      time: entry.time,
+      timeStr: entry.timeStr,
+      translation: entry.content,
+      translationTime: entry.time,
+      translationTimeStr: entry.timeStr
+    }))
+  })
+
+  return result
+}
+
 const parseRawText = () => {
   if (!rawText.value.trim()) return
   lineRefs.value = []
   const lines = rawText.value.split('\n')
-  lyrics.value = lines.map(line => {
+  const parsedEntries = []
+  // 判断是否包含中文（用于区分原文和译文）
+  const isChineseText = (text) => /[\u4e00-\u9fa5]/.test(text)
+  
+  for (const line of lines) {
     const match = line.match(/^\[(\d{2}:\d{2}(?::\d{2}(?:\.\d{2,3})?|\.\d{2,3}))\](.*)/)
     if (match) {
-      return { time: strToSeconds(match[1]), timeStr: match[1], text: match[2].trim(), deleted: false }
+      const time = strToSeconds(match[1])
+      const timeStr = match[1]
+      const content = match[2].trim()
+      
+      if (content) {
+        const isChinese = isChineseText(content)
+        parsedEntries.push({
+          time,
+          timeStr,
+          content,
+          isChinese
+        })
+      }
     }
-    return { time: 0, timeStr: '00:00.00', text: line.trim(), deleted: false }
-  })
+  }
+  
+  const hasChinese = parsedEntries.some(entry => entry.isChinese)
+  const hasOriginal = parsedEntries.some(entry => !entry.isChinese)
+
+  if (hasChinese && hasOriginal) {
+    lyrics.value = repairBilingualEntries(parsedEntries)
+  } else {
+    lyrics.value = parsedEntries.map(entry => createLyricLine({
+      time: entry.time,
+      timeStr: entry.timeStr,
+      text: entry.content
+    }))
+  }
+  
+  if (lyrics.value.length > 0) {
+    chineseAsTranslation.value = lyrics.value.some(l => l.translation)
+  }
   
   editIndex.value = 0
-  showToast('解析完成，请开始播放并打点！', 'success')
+  showToast('解析并自动校正完成！', 'success')
 }
 
 const handleParse = () => {
@@ -426,6 +526,11 @@ const strToSeconds = (str) => {
 
 const syncTimeFromStr = (index) => {
   lyrics.value[index].time = strToSeconds(lyrics.value[index].timeStr)
+  const prev = lyrics.value[index - 1]
+  if (chineseAsTranslation.value && prev?.translation) {
+    prev.translationTime = lyrics.value[index].time
+    prev.translationTimeStr = lyrics.value[index].timeStr
+  }
   lyrics.value.sort((a, b) => a.time - b.time)
 }
 
@@ -505,8 +610,31 @@ const stampTime = () => {
   const rawTime = audioRef.value.currentTime
   const offsetSeconds = timeOffsetMs.value / 1000
   const time = Math.max(0, rawTime - offsetSeconds)
-  lyrics.value[editIndex.value].time = time
-  lyrics.value[editIndex.value].timeStr = formatTime(time)
+  
+  const currentItem = lyrics.value[editIndex.value]
+  
+  if (chineseAsTranslation.value && !currentItem.text && currentItem.translation) {
+    let prevIndex = editIndex.value - 1
+    while (prevIndex >= 0 && (!lyrics.value[prevIndex].text || lyrics.value[prevIndex].deleted)) {
+      prevIndex--
+    }
+    if (prevIndex >= 0) {
+      currentItem.time = lyrics.value[prevIndex].time
+      currentItem.timeStr = lyrics.value[prevIndex].timeStr
+    } else {
+      currentItem.time = time
+      currentItem.timeStr = formatTime(time)
+    }
+  } else {
+    currentItem.time = time
+    currentItem.timeStr = formatTime(time)
+  }
+
+  const prevItem = lyrics.value[editIndex.value - 1]
+  if (chineseAsTranslation.value && currentItem.text && prevItem?.translation) {
+    prevItem.translationTime = currentItem.time
+    prevItem.translationTimeStr = currentItem.timeStr
+  }
 
   if (editIndex.value < lyrics.value.length - 1) {
     let nextIndex = editIndex.value + 1
@@ -540,7 +668,7 @@ const deleteLine = (index) => {
 }
 
 const addLine = () => {
-  const newLine = { time: 0, timeStr: '00:00.00', text: '', deleted: false }
+  const newLine = { time: 0, timeStr: '00:00.00', text: '', translation: '', translationTime: null, translationTimeStr: '', deleted: false }
   let insertIndex = editIndex.value >= 0 ? editIndex.value + 1 : lyrics.value.length
   if (insertIndex > lyrics.value.length) insertIndex = lyrics.value.length
   
@@ -553,6 +681,11 @@ const resetTimes = () => {
   lyrics.value.forEach(l => {
     l.time = 0
     l.timeStr = '00:00.00'
+    if (chineseAsTranslation.value) {
+      l.translation = ''
+      l.translationTime = null
+      l.translationTimeStr = ''
+    }
   })
   editIndex.value = 0
   showToast('时间已归零', 'success')
@@ -560,19 +693,42 @@ const resetTimes = () => {
 
 const saveLyrics = async () => {
   if (!track.value) return
-  const lrcContent = lyrics.value
-    .filter(l => l.text && !l.deleted)
-    .map(l => `[${l.timeStr}]${l.text}`)
-    .join('\n')
+  
+  let validLines = lyrics.value.filter(l => !l.deleted)
+  
+  let lrcContent
+  if (chineseAsTranslation.value) {
+    lrcContent = validLines
+      .filter(l => l.text || l.translation)
+      .map(l => {
+        if (l.text && l.translation) {
+          const translationTimeStr = l.translationTimeStr || l.timeStr
+          return `[${l.timeStr}]${l.text}\n[${translationTimeStr}]${l.translation}`
+        }
+        return `[${l.translationTimeStr || l.timeStr}]${l.text || l.translation}`
+      }).join('\n')
+  } else {
+    lrcContent = validLines
+      .filter(l => l.text)
+      .map(l => `[${l.timeStr}]${l.text}`)
+      .join('\n')
+  }
   
   saving.value = true
   try {
     const formData = new FormData()
     formData.append('lyrics', lrcContent)
 
-    await request.patch(`/tracks/${track.value.id}/`, formData, {
+    const res = await request.patch(`/tracks/${track.value.id}/`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
+    
+    if (res.data.success === false) {
+      const errorMsg = res.data.errors?.join('\n') || res.data.message || '保存失败'
+      showToast(errorMsg, 'error')
+      return
+    }
+    
     showToast('歌词已同步至音频文件！', 'success')
     rawText.value = lrcContent
     deletedLines.value = []
