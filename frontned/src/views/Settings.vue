@@ -11,7 +11,7 @@
         </button>
         <button
           @click="activeTab = 'scraper'"
-          class="pb-3 px-1 text-[17px] font-semibold border-b-2 transition-colors"
+          class="pb-3 px-1 text-[17px] font-semibold border-b-2 transition-colors mr-6"
           :class="activeTab === 'scraper' ? 'border-[#0071e3] text-[#0071e3]' : 'border-transparent text-[#86868b] hover:text-[#1d1d1f]'"
         >
           刮削
