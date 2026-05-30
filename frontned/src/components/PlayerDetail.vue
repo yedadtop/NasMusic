@@ -45,7 +45,7 @@
 
           <!-- 状态C：无歌词时 -->
           <div v-else class="w-full h-full flex flex-col items-center landscape:items-start md:items-start justify-center px-6 landscape:px-12 landscape:pr-32 md:pl-12 md:pr-32">
-            <div class="md:hidden landscape:hidden w-[70vw] max-w-[320px] aspect-square rounded-2xl overflow-hidden shadow-2xl mb-8 bg-black/20 transition-transform duration-500">
+            <div :class="coverStyleClass" :style="coverSpinStyle" class="md:hidden landscape:hidden w-[70vw] max-w-[320px] aspect-square overflow-hidden shadow-2xl mb-8 bg-black/20" @click="togglePlay">
               <img v-if="player.currentTrack?.track_cover" :src="biliCoverBlobUrl || player.currentTrack?._coverUrlLarge || (player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack.track_cover, 'large') : player.currentTrack.track_cover)" alt="cover" class="w-full h-full object-cover" referrerpolicy="no-referrer" @error="$event.target.src = player.currentTrack?.track_cover || 'https://picsum.photos/600'" />
               <img v-else src="https://picsum.photos/600" alt="cover" class="w-full h-full object-cover" />
             </div>
@@ -60,7 +60,7 @@
       <div class="w-full landscape:w-1/2 md:w-1/2 h-auto landscape:h-full md:h-full flex flex-col items-center justify-end landscape:justify-center md:justify-center px-6 landscape:px-8 md:px-12 pb-10 landscape:pb-4 md:pb-10 pt-8 landscape:pt-4 md:py-10 shrink-0 order-2 landscape:order-1 md:order-1 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent landscape:bg-none md:bg-none">
         <div class="w-full max-w-[360px] flex flex-col">
           
-          <div class="hidden landscape:block md:block landscape:w-[45vh] md:w-full mx-auto rounded-xl overflow-hidden bg-black/20 shrink-0 relative shadow-2xl transition-transform duration-500 hover:scale-[1.02]" style="aspect-ratio: 1 / 1;">
+          <div :class="coverStyleClass" :style="coverSpinStyle" class="hidden landscape:block md:block landscape:w-[45vh] md:w-full mx-auto overflow-hidden bg-black/20 shrink-0 relative shadow-2xl" style="aspect-ratio: 1 / 1;" @click="togglePlay">
             <img v-if="player.currentTrack?.track_cover" :src="biliCoverBlobUrl || player.currentTrack?._coverUrlLarge || (player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack.track_cover, 'large') : player.currentTrack.track_cover)" alt="cover" class="w-full h-full object-cover" referrerpolicy="no-referrer" @error="$event.target.src = player.currentTrack?.track_cover || 'https://picsum.photos/600'" />
             <img v-else src="https://picsum.photos/600" alt="cover" class="w-full h-full object-cover" />
           </div>
@@ -81,12 +81,19 @@
                   v-if="showOptionsMenu"
                   class="absolute right-0 bottom-full mb-2 md:top-full md:mt-2 md:bottom-auto bg-gray-800/90 backdrop-blur-sm rounded-lg shadow-xl py-2 min-w-[120px] z-50"
                 >
-                  <button 
+                  <button
                     class="flex items-center w-full px-4 py-2 text-sm text-white/80 hover:text-white hover:bg-white/10 transition"
                     @click="showEditModal = true; showOptionsMenu = false"
                   >
                     <Icon icon="mdi:pencil" class="w-4 h-4 mr-2" />
                     修改
+                  </button>
+                  <button
+                    class="flex items-center w-full px-4 py-2 text-sm text-white/80 hover:text-white hover:bg-white/10 transition"
+                    @click="handleToggleCoverStyle"
+                  >
+                    <Icon icon="mdi:image-filter-frames" class="w-4 h-4 mr-2" />
+                    切换封面
                   </button>
                 </div>
                 <div v-if="showOptionsMenu" class="fixed inset-0 z-40" @click="showOptionsMenu = false"></div>
@@ -494,6 +501,32 @@ const handleTrackUpdated = (updatedTrack) => {
   emit('trackUpdated')
 }
 
+const handleToggleCoverStyle = () => {
+  player.toggleCoverStyle()
+  showOptionsMenu.value = false
+}
+
+const coverStyleClass = computed(() => {
+  const baseClasses = 'transition-all duration-500 cursor-pointer'
+  switch (player.coverStyleMode) {
+    case 0:
+      return `${baseClasses} rounded-2xl`
+    case 1:
+      return `${baseClasses} rounded-full`
+    case 2:
+      return `${baseClasses} rounded-full cover-spin`
+    default:
+      return `${baseClasses} rounded-2xl`
+  }
+})
+
+const coverSpinStyle = computed(() => {
+  if (player.coverStyleMode === 2) {
+    return { animationPlayState: player.isPlaying ? 'running' : 'paused' }
+  }
+  return {}
+})
+
 </script>
 
 <style scoped>
@@ -512,5 +545,19 @@ const handleTrackUpdated = (updatedTrack) => {
 .fade-slow-enter-from,
 .fade-slow-leave-to {
   opacity: 0;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.cover-spin {
+  /** 旋转速度 */
+  animation: spin 20s linear infinite;
 }
 </style>

@@ -45,6 +45,7 @@ export const usePlayerStore = defineStore('player', () => {
   const loadMoreCallback = ref<(() => Promise<void>) | null>(null)
   const isLoadingMore = ref(false)
   const refreshLibraryTrigger = ref(0)
+  const coverStyleMode = ref(0)
 
   const progress = computed(() => {
     if (!duration.value) return 0
@@ -135,6 +136,10 @@ export const usePlayerStore = defineStore('player', () => {
 
   function triggerLibraryRefresh() {
     refreshLibraryTrigger.value++
+  }
+
+  function toggleCoverStyle() {
+    coverStyleMode.value = (coverStyleMode.value + 1) % 3
   }
 
   async function fetchTrackDetail(id: string | number) {
@@ -335,6 +340,8 @@ export const usePlayerStore = defineStore('player', () => {
     hasNext,
     isLoadingMore,
     refreshLibraryTrigger,
+    coverStyleMode,
+    toggleCoverStyle,
     fetchTrackDetail,
     fetchBilibiliLyrics,
     playTrack,
