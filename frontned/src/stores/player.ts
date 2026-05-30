@@ -142,8 +142,9 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   async function fetchBilibiliLyrics(title: string) {
+    currentTrackDetail.value = null
+    
     if (!title) {
-      currentTrackDetail.value = null
       return
     }
 
