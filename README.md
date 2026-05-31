@@ -43,6 +43,7 @@ NasMusic/
 │   ├── frontned/         # Vue 前端项目
 │   ├── manage.py         # Django 管理脚本
 │   └── requirements.txt   # Python 依赖
+-------------------
 ```
 
 ---
