@@ -467,11 +467,13 @@ const parseRawText = () => {
   lineRefs.value = []
   const lines = rawText.value.split('\n')
   const parsedEntries = []
-  // 判断是否包含中文（用于区分原文和译文）
   const isChineseText = (text) => /[\u4e00-\u9fa5]/.test(text)
   
   for (const line of lines) {
-    const match = line.match(/^\[(\d{2}:\d{2}(?::\d{2}(?:\.\d{2,3})?|\.\d{2,3}))\](.*)/)
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    
+    const match = trimmed.match(/^\[(\d{2}:\d{2}(?::\d{2}(?:\.\d{2,3})?|\.\d{2,3}))\](.*)/)
     if (match) {
       const time = strToSeconds(match[1])
       const timeStr = match[1]
@@ -486,6 +488,14 @@ const parseRawText = () => {
           isChinese
         })
       }
+    } else {
+      const isChinese = isChineseText(trimmed)
+      parsedEntries.push({
+        time: 0,
+        timeStr: '00:00.00',
+        content: trimmed,
+        isChinese
+      })
     }
   }
   
