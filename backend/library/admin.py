@@ -196,12 +196,11 @@ def _extract_embedded_cover(file_path, format_str):
                             mime_type = 'image/jpeg'
 
         elif ext == 'flac':
-            if hasattr(audio, 'tags') and audio.tags:
-                pictures = audio.tags.pictures
-                if pictures and len(pictures) > 0:
-                    pic = pictures[0]
-                    image_data = pic.data
-                    mime_type = pic.mime or 'image/jpeg'
+            pictures = getattr(audio, 'pictures', None) or getattr(audio.tags, 'pictures', None)
+            if pictures and len(pictures) > 0:
+                pic = pictures[0]
+                image_data = pic.data
+                mime_type = pic.mime or 'image/jpeg'
 
         elif ext == 'ogg':
             if hasattr(audio, 'tags') and audio.tags:
