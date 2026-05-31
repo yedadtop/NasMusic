@@ -103,9 +103,9 @@ server {
 
     # 1. 优先处理前端静态文件
     location / {
-        root /www/wwwroot/frontned; # 确认是你前端 dist 的路径
+        root /www/wwwroot/frontned; # 修改为你的前端根目录
         index index.html;
-        try_files $uri $uri/ /index.html; # 支持 Vue/React 路由
+        try_files $uri $uri/ /index.html;
     }
 
     # 2. 转发 API 请求到后端 8000 端口[cite: 1]
@@ -117,7 +117,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
     
-    # 新增：处理 Django 后台管理界面
+    # 3. 处理 Django 后台管理界面
     location /admin/ {
         proxy_pass http://127.0.0.1:8000; 
         proxy_set_header Host $host;
@@ -126,20 +126,18 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
     
-    # 新增：处理不带 api 前缀的音频流请求
+    # 4. 处理不带 api 前缀的音频流请求
     location /stream/ {
         proxy_pass http://127.0.0.1:8000; # 转发给 Django 后端
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # 必须加上这两行，防止 Nginx 缓存音频流导致播放卡顿
         proxy_buffering off;
         proxy_cache off;
     }
 
-    # 3. 后台管理界面和静态资源
+    # 5. 后台管理界面和静态资源
     location /static/ {
         alias /www/wwwroot/NasMusic/static_root/; # 替换为后端收集后的静态路径[cite: 1]
     }
@@ -147,7 +145,7 @@ server {
         alias /www/wwwroot/NasMusic/media/; # 替换为后端封面图路径[cite: 1]
     }
 
-    # 4. 高性能流媒体通道 (X-Accel-Redirect)[cite: 1, 3]
+    # 6. 高性能流媒体通道 (X-Accel-Redirect)[cite: 1, 3]
     location /protected_music/ {
         internal; # 外部无法直接访问
         alias /home/music/; # 替换为你音乐库的真实绝对路径
@@ -155,7 +153,7 @@ server {
         tcp_nopush on;
         default_type audio/mpeg;
         add_header Accept-Ranges bytes;
-        # 【补丁2】防止 Nginx 接管后丢失跨域头，导致前端播放器静默拦截
+        # 防止 Nginx 接管后丢失跨域头，导致前端播放器静默拦截
         add_header Access-Control-Allow-Origin *;
     }
 }
