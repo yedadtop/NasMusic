@@ -45,7 +45,7 @@
 
           <!-- 状态C：无歌词时 -->
           <div v-else class="w-full h-full flex flex-col items-center landscape:items-start md:items-start justify-center px-6 landscape:px-12 landscape:pr-32 md:pl-12 md:pr-32">
-            <div :class="coverStyleClass" :style="coverSpinStyle" class="md:hidden landscape:hidden w-[70vw] max-w-[320px] aspect-square overflow-hidden shadow-2xl mb-8 bg-black/20" @click="togglePlay">
+            <div :class="coverStyleClass" :style="coverSpinStyle" class="player-detail-mobile-cover md:hidden landscape:hidden w-full aspect-square overflow-hidden shadow-2xl mb-8 bg-black/20" @click="togglePlay">
               <img v-if="player.currentTrack?.track_cover" :src="biliCoverBlobUrl || player.currentTrack?._coverUrlLarge || (player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack.track_cover, 'large') : player.currentTrack.track_cover)" alt="cover" class="w-full h-full object-cover" referrerpolicy="no-referrer" @error="$event.target.src = player.currentTrack?.track_cover || 'https://picsum.photos/600'" />
               <img v-else src="https://picsum.photos/600" alt="cover" class="w-full h-full object-cover" />
             </div>
@@ -58,23 +58,26 @@
 
       <!-- 播放控制区 -->
       <div class="w-full landscape:w-1/2 md:w-1/2 h-auto landscape:h-full md:h-full flex flex-col items-center justify-end landscape:justify-center md:justify-center px-6 landscape:px-8 md:px-12 pb-10 landscape:pb-4 md:pb-10 pt-8 landscape:pt-4 md:py-10 shrink-0 order-2 landscape:order-1 md:order-1 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent landscape:bg-none md:bg-none">
-        <div class="w-full max-w-[360px] flex flex-col">
+        <div class="player-detail-stack flex flex-col">
           
-          <div :class="coverStyleClass" :style="coverSpinStyle" class="hidden landscape:block md:block landscape:w-[45vh] md:w-full mx-auto overflow-hidden bg-black/20 shrink-0 relative shadow-2xl" style="aspect-ratio: 1 / 1;" @click="togglePlay">
+          <div :class="coverStyleClass" :style="coverSpinStyle" class="player-detail-cover hidden landscape:block md:block w-full mx-auto overflow-hidden bg-black/20 shrink-0 relative shadow-2xl" style="aspect-ratio: 1 / 1;" @click="togglePlay">
             <img v-if="player.currentTrack?.track_cover" :src="biliCoverBlobUrl || player.currentTrack?._coverUrlLarge || (player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack.track_cover, 'large') : player.currentTrack.track_cover)" alt="cover" class="w-full h-full object-cover" referrerpolicy="no-referrer" @error="$event.target.src = player.currentTrack?.track_cover || 'https://picsum.photos/600'" />
             <img v-else src="https://picsum.photos/600" alt="cover" class="w-full h-full object-cover" />
           </div>
 
-          <div class="mt-0 landscape:mt-3 md:mt-8 flex justify-between items-center w-full">
-            <div class="flex flex-col truncate pr-4 text-left">
-              <h2 class="text-xl landscape:text-xl md:text-2xl font-bold truncate tracking-wide text-white drop-shadow-sm">
+
+
+          <div class="mt-0 landscape:mt-3 md:mt-8 flex justify-center items-center w-full relative">
+            <div class="flex flex-col truncate pr-8 text-left w-full">
+              <h2 class="text-xl landscape:text-xl md:text-2xl font-bold truncate tracking-wide text-white drop-shadow-sm w-full">
                 {{ player.currentTrack?.title || '未知歌曲' }}
               </h2>
-              <div class="text-sm landscape:text-sm md:text-base text-white/70 truncate mt-1 landscape:mt-1 md:mt-1.5 font-medium">
+              <div class="text-sm landscape:text-sm md:text-base text-white/70 truncate mt-1 landscape:mt-1 md:mt-1.5 font-medium w-full">
                 {{ player.currentTrack?.artist_name || '未知歌手' }}
               </div>
             </div>
-            <div class="flex items-center space-x-3 md:space-x-4 text-white/70 shrink-0">
+            
+            <div class="absolute right-0 flex items-center space-x-3 md:space-x-4 text-white/70 shrink-0">
               <div class="relative">
                 <button class="hover:text-white transition" @click="showOptionsMenu = !showOptionsMenu"><Icon icon="mdi:dots-vertical" class="w-4 h-4 md:w-5 md:h-5" /></button>
                 <div 
@@ -100,6 +103,9 @@
               </div>
             </div>
           </div>
+
+
+          
 
           <div class="mt-5 landscape:mt-3 md:mt-7 flex items-center justify-between w-full text-xs landscape:text-xs md:text-sm font-medium text-white/60 space-x-3 landscape:space-x-3 md:space-x-4">
             <span class="w-8 text-left">{{ formatTime(player.currentTime) }}</span>
@@ -530,6 +536,34 @@ const coverSpinStyle = computed(() => {
 </script>
 
 <style scoped>
+.player-detail-stack {
+  --player-detail-width: min(360px, calc(100vw - 3rem));
+  width: var(--player-detail-width);
+  max-width: var(--player-detail-width);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.player-detail-cover,
+.player-detail-mobile-cover {
+  width: var(--player-detail-width, min(360px, calc(100vw - 3rem)));
+  max-width: var(--player-detail-width, min(360px, calc(100vw - 3rem)));
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (orientation: landscape) and (max-width: 767px) {
+  .player-detail-stack {
+    --player-detail-width: min(360px, 45vh, calc(50vw - 4rem));
+  }
+}
+
+@media (min-width: 768px) {
+  .player-detail-stack {
+    --player-detail-width: min(360px, calc(50vw - 6rem));
+  }
+}
+
 .lyrics-scroll {
   -ms-overflow-style: none;
   scrollbar-width: none;
