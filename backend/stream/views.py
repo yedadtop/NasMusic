@@ -2,6 +2,7 @@
 import os
 import re
 import mimetypes
+from urllib.parse import quote
 from django.conf import settings
 from django.http import HttpResponse, StreamingHttpResponse, Http404
 from django.shortcuts import get_object_or_404
@@ -13,7 +14,6 @@ mimetypes.add_type('audio/flac', '.flac')
 mimetypes.add_type('audio/mp4', '.m4a')
 mimetypes.add_type('audio/ogg', '.ogg')
 
-# 正则表达式，用于解析前端传来的 Range 头
 RANGE_RE = re.compile(r'bytes\s*=\s*(\d+)\s*-\s*(\d*)', re.I)
 
 def file_iterator(file_path, chunk_size=8192, offset=0, length=None):
@@ -31,21 +31,22 @@ def file_iterator(file_path, chunk_size=8192, offset=0, length=None):
 
 
 def stream_audio(request, track_id):
-    """
-    智能音频流视图：
-    - DEBUG=False (生产环境): X-Accel-Redirect 交给 Nginx，解决假死。
-    - DEBUG=True  (本地开发): 恢复手动 Range 解析，完美支持前端拖拽测试。
-    """
     track = get_object_or_404(Track, id=track_id)
     file_path = track.file_path
 
     if not os.path.exists(file_path):
         raise Http404("Audio file not found on disk")
 
-    # ==========================================
-    # 场景一：生产环境 -> 高性能 Nginx 代理
-    # ==========================================
-    if not settings.DEBUG:
+    x_real_ip = request.META.get('HTTP_X_REAL_IP')
+    is_nginx_proxy = x_real_ip is not None
+
+    # 打印醒目的分割线和证明信息到后台日志
+    print("\n" + "="*50)
+    print(f"[NasMusic 代理追踪] 🎵 正在请求歌曲 ID: {track_id}")
+    print(f"[NasMusic 代理追踪] 🌐 访客 X-Real-IP: {x_real_ip if x_real_ip else '无 (非 Nginx 转发)'}")
+    print(f"[NasMusic 代理追踪] 🛠️ Nginx 代理状态: {'✅ 已接管' if is_nginx_proxy else '❌ 未接管 (直连/开发模式)'}")
+
+    if is_nginx_proxy or not settings.DEBUG:
         response = HttpResponse()
         
         config = SystemConfig.objects.filter(key='music_path').first()
@@ -55,16 +56,25 @@ def stream_audio(request, track_id):
             rel_path = os.path.relpath(file_path, music_root).replace('\\', '/')
             internal_path = f"/protected_music/{rel_path}"
         else:
-            internal_path = f"/protected_music/{os.path.basename(file_path)}"
+            raise Http404("Audio file is outside of the managed music library")
 
-        response['X-Accel-Redirect'] = internal_path.encode('utf-8')
+        # 修复中文路径 Bug
+        internal_path_safe = quote(internal_path, safe='/')
+
+        response['X-Accel-Redirect'] = internal_path_safe
         response['Content-Type'] = '' 
         response['Access-Control-Allow-Origin'] = '*'
+
+        # 打印最终下发给 Nginx 的指令
+        print(f"[NasMusic 代理追踪] 🚀 下发 X-Accel-Redirect 指令: {internal_path_safe}")
+        print("="*50 + "\n")
+        
         return response
 
-    # ==========================================
-    # 场景二：本地开发 -> 恢复原生的 HTTP 206 断点续传逻辑
-    # ==========================================
+
+    print("[NasMusic 代理追踪] ⚠️ 降级为 Django 原生处理文件流 (耗费性能)")
+    print("="*50 + "\n")
+    
     file_size = os.path.getsize(file_path)
     content_type, _ = mimetypes.guess_type(file_path)
     content_type = content_type or 'application/octet-stream'
@@ -73,7 +83,6 @@ def stream_audio(request, track_id):
     range_match = RANGE_RE.match(range_header)
 
     if range_match:
-        # 处理前端拖拽进度条 (返回 206 Partial Content)
         first_byte, last_byte = range_match.groups()
         first_byte = int(first_byte) if first_byte else 0
         last_byte = int(last_byte) if last_byte else file_size - 1
@@ -95,7 +104,6 @@ def stream_audio(request, track_id):
         response['Content-Length'] = str(length)
         response['Content-Range'] = f'bytes {first_byte}-{last_byte}/{file_size}'
     else:
-        # 处理首次加载 (返回 200 OK)
         response = StreamingHttpResponse(
             file_iterator(file_path, length=file_size),
             status=200,
