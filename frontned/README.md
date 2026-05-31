@@ -57,26 +57,7 @@ npm run type-check
 
 执行 TypeScript 类型检查，确保代码没有类型错误。
 
-## 项目结构
 
-```
-frontned/
-├── public/              # 静态资源目录
-├── src/
-│   ├── assets/          # 资源文件（图片、样式等）
-│   ├── components/      # Vue 组件
-│   ├── views/           # 页面视图
-│   ├── router/          # 路由配置
-│   ├── stores/          # 状态管理（Pinia）
-│   ├── api/             # API 请求封装
-│   ├── types/           # TypeScript 类型定义
-│   └── App.vue          # 根组件
-├── .env.development     # 开发环境变量
-├── .env.production      # 生产环境变量
-├── index.html           # HTML 入口文件
-├── vite.config.ts       # Vite 配置
-└── tsconfig.json        # TypeScript 配置
-```
 
 ## 常用命令
 
