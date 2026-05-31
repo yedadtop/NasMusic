@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from library.models import Track
+from scanner.models import ScanTask
 from .utils import fetch_and_embed_cover, fetch_and_embed_lyrics
 
 

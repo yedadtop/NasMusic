@@ -1,5 +1,6 @@
 import io
 import re
+import base64
 from PIL import Image
 from django.contrib import admin
 from django.http import JsonResponse
@@ -161,6 +162,97 @@ CRITICAL_FIELD_WARNINGS = {
 }
 
 
+def _extract_embedded_cover(file_path, format_str):
+    """
+    提取音频文件中嵌入的封面图片，返回 base64 编码
+    返回格式: {'data': 'base64字符串', 'mime_type': 'image/jpeg', 'size': (width, height)} 或 None
+    """
+    try:
+        audio = mutagen.File(file_path)
+        if audio is None:
+            return None
+
+        ext = format_str.lower()
+        image_data = None
+        mime_type = 'image/jpeg'
+
+        if ext == 'mp3':
+            if getattr(audio, 'tags', None):
+                apic_frames = audio.tags.getall('APIC')
+                if apic_frames and len(apic_frames) > 0:
+                    frame = apic_frames[0]
+                    image_data = frame.data
+                    mime_type = getattr(frame, 'mime', 'image/jpeg') or 'image/jpeg'
+
+        elif ext == 'm4a':
+            if hasattr(audio, 'tags') and 'covr' in audio.tags:
+                cover_list = audio.tags['covr']
+                if cover_list and len(cover_list) > 0:
+                    image_data = bytes(cover_list[0])
+                    if hasattr(cover_list[0], 'imageformat'):
+                        if cover_list[0].imageformat == mutagen.mp4.MP4Cover.FORMAT_PNG:
+                            mime_type = 'image/png'
+                        else:
+                            mime_type = 'image/jpeg'
+
+        elif ext == 'flac':
+            if hasattr(audio, 'tags') and audio.tags:
+                pictures = audio.tags.pictures
+                if pictures and len(pictures) > 0:
+                    pic = pictures[0]
+                    image_data = pic.data
+                    mime_type = pic.mime or 'image/jpeg'
+
+        elif ext == 'ogg':
+            if hasattr(audio, 'tags') and audio.tags:
+                for key, value in audio.tags.items():
+                    if key.lower() == 'metadata_block_picture' or key.lower().startswith('metadata_block_picture'):
+                        try:
+                            from mutagen.flac import Picture
+                            pic_data = value[0] if isinstance(value, list) else value
+                            pic = Picture(pic_data)
+                            image_data = pic.data
+                            mime_type = pic.mime or 'image/jpeg'
+                            break
+                        except Exception as e:
+                            print(f"OGG 封面解析错误: {e}")
+                            continue
+
+        if image_data is None:
+            return None
+
+        img = Image.open(io.BytesIO(image_data))
+        width, height = img.size
+
+        max_size = 150
+        if width > max_size or height > max_size:
+            ratio = min(max_size / width, max_size / height)
+            new_size = (int(width * ratio), int(height * ratio))
+            img.thumbnail(new_size, Image.Resampling.LANCZOS)
+
+        buffer = io.BytesIO()
+        if mime_type.lower().endswith('png'):
+            img.save(buffer, format='PNG')
+        else:
+            img.save(buffer, format='JPEG', quality=85)
+        buffer.seek(0)
+
+        base64_data = base64.b64encode(buffer.read()).decode('utf-8')
+        final_mime = 'image/png' if mime_type.lower().endswith('png') else 'image/jpeg'
+
+        return {
+            'data': base64_data,
+            'mime_type': final_mime,
+            'size': img.size,
+            'original_mime': mime_type
+        }
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {'error': str(e)}
+
+
 def _get_all_metadata(file_path, format_str):
     try:
         metadata_list = []
@@ -234,6 +326,37 @@ def _get_all_metadata(file_path, format_str):
                         metadata_list.append({'key': key.upper(), 'value': str(v), '_idx': idx, 'description': METADATA_FIELD_DESCRIPTIONS.get(key.upper(), f'Vorbis 注释 ({key}) - FLAC/OGG Vorbis Comment 格式的 {key} 字段'), 'warning': CRITICAL_FIELD_WARNINGS.get(key.upper(), None)}); idx += 1
                 else:
                     metadata_list.append({'key': key.upper(), 'value': str(val_list), '_idx': idx, 'description': METADATA_FIELD_DESCRIPTIONS.get(key.upper(), f'Vorbis 注释 ({key}) - FLAC/OGG Vorbis Comment 格式的 {key} 字段'), 'warning': CRITICAL_FIELD_WARNINGS.get(key.upper(), None)}); idx += 1
+
+        cover_info = _extract_embedded_cover(file_path, format_str)
+        if cover_info and 'error' not in cover_info and cover_info.get('data'):
+            metadata_list.insert(0, {
+                'key': '__EMBEDDED_COVER__',
+                'value': f'嵌入封面 ({cover_info["size"][0]}x{cover_info["size"][1]}) - {cover_info["original_mime"]}',
+                '_idx': -1,
+                'description': '原始嵌入封面 - 从音频文件中提取的内置封面图片（非数据库存储的封面）',
+                'warning': None,
+                'cover_data': f'data:{cover_info["mime_type"]};base64,{cover_info["data"]}'
+            })
+        elif cover_info and 'error' in cover_info:
+            metadata_list.insert(0, {
+                'key': '__EMBEDDED_COVER__',
+                'value': f'封面读取失败: {cover_info["error"]}',
+                '_idx': -1,
+                'description': f'读取嵌入封面时发生错误',
+                'warning': None,
+                'cover_data': None,
+                'has_error': True
+            })
+        else:
+            metadata_list.insert(0, {
+                'key': '__EMBEDDED_COVER__',
+                'value': '未找到嵌入封面',
+                '_idx': -1,
+                'description': '此音频文件中没有检测到嵌入的封面图片。您可以通过"新增元数据"功能手动添加封面。',
+                'warning': None,
+                'cover_data': None,
+                'no_cover': True
+            })
 
         return metadata_list
     except Exception as e:

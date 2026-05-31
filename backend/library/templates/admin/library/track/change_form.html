@@ -80,6 +80,8 @@
         }
 
         metadata.sort(function(a, b) {
+            if (a.key === '__EMBEDDED_COVER__') return -1;
+            if (b.key === '__EMBEDDED_COVER__') return 1;
             if (a.key < b.key) return -1;
             if (a.key > b.key) return 1;
             return 0;
@@ -92,9 +94,52 @@
             var idx = item._idx !== undefined ? item._idx : -1;
             var description = item.description || '';
             var warning = item.warning || null;
+            var coverData = item.cover_data || null;
 
             var tr = document.createElement('tr');
             tr.style.borderBottom = '1px solid #f0f0f0';
+
+            if (key === '__EMBEDDED_COVER__') {
+                tr.style.background = '#f8f9fa';
+                var coverHtml = '';
+                var hasError = item.has_error || false;
+                var noCover = item.no_cover || false;
+
+                if (coverData && !hasError) {
+                    coverHtml =
+                        '<div style="text-align: center; margin: 4px 0;">' +
+                        '<img src="' + coverData + '" ' +
+                        'style="max-width: 120px; max-height: 120px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); object-fit: contain;" ' +
+                        'alt="嵌入封面" />' +
+                        '</div>';
+                } else if (hasError) {
+                    coverHtml = '<span style="color: #ba2121; font-size: 11px;">❌ ' + escapeHtml(value) + '</span>';
+                } else if (noCover) {
+                    coverHtml =
+                        '<div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 6px; margin-top: 4px; text-align: center;">' +
+                        '<span style="color: #856404; font-size: 11px;">📷 无嵌入封面</span>' +
+                        '</div>';
+                } else {
+                    coverHtml = '<span style="color: #ba2121; font-size: 11px;">❌ 无法读取</span>';
+                }
+
+                tr.innerHTML =
+                    '<td colspan="2" style="padding: 6px 8px; vertical-align: middle;">' +
+                    '<strong style="font-size: 13px; color: #333;">封面</strong> ' +
+                    '<span style="color: #888; font-size: 11px;">(' + escapeHtml(value) + ')</span>' +
+                    '</td>' +
+                    '<td style="padding: 6px 8px; vertical-align: middle; width: 35%;">' +
+                    '<span style="color: #666; font-size: 11px;">' + escapeHtml(description) + '</span>' +
+                    '</td>' +
+                    '<td style="padding: 6px 8px; text-align: center; vertical-align: middle;">' +
+                    coverHtml +
+                    '</td>' +
+                    '<td style="padding: 6px 8px; text-align: center; vertical-align: middle;">' +
+                    '<span style="color: #999; font-size: 10px;">只读</span>' +
+                    '</td>';
+                tbody.appendChild(tr);
+                continue;
+            }
 
             var descHtml = description ?
                 '<span style="color: #666; font-size: 12px; line-height: 1.4; display: block;">' + escapeHtml(description) + '</span>' :
