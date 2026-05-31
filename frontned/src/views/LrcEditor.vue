@@ -219,12 +219,13 @@
               <!-- 歌词文本 - PC端并排显示，移动端单独一行 -->
               <div class="w-full md:w-auto md:flex-1 px-2 md:px-4 min-w-0 flex items-center gap-2">
                 <input 
-                  v-model="item.text" 
+                  :value="chineseAsTranslation ? item.text : (item.text || item.translation)"
                   :disabled="item.deleted"
                   class="w-full md:flex-1 bg-transparent border-none outline-none text-[15px] md:text-lg transition-colors placeholder-gray-300"
                   :class="{'font-bold text-gray-600': playingIndex === index, 'text-gray-700': playingIndex !== index}"
                   @focus="setEditIndex(index, false)"
                   @click.stop
+                  @input="e => item.text = e.target.value"
                   placeholder="在此输入歌词..."
                 />
                 
@@ -256,6 +257,13 @@
                     @click.stop
                     placeholder="翻译..."
                   />
+                </div>
+              </div>
+
+              <!-- 移动端非翻译模式下的备用显示 -->
+              <div v-if="!chineseAsTranslation && isMobile && !item.text && item.translation" class="w-full px-2 mt-1">
+                <div class="text-[13px] text-gray-500 italic">
+                  {{ item.translation }}
                 </div>
               </div>
             </div>
@@ -416,7 +424,44 @@ const loadTrackData = async () => {
   }
 }
 
+// 判断是否包含中文
 const isChineseText = (text = '') => /[\u4e00-\u9fa5]/.test(text)
+
+// 智能配对中英文（仅在开启翻译按钮时调用）
+const repairBilingualEntries = (entries) => {
+  const result = []
+  let lastOriginalIndex = -1
+
+  entries.forEach((entry) => {
+    // 如果不是中文，一律当作主歌词（原文）
+    if (!entry.isChinese) {
+      result.push(createLyricLine({
+        time: entry.time,
+        timeStr: entry.timeStr,
+        text: entry.content
+      }))
+      lastOriginalIndex = result.length - 1
+      return
+    }
+
+    // 如果是中文，且上一句英文还没有翻译，则自动填入上一句的翻译框
+    if (lastOriginalIndex >= 0 && !result[lastOriginalIndex].translation) {
+      result[lastOriginalIndex].translation = entry.content
+      result[lastOriginalIndex].translationTime = entry.time
+      result[lastOriginalIndex].translationTimeStr = entry.timeStr
+      return
+    }
+
+    // 其他情况（比如一上来就是中文，没有前置英文），单独作为主歌词成行
+    result.push(createLyricLine({
+      time: entry.time,
+      timeStr: entry.timeStr,
+      text: entry.content
+    }))
+  })
+
+  return result
+}
 
 const createLyricLine = ({ time, timeStr, text = '', translation = '', translationTime = null, translationTimeStr = '' }) => ({
   time,
@@ -428,47 +473,15 @@ const createLyricLine = ({ time, timeStr, text = '', translation = '', translati
   deleted: false
 })
 
-const repairBilingualEntries = (entries) => {
-  const result = []
-  let lastOriginalIndex = -1
 
-  entries.forEach((entry) => {
-    if (!entry.isChinese) {
-      result.push(createLyricLine({
-        time: entry.time,
-        timeStr: entry.timeStr,
-        text: entry.content
-      }))
-      lastOriginalIndex = result.length - 1
-      return
-    }
-
-    if (lastOriginalIndex >= 0 && !result[lastOriginalIndex].translation) {
-      result[lastOriginalIndex].translation = entry.content
-      result[lastOriginalIndex].translationTime = entry.time
-      result[lastOriginalIndex].translationTimeStr = entry.timeStr
-      return
-    }
-
-    result.push(createLyricLine({
-      time: entry.time,
-      timeStr: entry.timeStr,
-      translation: entry.content,
-      translationTime: entry.time,
-      translationTimeStr: entry.timeStr
-    }))
-  })
-
-  return result
-}
 
 const parseRawText = () => {
   if (!rawText.value.trim()) return
   lineRefs.value = []
   const lines = rawText.value.split('\n')
   const parsedEntries = []
-  const isChineseText = (text) => /[\u4e00-\u9fa5]/.test(text)
   
+  // 第一步：先单纯地解析出所有行的时间和内容
   for (const line of lines) {
     const trimmed = line.trim()
     if (!trimmed) continue
@@ -480,31 +493,29 @@ const parseRawText = () => {
       const content = match[2].trim()
       
       if (content) {
-        const isChinese = isChineseText(content)
-        parsedEntries.push({
-          time,
-          timeStr,
-          content,
-          isChinese
+        parsedEntries.push({ 
+          time, 
+          timeStr, 
+          content, 
+          isChinese: isChineseText(content) 
         })
       }
     } else {
-      const isChinese = isChineseText(trimmed)
-      parsedEntries.push({
-        time: 0,
-        timeStr: '00:00.00',
-        content: trimmed,
-        isChinese
+      parsedEntries.push({ 
+        time: 0, 
+        timeStr: '00:00.00', 
+        content: trimmed, 
+        isChinese: isChineseText(trimmed) 
       })
     }
   }
   
-  const hasChinese = parsedEntries.some(entry => entry.isChinese)
-  const hasOriginal = parsedEntries.some(entry => !entry.isChinese)
-
-  if (hasChinese && hasOriginal) {
+  // 第二步：根据按钮状态决定如何组装
+  if (chineseAsTranslation.value) {
+    // 按钮开启：使用智能语言识别，自动将中文挂载到上一句英文作为翻译
     lyrics.value = repairBilingualEntries(parsedEntries)
   } else {
+    // 按钮关闭：无视语言，严格逐行显示为独立歌词
     lyrics.value = parsedEntries.map(entry => createLyricLine({
       time: entry.time,
       timeStr: entry.timeStr,
@@ -512,12 +523,8 @@ const parseRawText = () => {
     }))
   }
   
-  if (lyrics.value.length > 0) {
-    chineseAsTranslation.value = lyrics.value.some(l => l.translation)
-  }
-  
   editIndex.value = 0
-  showToast('解析并自动校正完成！', 'success')
+  showToast('解析完成！', 'success')
 }
 
 const handleParse = () => {
@@ -814,6 +821,12 @@ watch(track, (newTrack) => {
   if (newTrack) {
     const artistName = (newTrack.all_artists || []).join('/') || newTrack.artist_name || '未知歌手'
     document.title = `编辑：${newTrack.title} - ${artistName}`
+  }
+})
+
+watch(chineseAsTranslation, () => {
+  if (rawText.value.trim()) {
+    parseRawText()
   }
 })
 </script>
