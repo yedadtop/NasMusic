@@ -99,6 +99,9 @@ class Track(models.Model):
         verbose_name = "歌曲"
         verbose_name_plural = "歌曲"
 
+    def __str__(self):
+        return self.title
+
     def save(self, *args, **kwargs):
         if self.artist and not self.artist.pk: self.artist.save()
         if self.album and not self.album.pk: self.album.save()

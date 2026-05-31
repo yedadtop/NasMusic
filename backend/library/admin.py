@@ -2,6 +2,8 @@ import io
 import re
 from PIL import Image
 from django.contrib import admin
+from django.http import JsonResponse
+from django.urls import path
 from django.utils.html import mark_safe
 from .models import Artist, Album, Track
 from .utils import sync_cover_to_audio_file
@@ -33,6 +35,325 @@ def parse_artists(artist_string):
     return artists if artists else ["Unknown Artist"]
 
 
+# 新增：Mp3tag 显示名称与 ID3 帧的映射关系
+MP3TAG_TO_ID3 = {
+    'ALBUM': 'TALB', 'ARTIST': 'TPE1', 'ALBUMARTIST': 'TPE2',
+    'TITLE': 'TIT2', 'TRACK': 'TRCK', 'GENRE': 'TCON',
+    'YEAR': 'TDRC', 'COMMENT': 'COMM', 'UNSYNCEDLYRICS': 'USLT',
+    'COMPOSER': 'TCOM', 'DISC': 'TPOS'
+}
+ID3_TO_MP3TAG = {v: k for k, v in MP3TAG_TO_ID3.items()}
+ID3_TO_MP3TAG['TYER'] = 'YEAR'  # 兼容旧版 ID3v2.3 年份标签
+
+_INFO_KEYS = frozenset({'BITRATE', 'SAMPLE_RATE', 'LENGTH', 'CHANNELS', 'BITS_PER_SAMPLE'})
+
+
+def _get_all_metadata(file_path, format_str):
+    try:
+        metadata_list = []
+        ext = format_str.lower()
+        idx = 0
+
+        audio_raw = mutagen.File(file_path)
+        if audio_raw is None:
+            return metadata_list
+
+        info = audio_raw.info
+        if info:
+            if hasattr(info, 'bitrate') and info.bitrate:
+                metadata_list.append({'key': 'BITRATE', 'value': str(info.bitrate), '_idx': idx}); idx += 1
+            if hasattr(info, 'sample_rate') and info.sample_rate:
+                metadata_list.append({'key': 'SAMPLE_RATE', 'value': str(info.sample_rate), '_idx': idx}); idx += 1
+            if hasattr(info, 'length') and info.length:
+                metadata_list.append({'key': 'LENGTH', 'value': f"{info.length:.2f}", '_idx': idx}); idx += 1
+            if hasattr(info, 'channels') and info.channels:
+                metadata_list.append({'key': 'CHANNELS', 'value': str(info.channels), '_idx': idx}); idx += 1
+            if hasattr(info, 'bits_per_sample') and info.bits_per_sample:
+                metadata_list.append({'key': 'BITS_PER_SAMPLE', 'value': str(info.bits_per_sample), '_idx': idx}); idx += 1
+
+        if ext == 'mp3':
+            if getattr(audio_raw, 'tags', None):
+                for frame in audio_raw.tags.values():
+                    frame_id = frame.FrameID
+                    if frame_id.startswith('APIC'):
+                        continue
+
+                    if frame_id == 'TXXX':
+                        key_name = frame.desc.upper() if hasattr(frame, 'desc') else 'TXXX'
+                        val = str(frame.text[0]) if hasattr(frame, 'text') and frame.text else str(frame)
+                        metadata_list.append({'key': key_name, 'value': val, '_idx': idx}); idx += 1
+                    elif frame_id == 'USLT':
+                        val = str(frame.text) if hasattr(frame, 'text') else str(frame)
+                        metadata_list.append({'key': 'UNSYNCEDLYRICS', 'value': val, '_idx': idx}); idx += 1
+                    elif frame_id == 'COMM':
+                        val = str(frame.text[0]) if hasattr(frame, 'text') and frame.text else str(frame)
+                        metadata_list.append({'key': 'COMMENT', 'value': val, '_idx': idx}); idx += 1
+                    else:
+                        key_name = ID3_TO_MP3TAG.get(frame_id, frame_id)
+                        if hasattr(frame, 'text') and isinstance(frame.text, list):
+                            for text_val in frame.text:
+                                metadata_list.append({'key': key_name, 'value': str(text_val), '_idx': idx}); idx += 1
+                        else:
+                            metadata_list.append({'key': key_name, 'value': str(frame), '_idx': idx}); idx += 1
+
+        elif ext == 'm4a':
+            audio_easy = mutagen.File(file_path, easy=True)
+            if audio_easy and getattr(audio_easy, 'tags', None):
+                for k, v in audio_easy.tags.items():
+                    for val in v:
+                        metadata_list.append({'key': k.upper(), 'value': str(val), '_idx': idx}); idx += 1
+            extra_keys = ['COMPATIBLE_BRANDS', 'ENCODERSETTINGS', 'HW', 'MAJOR_BRAND', 'MAXRATE', 'MINOR_VERSION', 'TE_IS_REENCODE']
+            for key in extra_keys:
+                if key in (audio_raw.tags or {}):
+                    val = audio_raw.tags[key]
+                    if isinstance(val, list):
+                        for v in val:
+                            metadata_list.append({'key': key, 'value': str(v), '_idx': idx}); idx += 1
+                    else:
+                        metadata_list.append({'key': key, 'value': str(val), '_idx': idx}); idx += 1
+
+        elif ext in ['flac', 'ogg']:
+            for key, val_list in (audio_raw.tags or {}).items():
+                if key.lower().startswith('metadata_block_picture'):
+                    continue
+                if isinstance(val_list, list):
+                    for v in val_list:
+                        metadata_list.append({'key': key.upper(), 'value': str(v), '_idx': idx}); idx += 1
+                else:
+                    metadata_list.append({'key': key.upper(), 'value': str(val_list), '_idx': idx}); idx += 1
+
+        return metadata_list
+    except Exception as e:
+        return [{'key': '_error', 'value': str(e)}]
+
+
+def _find_mp3_frame_by_idx(audio_tags, target_idx):
+    seen = 0
+    for fk, f in audio_tags.items():
+        if fk.startswith('APIC'):
+            continue
+        if seen == target_idx:
+            return fk, f
+        seen += 1
+    return None, None
+
+
+def _set_metadata_entry(file_path, format_str, key, value, idx=None):
+    try:
+        key_upper = key.upper()
+        ext = format_str.lower()
+
+        audio_easy = mutagen.File(file_path, easy=True)
+        if audio_easy is not None and getattr(audio_easy, 'tags', None) and key.lower() in audio_easy.tags.valid_keys:
+            if idx is not None:
+                current_values = list(audio_easy.tags.get(key.lower(), []))
+                if 0 <= idx < len(current_values):
+                    current_values[idx] = value
+                    audio_easy[key.lower()] = current_values
+                else:
+                    audio_easy[key.lower()] = value
+            else:
+                audio_easy[key.lower()] = value
+            audio_easy.save()
+            return True, '写入成功'
+
+        audio_raw = mutagen.File(file_path)
+        if audio_raw is None:
+            return False, '无法读取音频文件'
+
+        if ext == 'mp3':
+            from mutagen import id3 as id3_module
+            if not getattr(audio_raw, 'tags', None):
+                audio_raw.add_tags()
+
+            if idx is not None:
+                fk, target_frame = _find_mp3_frame_by_idx(audio_raw.tags, idx)
+                if target_frame is not None:
+                    fid = target_frame.FrameID
+                    if fid == 'TXXX':
+                        old_desc = target_frame.desc if hasattr(target_frame, 'desc') else ''
+                        audio_raw.tags.delall(fk)
+                        audio_raw.tags.add(id3_module.TXXX(encoding=3, desc=old_desc, text=[value]))
+                    elif fid == 'COMM':
+                        lang = getattr(target_frame, 'lang', 'eng')
+                        desc = getattr(target_frame, 'desc', '')
+                        audio_raw.tags.delall(fk)
+                        audio_raw.tags.add(id3_module.COMM(encoding=3, lang=lang, desc=desc, text=value))
+                    elif fid == 'USLT':
+                        lang = getattr(target_frame, 'lang', 'eng')
+                        desc = getattr(target_frame, 'desc', '')
+                        audio_raw.tags.delall(fk)
+                        audio_raw.tags.add(id3_module.USLT(encoding=3, lang=lang, desc=desc, text=value))
+                    else:
+                        frame_cls = getattr(id3_module, fid, None)
+                        if frame_cls:
+                            try:
+                                target_frame.text = [value]
+                            except Exception:
+                                try:
+                                    target_frame.text = value
+                                except Exception:
+                                    audio_raw.tags.delall(fk)
+                                    audio_raw.tags.add(frame_cls(encoding=3, text=[value]))
+                    audio_raw.save()
+                    return True, '写入成功'
+                else:
+                    return False, f'找不到索引为 {idx} 的帧'
+
+            if key_upper in MP3TAG_TO_ID3:
+                frame_id = MP3TAG_TO_ID3[key_upper]
+                audio_raw.tags.delall(frame_id)
+                frame_cls = getattr(id3_module, frame_id, None)
+                if frame_cls:
+                    if frame_id in ['COMM', 'USLT']:
+                        audio_raw.tags.add(frame_cls(encoding=3, lang='eng', desc='', text=value))
+                    else:
+                        audio_raw.tags.add(frame_cls(encoding=3, text=[value]))
+            else:
+                to_delete = [fk for fk, f in audio_raw.tags.items() if fk.startswith('TXXX') and hasattr(f, 'desc') and f.desc.upper() == key_upper]
+                for fk in to_delete:
+                    audio_raw.tags.delall(fk)
+                audio_raw.tags.add(id3_module.TXXX(encoding=3, desc=key_upper, text=[value]))
+            audio_raw.save()
+
+        elif ext in ['flac', 'ogg']:
+            if key_upper in (audio_raw.tags or {}):
+                current = audio_raw.tags[key_upper]
+                if isinstance(current, list) and idx is not None and 0 <= idx < len(current):
+                    current[idx] = value
+                else:
+                    audio_raw[key_upper] = value
+            else:
+                audio_raw[key_upper] = value
+            audio_raw.save()
+        elif ext == 'm4a':
+            if key in (audio_raw.tags or {}):
+                current = audio_raw.tags[key]
+                if isinstance(current, list) and idx is not None and 0 <= idx < len(current):
+                    current[idx] = value
+                else:
+                    audio_raw[key] = value
+            else:
+                audio_raw[key] = value
+            audio_raw.save()
+        return True, '写入成功'
+    except Exception as e:
+        return False, str(e)
+
+
+def _count_info_offset(file_path):
+    try:
+        audio = mutagen.File(file_path)
+        if audio is None:
+            return 0
+        info = audio.info
+        count = 0
+        if info:
+            if hasattr(info, 'bitrate') and info.bitrate: count += 1
+            if hasattr(info, 'sample_rate') and info.sample_rate: count += 1
+            if hasattr(info, 'length') and info.length: count += 1
+            if hasattr(info, 'channels') and info.channels: count += 1
+            if hasattr(info, 'bits_per_sample') and info.bits_per_sample: count += 1
+        return count
+    except Exception:
+        return 0
+
+
+def _delete_metadata_entry(file_path, format_str, key, idx=None):
+    try:
+        key_upper = key.upper()
+
+        if key_upper in _INFO_KEYS:
+            return True, '已忽略（该字段为文件技术属性，非存储标签）'
+
+        ext = format_str.lower()
+        info_offset = _count_info_offset(file_path)
+
+        audio_easy = mutagen.File(file_path, easy=True)
+        if audio_easy is not None and getattr(audio_easy, 'tags', None) and key.lower() in audio_easy.tags:
+            easy_tag_idx = idx - info_offset if idx is not None else None
+            if easy_tag_idx is not None and easy_tag_idx >= 0:
+                current_values = list(audio_easy.tags.get(key.lower(), []))
+                if 0 <= easy_tag_idx < len(current_values):
+                    current_values.pop(easy_tag_idx)
+                    if current_values:
+                        audio_easy[key.lower()] = current_values
+                    else:
+                        del audio_easy[key.lower()]
+                else:
+                    del audio_easy[key.lower()]
+            else:
+                del audio_easy[key.lower()]
+            audio_easy.save()
+            return True, '删除成功'
+
+        audio_raw = mutagen.File(file_path)
+        if audio_raw is None:
+            return False, '无法读取音频文件'
+
+        if ext == 'mp3':
+            if getattr(audio_raw, 'tags', None):
+                tag_idx = idx - info_offset if idx is not None else None
+                if tag_idx is not None and tag_idx >= 0:
+                    fk, target_frame = _find_mp3_frame_by_idx(audio_raw.tags, tag_idx)
+                    if target_frame is not None:
+                        audio_raw.tags.delall(fk)
+                        audio_raw.save()
+                        return True, '删除成功'
+                    else:
+                        return False, f'找不到索引为 {idx} 的标签'
+
+                if key_upper in MP3TAG_TO_ID3:
+                    frame_id = MP3TAG_TO_ID3[key_upper]
+                    audio_raw.tags.delall(frame_id)
+                    if key_upper == 'YEAR':
+                        audio_raw.tags.delall('TYER')
+                else:
+                    to_delete = [fk for fk, f in audio_raw.tags.items() if fk.startswith('TXXX') and hasattr(f, 'desc') and f.desc.upper() == key_upper]
+                    for fk in to_delete:
+                        audio_raw.tags.delall(fk)
+                audio_raw.save()
+        elif ext in ['flac', 'ogg']:
+            if key_upper in (audio_raw.tags or {}):
+                current = audio_raw.tags[key_upper]
+                if isinstance(current, list) and idx is not None:
+                    tag_idx = idx - info_offset
+                    if 0 <= tag_idx < len(current):
+                        current.pop(tag_idx)
+                        if current:
+                            audio_raw.tags[key_upper] = current
+                        else:
+                            del audio_raw.tags[key_upper]
+                        audio_raw.save()
+                        return True, '删除成功'
+                del audio_raw.tags[key_upper]
+                audio_raw.save()
+        elif ext == 'm4a':
+            extra_keys = ['COMPATIBLE_BRANDS', 'ENCODERSETTINGS', 'HW', 'MAJOR_BRAND', 'MAXRATE', 'MINOR_VERSION', 'TE_IS_REENCODE']
+            if key in extra_keys:
+                if key in (audio_raw.tags or {}):
+                    current = audio_raw.tags[key]
+                    if isinstance(current, list) and idx is not None:
+                        if 0 <= idx < len(current):
+                            current.pop(idx)
+                            if current:
+                                audio_raw.tags[key] = current
+                            else:
+                                del audio_raw.tags[key]
+                        else:
+                            del audio_raw.tags[key]
+                    else:
+                        del audio_raw.tags[key]
+                    audio_raw.save()
+                    return True, '删除成功'
+            elif key in (audio_raw.tags or {}):
+                del audio_raw.tags[key]
+                audio_raw.save()
+        return True, '删除成功'
+    except Exception as e:
+        return False, str(e)
+
+
 @admin.register(Artist)
 class ArtistAdmin(admin.ModelAdmin):
     list_display = ('name',)
@@ -57,6 +378,51 @@ class TrackAdmin(admin.ModelAdmin):
 
     readonly_fields = ('cover_preview', 'file_path', 'duration', 'format')
     autocomplete_fields = ('artist', 'album', 'artists')
+    change_form_template = 'admin/library/track/change_form.html'
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('<int:object_id>/metadata/',
+                 self.admin_site.admin_view(self.metadata_view),
+                 name='library_track_metadata'),
+        ]
+        return custom_urls + urls
+
+    def metadata_view(self, request, object_id):
+        from django.shortcuts import get_object_or_404
+        track = get_object_or_404(Track, pk=object_id)
+
+        if request.method == 'GET':
+            metadata = _get_all_metadata(track.file_path, track.format)
+            return JsonResponse({'success': True, 'metadata': metadata})
+
+        if request.method == 'POST':
+            action = request.POST.get('action', '').strip()
+            key = request.POST.get('key', '').strip()
+            value = request.POST.get('value', '').strip()
+            idx_str = request.POST.get('idx', '').strip()
+            idx = int(idx_str) if idx_str.isdigit() else None
+
+            if not key:
+                return JsonResponse({'success': False, 'message': '键名不能为空'})
+
+            if action == 'add':
+                if not value:
+                    return JsonResponse({'success': False, 'message': '值不能为空'})
+                ok, msg = _set_metadata_entry(track.file_path, track.format, key, value)
+            elif action == 'delete':
+                ok, msg = _delete_metadata_entry(track.file_path, track.format, key, idx=idx)
+            else:
+                return JsonResponse({'success': False, 'message': f'未知操作: {action}'})
+
+            if ok:
+                metadata = _get_all_metadata(track.file_path, track.format)
+                return JsonResponse({'success': True, 'message': msg, 'metadata': metadata})
+            else:
+                return JsonResponse({'success': False, 'message': msg})
+
+        return JsonResponse({'success': False, 'message': '不支持的请求方法'})
 
     def display_all_artists(self, obj):
         return ', '.join([a.name for a in obj.artists.all()])

@@ -1,0 +1,215 @@
+{% extends "admin/change_form.html" %}
+
+{% block after_related_objects %}
+{{ block.super }}
+<div class="module aligned" id="metadata-section">
+    <h2>音频文件元数据</h2>
+    <div class="form-row">
+        <div id="metadata-status" style="padding: 8px 0; display: none;"></div>
+        <table id="metadata-table" style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
+            <thead>
+                <tr>
+                    <th style="text-align: left; padding: 8px; border-bottom: 2px solid #eee; width: 40%;">标签键</th>
+                    <th style="text-align: left; padding: 8px; border-bottom: 2px solid #eee; width: 45%;">值</th>
+                    <th style="text-align: center; padding: 8px; border-bottom: 2px solid #eee; width: 15%;">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr id="metadata-loading">
+                    <td colspan="3" style="padding: 16px; text-align: center; color: #999;">正在读取元数据...</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div style="background: #f8f8f8; border: 1px solid #eee; border-radius: 4px; padding: 12px; margin-top: 8px;">
+            <strong style="display: block; margin-bottom: 8px;">新增元数据</strong>
+            <div style="display: flex; gap: 8px; align-items: flex-end;">
+                <div style="flex: 1;">
+                    <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">标签键</label>
+                    <input type="text" id="meta-key" placeholder="例如: ALBUM 或 GENRE" style="width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px;" />
+                </div>
+                <div style="flex: 2;">
+                    <label style="display: block; font-size: 11px; color: #666; margin-bottom: 2px;">值</label>
+                    <input type="text" id="meta-value" placeholder="标签值" style="width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px;" />
+                </div>
+                <div>
+                    <button type="button" id="meta-add-btn" class="default" style="white-space: nowrap; padding: 6px 20px;">新增</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block admin_change_form_document_ready %}
+{{ block.super }}
+<script>
+(function() {
+    const metaUrl = '{% url "admin:library_track_metadata" object_id %}';
+    const statusEl = document.getElementById('metadata-status');
+    const tbody = document.querySelector('#metadata-table tbody');
+    const keyInput = document.getElementById('meta-key');
+    const valueInput = document.getElementById('meta-value');
+    const addBtn = document.getElementById('meta-add-btn');
+
+    function showStatus(msg, isError) {
+        statusEl.style.display = 'block';
+        statusEl.style.color = isError ? '#ba2121' : '#147a3b';
+        statusEl.style.background = isError ? '#fbe9e9' : '#e9f7ef';
+        statusEl.style.padding = '8px 12px';
+        statusEl.style.borderRadius = '4px';
+        statusEl.style.marginBottom = '8px';
+        statusEl.textContent = msg;
+        setTimeout(function() { statusEl.style.display = 'none'; }, 4000);
+    }
+
+    function renderTable(metadata) {
+        tbody.innerHTML = '';
+
+        if (metadata.length === 1 && metadata[0].key === '_error') {
+            tbody.innerHTML = '<tr><td colspan="3" style="padding: 16px; text-align: center; color: #ba2121;">读取错误: ' + escapeHtml(metadata[0].value) + '</td></tr>';
+            return;
+        }
+
+        if (!metadata || metadata.length === 0) {
+            var tr = document.createElement('tr');
+            tr.innerHTML = '<td colspan="3" style="padding: 16px; text-align: center; color: #999;">暂无元数据</td>';
+            tbody.appendChild(tr);
+            return;
+        }
+
+        metadata.sort(function(a, b) {
+            if (a.key < b.key) return -1;
+            if (a.key > b.key) return 1;
+            return 0;
+        });
+
+        for (var i = 0; i < metadata.length; i++) {
+            var item = metadata[i];
+            var key = item.key;
+            var value = item.value;
+            var idx = item._idx !== undefined ? item._idx : -1;
+
+            var tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid #f0f0f0';
+            tr.innerHTML =
+                '<td style="padding: 8px; font-weight: 600; font-family: \'Microsoft YaHei\', \'微软雅黑\', sans-serif; word-break: break-all;">' + escapeHtml(key) + '</td>' +
+                '<td style="padding: 8px; word-break: break-all; color: #555; font-family: \'Microsoft YaHei\', \'微软雅黑\', sans-serif;">' + escapeHtml(value) + '</td>' +
+                '<td style="padding: 8px; text-align: center;">' +
+                '<button type="button" class="button meta-del-btn" data-key="' + escapeHtml(key) + '" data-idx="' + idx + '" style="padding: 4px 12px; font-size: 12px; background: #ba2121; color: #fff;">删除</button>' +
+                '</td>';
+            tbody.appendChild(tr);
+        }
+        bindDeleteButtons();
+    }
+
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+    }
+
+    function resetAddForm() {
+        keyInput.value = '';
+        valueInput.value = '';
+    }
+
+    function sendRequest(action, key, value, idx) {
+        var formData = new FormData();
+        formData.append('action', action);
+        formData.append('key', key);
+        if (value !== undefined && value !== null) {
+            formData.append('value', value);
+        }
+        if (idx !== null && idx !== undefined && idx >= 0) {
+            formData.append('idx', idx);
+        }
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', metaUrl, true);
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+        xhr.onload = function() {
+            try {
+                var resp = JSON.parse(xhr.responseText);
+                if (resp.success) {
+                    showStatus(resp.message || '操作成功', false);
+                    renderTable(resp.metadata);
+                    if (action === 'add') resetAddForm();
+                } else {
+                    showStatus(resp.message || '操作失败', true);
+                }
+            } catch (e) {
+                showStatus('服务器返回异常: ' + xhr.responseText, true);
+            }
+        };
+
+        xhr.onerror = function() {
+            showStatus('网络请求失败，请检查连接', true);
+        };
+
+        xhr.send(formData);
+    }
+
+    function bindDeleteButtons() {
+        var delBtns = tbody.querySelectorAll('.meta-del-btn');
+
+        for (var j = 0; j < delBtns.length; j++) {
+            delBtns[j].addEventListener('click', function(e) {
+                e.preventDefault();
+                var key = this.getAttribute('data-key');
+                var idx = parseInt(this.getAttribute('data-idx'), 10);
+                if (!confirm('确定要删除 "' + key + '" 吗？此操作不可撤销。')) return;
+                sendRequest('delete', key, '', idx);
+            });
+        }
+    }
+
+    addBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        var key = keyInput.value.trim();
+        var value = valueInput.value.trim();
+
+        if (!key) { showStatus('请输入标签键', true); return; }
+        if (!value) { showStatus('请输入值', true); return; }
+
+        sendRequest('add', key, value, null);
+    });
+
+    keyInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            valueInput.focus();
+        }
+    });
+
+    valueInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addBtn.click();
+        }
+    });
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', metaUrl, true);
+    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    xhr.onload = function() {
+        try {
+            var resp = JSON.parse(xhr.responseText);
+            if (resp.success) {
+                renderTable(resp.metadata);
+            } else {
+                tbody.innerHTML = '<tr><td colspan="3" style="padding: 16px; text-align: center; color: #ba2121;">读取元数据失败</td></tr>';
+            }
+        } catch (e) {
+            tbody.innerHTML = '<tr><td colspan="3" style="padding: 16px; text-align: center; color: #ba2121;">解析元数据失败</td></tr>';
+        }
+    };
+    xhr.onerror = function() {
+        tbody.innerHTML = '<tr><td colspan="3" style="padding: 16px; text-align: center; color: #ba2121;">网络请求失败</td></tr>';
+    };
+    xhr.send();
+})();
+</script>
+{% endblock %}
