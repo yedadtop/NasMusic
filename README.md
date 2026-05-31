@@ -22,18 +22,9 @@
 ## 功能特性
 
 - **音乐扫描入库**：自动扫描本地音乐文件夹，读取音频文件标签（ID3、Vorbis）并提取封面
-- **多歌手支持**：一首歌曲支持多个艺人演唱（通过 ForeignKey + ManyToMany 关系实现）
-- **智能歌手拆分**：自动拆分多艺人标签，支持 `/`, `,`, `&`, `-`, `feat.`, `ft.`, `;`, `|`, `+`, `_` 以及中文分隔符（空格、顿号、间隔号）
-- **分页与搜索**：支持歌曲、艺人、专辑的模糊搜索和分页浏览
-- **音频流媒体**：支持 HTTP 206 Partial Content，本地开发完美支持 HTML5 audio 标签拖拽，生产环境使用 Nginx X-Accel-Redirect 提升性能
 - **标签同步**：修改歌曲信息后自动同步写入物理音频文件的 ID3/Vorbis 标签
-- **歌词同步**：支持歌词写入 MP3（USLT）、FLAC、OGG、M4A 格式
-- **自动清理**：删除歌曲时自动清理孤立的艺人和专辑记录
 - **回收站功能**：删除的文件自动移入 `.trash` 目录，支持恢复和彻底删除
-- **分片上传**：支持大文件分片上传，断点续传，适合内网传输大音频文件
 - **封面/歌词刮削**：支持从网络自动刮削歌曲封面和歌词（单首/批量）
-- **系统配置**：提供 API 配置音乐库路径等系统参数
-- **增量扫描**：智能检测路径变化，自动判断全量扫描或增量扫描
 - **音乐信息编辑**：支持在线编辑歌曲标题、歌手、专辑、歌词、封面等信息
 - **歌词时间轴打点**：支持键盘快捷键（Space播放/暂停、Enter打点跳下行）精确定位歌词时间轴，可视化编辑 LRC 歌词并同步写入音频文件
 
@@ -46,45 +37,10 @@ NasMusic/
 ├── backend/
 │   ├── NasMusic/         # Django 项目配置
 │   ├── library/          # 核心音乐库管理
-│   │   ├── models.py     # Track, Artist, Album 模型
-│   │   ├── views.py      # REST API ViewSet
-│   │   ├── serializers.py# DRF 序列化器
-│   │   ├── admin.py      # Django 后台管理
-│   │   ├── utils.py      # 封面同步工具
-│   │   ├── apps.py       # 应用配置
-│   │   ├── tests.py      # 单元测试
-│   │   └── migrations/   # 数据库迁移
 │   ├── scanner/          # 音乐扫描入库
-│   │   ├── models.py     # ScanTask, SystemConfig 模型
-│   │   ├── views.py      # 扫描任务 API
-│   │   ├── tasks.py      # 异步扫描任务
-│   │   ├── utils.py      # 音频标签解析
-│   │   ├── urls.py       # 路由配置
-│   │   ├── admin.py      # 后台管理
-│   │   ├── apps.py       # 应用配置
-│   │   ├── tests.py      # 单元测试
-│   │   └── migrations/   # 数据库迁移
 │   ├── stream/           # 音频流媒体服务
-│   │   ├── models.py     # 流媒体相关模型
-│   │   ├── views.py      # 分段流媒体支持
-│   │   ├── urls.py       # 路由配置
-│   │   ├── admin.py      # 后台管理
-│   │   ├── apps.py       # 应用配置
-│   │   ├── tests.py      # 单元测试
-│   │   └── migrations/   # 数据库迁移
 │   ├── scraper/          # 音乐信息刮削器
-│   │   ├── models.py     # 刮削器模型
-│   │   ├── views.py      # 刮削 API
-│   │   ├── bilibili_views.py  # B站视频刮削
-│   │   ├── serializers.py # DRF 序列化器
-│   │   ├── utils.py      # 刮削工具
-│   │   ├── urls.py       # 路由配置
-│   │   ├── admin.py      # 后台管理
-│   │   ├── apps.py       # 应用配置
-│   │   ├── tests.py      # 单元测试
-│   │   └── migrations/   # 数据库迁移
 │   ├── frontned/         # Vue 前端项目
-│   ├── export_code.py    # 导出工具
 │   ├── manage.py         # Django 管理脚本
 │   └── requirements.txt   # Python 依赖
 ```
@@ -93,32 +49,39 @@ NasMusic/
 
 ## 快速开始
 
-### 1. 安装依赖
+### 1. 创建虚拟环境
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+### 2. 安装依赖
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. 数据库迁移
+### 3. 数据库迁移
 
 ```bash
 python manage.py makemigrations
 python manage.py migrate
 ```
 
-### 3. 创建超级用户
+### 4. 创建超级用户
 
 ```bash
 python manage.py createsuperuser
 ```
 
-### 4. 启动服务
+### 5. 启动服务
 
 ```bash
 python manage.py runserver
 ```
 
-### 5. 扫描音乐库
+### 6. 扫描音乐库
 
 ```
 在设置页面填入音乐库路径，点击扫描按钮即可开始扫描。
