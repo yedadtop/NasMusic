@@ -33,7 +33,7 @@ npm run dev
 
 ### 配置后端 API 地址
 
-开发环境下，前端默认访问 `http://localhost:8000` 的后端 API。如果后端运行在不同的地址，请修改 `C:\D\Mass\My_Code\python\NasMusic\frontned\src\api\index.ts` 文件：
+开发环境下，前端默认访问 `http://localhost:8000` 的后端 API。如果后端运行在不同的地址，请修改 `frontned\src\api\index.ts` 文件：
 
 ```
 export const STREAM_BASE_URL = 'http://127.0.0.1:8000'
