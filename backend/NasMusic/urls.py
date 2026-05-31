@@ -5,6 +5,10 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from library.views import TrackViewSet, ArtistViewSet, AlbumViewSet, ChunkedUploadViewSet
 
+admin.site.site_header = 'NasMusic 管理后台'
+admin.site.site_title = 'NasMusic 管理'
+admin.site.index_title = 'NasMusic 管理'
+
 router = DefaultRouter()
 router.register(r'tracks', TrackViewSet)
 router.register(r'artists', ArtistViewSet)

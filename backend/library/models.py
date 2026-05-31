@@ -65,11 +65,21 @@ def move_to_trash(file_path):
 
 class Artist(models.Model):
     name = models.CharField(max_length=255, unique=True, verbose_name="歌手名")
+
+    class Meta:
+        verbose_name = "歌手"
+        verbose_name_plural = "歌手"
+
     def __str__(self): return self.name
 
 class Album(models.Model):
     title = models.CharField(max_length=255, verbose_name="专辑名")
     artist = models.ForeignKey(Artist, on_delete=models.CASCADE, related_name='albums', verbose_name="所属歌手")
+
+    class Meta:
+        verbose_name = "专辑"
+        verbose_name_plural = "专辑"
+
     def __str__(self): return self.title
 
 class Track(models.Model):
@@ -84,6 +94,10 @@ class Track(models.Model):
     format = models.CharField(max_length=10, verbose_name="格式")
     added_at = models.DateTimeField(auto_now_add=True, verbose_name="添加时间")
     search_text = models.CharField(max_length=2048, blank=True, default='', editable=False, db_index=True, verbose_name="搜索文本")
+
+    class Meta:
+        verbose_name = "歌曲"
+        verbose_name_plural = "歌曲"
 
     def save(self, *args, **kwargs):
         if self.artist and not self.artist.pk: self.artist.save()

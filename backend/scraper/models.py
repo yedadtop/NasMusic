@@ -11,8 +11,6 @@ class ScraperAPI(models.Model):
 
     class Meta:
         ordering = ['priority', '-id']
-        verbose_name = "刮削接口配置"
-        verbose_name_plural = "刮削接口配置"
 
     def __str__(self):
         return f"{self.name} ({'启用' if self.is_active else '停用'})"
