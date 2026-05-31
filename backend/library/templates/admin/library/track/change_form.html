@@ -9,14 +9,15 @@
         <table id="metadata-table" style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
             <thead>
                 <tr>
-                    <th style="text-align: left; padding: 8px; border-bottom: 2px solid #eee; width: 40%;">标签键</th>
-                    <th style="text-align: left; padding: 8px; border-bottom: 2px solid #eee; width: 45%;">值</th>
+                    <th style="text-align: left; padding: 8px; border-bottom: 2px solid #eee; width: 20%;">标签键</th>
+                    <th style="text-align: left; padding: 8px; border-bottom: 2px solid #eee; width: 30%;">值</th>
+                    <th style="text-align: left; padding: 8px; border-bottom: 2px solid #eee; width: 35%;">字段说明</th>
                     <th style="text-align: center; padding: 8px; border-bottom: 2px solid #eee; width: 15%;">操作</th>
                 </tr>
             </thead>
             <tbody>
                 <tr id="metadata-loading">
-                    <td colspan="3" style="padding: 16px; text-align: center; color: #999;">正在读取元数据...</td>
+                    <td colspan="4" style="padding: 16px; text-align: center; color: #999;">正在读取元数据...</td>
                 </tr>
             </tbody>
         </table>
@@ -67,13 +68,13 @@
         tbody.innerHTML = '';
 
         if (metadata.length === 1 && metadata[0].key === '_error') {
-            tbody.innerHTML = '<tr><td colspan="3" style="padding: 16px; text-align: center; color: #ba2121;">读取错误: ' + escapeHtml(metadata[0].value) + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" style="padding: 16px; text-align: center; color: #ba2121;">读取错误: ' + escapeHtml(metadata[0].value) + '</td></tr>';
             return;
         }
 
         if (!metadata || metadata.length === 0) {
             var tr = document.createElement('tr');
-            tr.innerHTML = '<td colspan="3" style="padding: 16px; text-align: center; color: #999;">暂无元数据</td>';
+            tr.innerHTML = '<td colspan="4" style="padding: 16px; text-align: center; color: #999;">暂无元数据</td>';
             tbody.appendChild(tr);
             return;
         }
@@ -89,14 +90,24 @@
             var key = item.key;
             var value = item.value;
             var idx = item._idx !== undefined ? item._idx : -1;
+            var description = item.description || '';
+            var warning = item.warning || null;
 
             var tr = document.createElement('tr');
             tr.style.borderBottom = '1px solid #f0f0f0';
+
+            var descHtml = description ?
+                '<span style="color: #666; font-size: 12px; line-height: 1.4; display: block;">' + escapeHtml(description) + '</span>' :
+                '<span style="color: #999; font-size: 11px; font-style: italic;">暂无说明</span>';
+
+            var warningAttr = warning ? ' data-warning=\'' + JSON.stringify(warning).replace(/'/g, "\\'") + '\'' : '';
+
             tr.innerHTML =
-                '<td style="padding: 8px; font-weight: 600; font-family: \'Microsoft YaHei\', \'微软雅黑\', sans-serif; word-break: break-all;">' + escapeHtml(key) + '</td>' +
-                '<td style="padding: 8px; word-break: break-all; color: #555; font-family: \'Microsoft YaHei\', \'微软雅黑\', sans-serif;">' + escapeHtml(value) + '</td>' +
-                '<td style="padding: 8px; text-align: center;">' +
-                '<button type="button" class="button meta-del-btn" data-key="' + escapeHtml(key) + '" data-idx="' + idx + '" style="padding: 4px 12px; font-size: 12px; background: #ba2121; color: #fff;">删除</button>' +
+                '<td style="padding: 8px; font-weight: 600; font-family: \'Microsoft YaHei\', \'微软雅黑\', sans-serif; word-break: break-all; vertical-align: top;">' + escapeHtml(key) + '</td>' +
+                '<td style="padding: 8px; word-break: break-all; color: #555; font-family: \'Microsoft YaHei\', \'微软雅黑\', sans-serif; vertical-align: top;">' + escapeHtml(value) + '</td>' +
+                '<td style="padding: 8px; vertical-align: top;">' + descHtml + '</td>' +
+                '<td style="padding: 8px; text-align: center; vertical-align: middle;">' +
+                '<button type="button" class="button meta-del-btn" data-key="' + escapeHtml(key) + '" data-idx="' + idx + '"' + warningAttr + ' style="padding: 4px 12px; font-size: 12px; background: #ba2121; color: #fff;">删除</button>' +
                 '</td>';
             tbody.appendChild(tr);
         }
@@ -160,7 +171,29 @@
                 e.preventDefault();
                 var key = this.getAttribute('data-key');
                 var idx = parseInt(this.getAttribute('data-idx'), 10);
-                if (!confirm('确定要删除 "' + key + '" 吗？此操作不可撤销。')) return;
+                var warningStr = this.getAttribute('data-warning');
+                var warning = warningStr ? JSON.parse(warningStr) : null;
+
+                var confirmMessage = '';
+                if (warning) {
+                    if (warning.severity === 'high') {
+                        confirmMessage = '⚠️ ' + warning.warning + '\n\n' +
+                            '📌 后果说明：\n' + warning.consequence + '\n\n' +
+                            '⚠️ 强烈建议保留此字段！确定要继续删除吗？';
+                    } else if (warning.severity === 'medium') {
+                        confirmMessage = '⚠️ ' + warning.warning + '\n\n' +
+                            '📌 可能影响：\n' + warning.consequence + '\n\n' +
+                            '确定要删除 "' + key + '" 吗？此操作不可撤销。';
+                    } else {
+                        confirmMessage = warning.warning + '\n\n' +
+                            '💡 提示：\n' + warning.consequence + '\n\n' +
+                            '确定要删除 "' + key + '" 吗？';
+                    }
+                } else {
+                    confirmMessage = '确定要删除 "' + key + '" 吗？此操作不可撤销。';
+                }
+
+                if (!confirm(confirmMessage)) return;
                 sendRequest('delete', key, '', idx);
             });
         }
@@ -200,14 +233,14 @@
             if (resp.success) {
                 renderTable(resp.metadata);
             } else {
-                tbody.innerHTML = '<tr><td colspan="3" style="padding: 16px; text-align: center; color: #ba2121;">读取元数据失败</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" style="padding: 16px; text-align: center; color: #ba2121;">读取元数据失败</td></tr>';
             }
         } catch (e) {
-            tbody.innerHTML = '<tr><td colspan="3" style="padding: 16px; text-align: center; color: #ba2121;">解析元数据失败</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" style="padding: 16px; text-align: center; color: #ba2121;">解析元数据失败</td></tr>';
         }
     };
     xhr.onerror = function() {
-        tbody.innerHTML = '<tr><td colspan="3" style="padding: 16px; text-align: center; color: #ba2121;">网络请求失败</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" style="padding: 16px; text-align: center; color: #ba2121;">网络请求失败</td></tr>';
     };
     xhr.send();
 })();

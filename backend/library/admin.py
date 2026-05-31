@@ -47,6 +47,119 @@ ID3_TO_MP3TAG['TYER'] = 'YEAR'  # 兼容旧版 ID3v2.3 年份标签
 
 _INFO_KEYS = frozenset({'BITRATE', 'SAMPLE_RATE', 'LENGTH', 'CHANNELS', 'BITS_PER_SAMPLE'})
 
+METADATA_FIELD_DESCRIPTIONS = {
+    'BITRATE': '比特率 - 音频文件的编码速率，单位为 kbps，数值越高音质越好但文件越大',
+    'SAMPLE_RATE': '采样率 - 每秒采集音频信号的次数，单位为 Hz（如 44100Hz 为 CD 音质）',
+    'LENGTH': '时长 - 音频文件的总播放时间，单位为秒',
+    'CHANNELS': '声道数 - 音频的声道数量（1=单声道, 2=立体声）',
+    'BITS_PER_SAMPLE': '位深度 - 每个采样点的位数（如 16bit、24bit），影响动态范围',
+    'TITLE': '歌曲名称 - 这首曲目的正式标题',
+    'ARTIST': '主要歌手 - 演唱这首歌曲的主要艺术家名称',
+    'ALBUMARTIST': '专辑歌手 - 整张专辑的艺术家（通常与主要歌手相同，或为群星/ Various Artists）',
+    'ALBUM': '专辑名称 - 这首歌曲所属的专辑标题',
+    'TRACK': '曲目编号 - 在专辑中的排序号（如 "3/12" 表示第3首，共12首）',
+    'DISC': '碟片编号 - 多碟专辑中的光盘编号（如 "1/2" 表示第1张盘，共2张）',
+    'GENRE': '音乐风格 - 歌曲的音乐类型或流派（如 Pop、Rock、Jazz、Classical 等）',
+    'YEAR': '发行年份 - 专辑或歌曲首次发布的年份',
+    'COMMENT': '注释/备注 - 关于这首歌的附加说明或评论信息',
+    'UNSYNCEDLYRICS': '完整歌词 - 未同步的完整歌词文本（非逐字卡拉OK式歌词）',
+    'COMPOSER': '作曲者 - 创作这首歌曲旋律的作曲家姓名',
+    'LYRICIST': '作词者 - 创作这首歌曲歌词的词作者姓名',
+    'PERFORMER': '表演者 - 实际演奏或演唱此版本的具体艺人',
+    'ARRANGER': '编曲者 - 对原曲进行编排和改编的音乐人',
+    'PRODUCER': '制作人 - 负责录制和制作这张唱片的音乐制作人',
+    'ENGINEER': '录音师 - 负责音频录制和混音的技术工程师',
+    'COPYRIGHT': '版权信息 - 音乐作品的版权声明和所有者信息',
+    'ENCODER': '编码器 - 用于编码音频文件的软件名称和版本',
+    'COMPATIBLE_BRANDS': '兼容品牌 (M4A) - M4A 文件格式的兼容性标识',
+    'ENCODERSETTINGS': '编码设置 (M4A) - M4A 编码时的具体参数配置',
+    'MAJOR_BRAND': '主品牌 (M4A) - M4A 容器格式的主要标识符',
+    'DATE': '日期 - 更精确的发布日期（通常包含年月日）',
+    'BPM': '节拍速度 - 每分钟的节拍数，用于 DJ 混音和节奏匹配',
+    'ISRC': '国际标准录音代码 - 全球唯一的录音制品识别码',
+    'MOOD': '情绪标签 - 描述歌曲情感氛围的关键词（如 Happy、Sad、Energetic）',
+    'RATING': '评分等级 - 用户对这首歌的质量评级（通常为 1-5 星）',
+    'REPLAYGAIN_TRACK_GAIN': '音量增益 (Track) - 单曲级别的 ReplayGain 音量标准化增益值',
+    'REPLAYGAIN_ALBUM_GAIN': '音量增益 (Album) - 专辑级别的 ReplayGain 音量标准化增益值',
+    'MEDIA': '载体类型 - 原始发行介质（如 CD、Vinyl、Digital）',
+    'LABEL': '唱片公司 - 发行这张专辑的唱片公司名称',
+    'CATALOGNUMBER': '目录编号 - 唱片公司内部的产品编号',
+    'BARCODE': '条形码 - 产品的 UPC/EAN 条形码用于零售识别',
+    'ASIN': '亚马逊编号 - 亚马逊网站的标准识别号码',
+    'MUSICBRAINZ_ARTISTID': 'MusicBrainz 艺术家ID - MusicBrainz 数据库中的唯一艺术家标识符',
+    'MUSICBRAINZ_ALBUMID': 'MusicBrainz 专辑ID - MusicBrainz 数据库中的唯一专辑标识符',
+    'MUSICBRAINZ_TRACKID': 'MusicBrainz 曲目ID - MusicBrainz 数据库中的唯一曲目标识符',
+    'MUSICBRAINZ_RELEASEGROUPID': 'MusicBrainz 发行组ID - MusicBrainz 数据库中同一专辑不同发行的分组标识',
+}
+
+CRITICAL_FIELD_WARNINGS = {
+    'BITRATE': {
+        'warning': '⚠️ 删除比特率信息',
+        'consequence': '比特率是音频文件的编码属性，删除后可能导致播放器无法正确显示音质信息，但不影响音频播放本身。',
+        'severity': 'low'
+    },
+    'SAMPLE_RATE': {
+        'warning': '⚠️ 删除采样率信息',
+        'consequence': '采样率是音频的基础技术参数（如 44100Hz），删除后可能影响某些专业音频软件的识别和兼容性。',
+        'severity': 'low'
+    },
+    'LENGTH': {
+        'warning': '⚠️ 删除时长信息',
+        'consequence': '时长是从音频文件计算得出的，删除后播放器将无法显示歌曲总时长，但实际播放不受影响。',
+        'severity': 'low'
+    },
+    'CHANNELS': {
+        'warning': '⚠️ 删除声道数信息',
+        'consequence': '声道数标识音频是单声道还是立体声，删除后可能影响环绕声系统的自动识别。',
+        'severity': 'low'
+    },
+    'BITS_PER_SAMPLE': {
+        'warning': '⚠️ 删除位深度信息',
+        'consequence': '位深度影响音质表现（16bit/24bit），删除后高解析度音频可能被误认为是普通音质。',
+        'severity': 'low'
+    },
+    'TITLE': {
+        'warning': '🚨 删除歌曲名称',
+        'consequence': '删除后歌曲将显示为"未知曲目"，在音乐库中难以识别和搜索，强烈建议保留此字段！',
+        'severity': 'high'
+    },
+    'ARTIST': {
+        'warning': '🚨 删除主要歌手',
+        'consequence': '删除后将显示为"Unknown Artist"，会导致歌手页面混乱、艺术家归档丢失、按歌手筛选功能失效！',
+        'severity': 'high'
+    },
+    'ALBUM': {
+        'warning': '🚨 删除专辑名称',
+        'consequence': '删除后歌曲将脱离专辑归属，导致专辑页面显示不完整、专辑封面关联失效！',
+        'severity': 'high'
+    },
+    'TRACK': {
+        'warning': '⚠️ 删除曲目编号',
+        'consequence': '删除后歌曲在专辑中的排序将丢失，播放列表顺序可能被打乱，影响整张专辑的聆听体验。',
+        'severity': 'medium'
+    },
+    'GENRE': {
+        'warning': '⚠️ 删除音乐风格',
+        'consequence': '删除后将无法按流派筛选歌曲，智能推荐和分类功能可能受影响。',
+        'severity': 'medium'
+    },
+    'YEAR': {
+        'warning': '⚠️ 删除发行年份',
+        'consequence': '删除后无法按年代浏览歌曲，时间线视图和发行历史记录将缺失此信息。',
+        'severity': 'medium'
+    },
+    'ALBUMARTIST': {
+        'warning': '⚠️ 删除专辑歌手',
+        'consequence': '对于合辑或群星专辑，删除后可能导致艺术家归类错误，影响多碟专辑的正确识别。',
+        'severity': 'medium'
+    },
+    'DISC': {
+        'warning': '⚠️ 删除碟片编号',
+        'consequence': '对于多碟专辑/现场录音，删除后所有曲目将被视为同一张盘，导致排序混乱。',
+        'severity': 'medium'
+    },
+}
+
 
 def _get_all_metadata(file_path, format_str):
     try:
@@ -61,15 +174,15 @@ def _get_all_metadata(file_path, format_str):
         info = audio_raw.info
         if info:
             if hasattr(info, 'bitrate') and info.bitrate:
-                metadata_list.append({'key': 'BITRATE', 'value': str(info.bitrate), '_idx': idx}); idx += 1
+                metadata_list.append({'key': 'BITRATE', 'value': str(info.bitrate), '_idx': idx, 'description': METADATA_FIELD_DESCRIPTIONS.get('BITRATE', ''), 'warning': CRITICAL_FIELD_WARNINGS.get('BITRATE', None)}); idx += 1
             if hasattr(info, 'sample_rate') and info.sample_rate:
-                metadata_list.append({'key': 'SAMPLE_RATE', 'value': str(info.sample_rate), '_idx': idx}); idx += 1
+                metadata_list.append({'key': 'SAMPLE_RATE', 'value': str(info.sample_rate), '_idx': idx, 'description': METADATA_FIELD_DESCRIPTIONS.get('SAMPLE_RATE', ''), 'warning': CRITICAL_FIELD_WARNINGS.get('SAMPLE_RATE', None)}); idx += 1
             if hasattr(info, 'length') and info.length:
-                metadata_list.append({'key': 'LENGTH', 'value': f"{info.length:.2f}", '_idx': idx}); idx += 1
+                metadata_list.append({'key': 'LENGTH', 'value': f"{info.length:.2f}", '_idx': idx, 'description': METADATA_FIELD_DESCRIPTIONS.get('LENGTH', ''), 'warning': CRITICAL_FIELD_WARNINGS.get('LENGTH', None)}); idx += 1
             if hasattr(info, 'channels') and info.channels:
-                metadata_list.append({'key': 'CHANNELS', 'value': str(info.channels), '_idx': idx}); idx += 1
+                metadata_list.append({'key': 'CHANNELS', 'value': str(info.channels), '_idx': idx, 'description': METADATA_FIELD_DESCRIPTIONS.get('CHANNELS', ''), 'warning': CRITICAL_FIELD_WARNINGS.get('CHANNELS', None)}); idx += 1
             if hasattr(info, 'bits_per_sample') and info.bits_per_sample:
-                metadata_list.append({'key': 'BITS_PER_SAMPLE', 'value': str(info.bits_per_sample), '_idx': idx}); idx += 1
+                metadata_list.append({'key': 'BITS_PER_SAMPLE', 'value': str(info.bits_per_sample), '_idx': idx, 'description': METADATA_FIELD_DESCRIPTIONS.get('BITS_PER_SAMPLE', ''), 'warning': CRITICAL_FIELD_WARNINGS.get('BITS_PER_SAMPLE', None)}); idx += 1
 
         if ext == 'mp3':
             if getattr(audio_raw, 'tags', None):
@@ -81,36 +194,36 @@ def _get_all_metadata(file_path, format_str):
                     if frame_id == 'TXXX':
                         key_name = frame.desc.upper() if hasattr(frame, 'desc') else 'TXXX'
                         val = str(frame.text[0]) if hasattr(frame, 'text') and frame.text else str(frame)
-                        metadata_list.append({'key': key_name, 'value': val, '_idx': idx}); idx += 1
+                        metadata_list.append({'key': key_name, 'value': val, '_idx': idx, 'description': METADATA_FIELD_DESCRIPTIONS.get(key_name, f'自定义文本标签 (TXXX) - 用户自定义的 {key_name} 字段'), 'warning': CRITICAL_FIELD_WARNINGS.get(key_name, None)}); idx += 1
                     elif frame_id == 'USLT':
                         val = str(frame.text) if hasattr(frame, 'text') else str(frame)
-                        metadata_list.append({'key': 'UNSYNCEDLYRICS', 'value': val, '_idx': idx}); idx += 1
+                        metadata_list.append({'key': 'UNSYNCEDLYRICS', 'value': val, '_idx': idx, 'description': METADATA_FIELD_DESCRIPTIONS.get('UNSYNCEDLYRICS', ''), 'warning': CRITICAL_FIELD_WARNINGS.get('UNSYNCEDLYRICS', None)}); idx += 1
                     elif frame_id == 'COMM':
                         val = str(frame.text[0]) if hasattr(frame, 'text') and frame.text else str(frame)
-                        metadata_list.append({'key': 'COMMENT', 'value': val, '_idx': idx}); idx += 1
+                        metadata_list.append({'key': 'COMMENT', 'value': val, '_idx': idx, 'description': METADATA_FIELD_DESCRIPTIONS.get('COMMENT', ''), 'warning': CRITICAL_FIELD_WARNINGS.get('COMMENT', None)}); idx += 1
                     else:
                         key_name = ID3_TO_MP3TAG.get(frame_id, frame_id)
                         if hasattr(frame, 'text') and isinstance(frame.text, list):
                             for text_val in frame.text:
-                                metadata_list.append({'key': key_name, 'value': str(text_val), '_idx': idx}); idx += 1
+                                metadata_list.append({'key': key_name, 'value': str(text_val), '_idx': idx, 'description': METADATA_FIELD_DESCRIPTIONS.get(key_name, f'ID3 标签 ({frame_id}) - {frame_id} 帧存储的数据'), 'warning': CRITICAL_FIELD_WARNINGS.get(key_name, None)}); idx += 1
                         else:
-                            metadata_list.append({'key': key_name, 'value': str(frame), '_idx': idx}); idx += 1
+                            metadata_list.append({'key': key_name, 'value': str(frame), '_idx': idx, 'description': METADATA_FIELD_DESCRIPTIONS.get(key_name, f'ID3 标签 ({frame_id}) - {frame_id} 帧存储的数据'), 'warning': CRITICAL_FIELD_WARNINGS.get(key_name, None)}); idx += 1
 
         elif ext == 'm4a':
             audio_easy = mutagen.File(file_path, easy=True)
             if audio_easy and getattr(audio_easy, 'tags', None):
                 for k, v in audio_easy.tags.items():
                     for val in v:
-                        metadata_list.append({'key': k.upper(), 'value': str(val), '_idx': idx}); idx += 1
+                        metadata_list.append({'key': k.upper(), 'value': str(val), '_idx': idx, 'description': METADATA_FIELD_DESCRIPTIONS.get(k.upper(), f'M4A 标签 ({k}) - M4A/MP4 容器中的 {k} 字段'), 'warning': CRITICAL_FIELD_WARNINGS.get(k.upper(), None)}); idx += 1
             extra_keys = ['COMPATIBLE_BRANDS', 'ENCODERSETTINGS', 'HW', 'MAJOR_BRAND', 'MAXRATE', 'MINOR_VERSION', 'TE_IS_REENCODE']
             for key in extra_keys:
                 if key in (audio_raw.tags or {}):
                     val = audio_raw.tags[key]
                     if isinstance(val, list):
                         for v in val:
-                            metadata_list.append({'key': key, 'value': str(v), '_idx': idx}); idx += 1
+                            metadata_list.append({'key': key, 'value': str(v), '_idx': idx, 'description': METADATA_FIELD_DESCRIPTIONS.get(key, f'M4A 技术属性 ({key}) - M4A 文件的 {key} 技术参数'), 'warning': CRITICAL_FIELD_WARNINGS.get(key, None)}); idx += 1
                     else:
-                        metadata_list.append({'key': key, 'value': str(val), '_idx': idx}); idx += 1
+                        metadata_list.append({'key': key, 'value': str(val), '_idx': idx, 'description': METADATA_FIELD_DESCRIPTIONS.get(key, f'M4A 技术属性 ({key}) - M4A 文件的 {key} 技术参数'), 'warning': CRITICAL_FIELD_WARNINGS.get(key, None)}); idx += 1
 
         elif ext in ['flac', 'ogg']:
             for key, val_list in (audio_raw.tags or {}).items():
@@ -118,9 +231,9 @@ def _get_all_metadata(file_path, format_str):
                     continue
                 if isinstance(val_list, list):
                     for v in val_list:
-                        metadata_list.append({'key': key.upper(), 'value': str(v), '_idx': idx}); idx += 1
+                        metadata_list.append({'key': key.upper(), 'value': str(v), '_idx': idx, 'description': METADATA_FIELD_DESCRIPTIONS.get(key.upper(), f'Vorbis 注释 ({key}) - FLAC/OGG Vorbis Comment 格式的 {key} 字段'), 'warning': CRITICAL_FIELD_WARNINGS.get(key.upper(), None)}); idx += 1
                 else:
-                    metadata_list.append({'key': key.upper(), 'value': str(val_list), '_idx': idx}); idx += 1
+                    metadata_list.append({'key': key.upper(), 'value': str(val_list), '_idx': idx, 'description': METADATA_FIELD_DESCRIPTIONS.get(key.upper(), f'Vorbis 注释 ({key}) - FLAC/OGG Vorbis Comment 格式的 {key} 字段'), 'warning': CRITICAL_FIELD_WARNINGS.get(key.upper(), None)}); idx += 1
 
         return metadata_list
     except Exception as e:
@@ -262,9 +375,6 @@ def _count_info_offset(file_path):
 def _delete_metadata_entry(file_path, format_str, key, idx=None):
     try:
         key_upper = key.upper()
-
-        if key_upper in _INFO_KEYS:
-            return True, '已忽略（该字段为文件技术属性，非存储标签）'
 
         ext = format_str.lower()
         info_offset = _count_info_offset(file_path)
