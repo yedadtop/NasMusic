@@ -54,6 +54,10 @@
           <span class="text-xs text-gray-400">ms</span>
         </div>
 
+        <el-button :size="isMobile ? 'small' : 'default'" :icon="Download" round class="font-bold shadow-sm px-3 md:px-5" @click="exportLyrics">
+          <span class="hidden sm:inline">{{ isMobile ? '导出' : '导出 LRC' }}</span>
+          <span class="sm:hidden">导出</span>
+        </el-button>
         <el-button type="primary" :size="isMobile ? 'small' : 'default'" :icon="Check" :loading="saving" @click="saveLyrics" round class="font-bold shadow-md px-4 md:px-6">
           {{ isMobile ? '保存' : '保存并同步' }}
         </el-button>
@@ -346,7 +350,7 @@
 import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppleToast from '../components/AppleToast.vue'
-import { Check, VideoPlay, VideoPause, RefreshLeft, Document, Plus, Minus, Delete, Operation, Close, Location, QuestionFilled } from '@element-plus/icons-vue'
+import { Check, VideoPlay, VideoPause, RefreshLeft, Document, Plus, Minus, Delete, Operation, Close, Location, QuestionFilled, Download } from '@element-plus/icons-vue'
 import request, { STREAM_BASE_URL } from '../api'
 import { usePlayerStore } from '../stores/player'
 
@@ -724,14 +728,12 @@ const resetTimes = () => {
   showToast('时间已归零', 'success')
 }
 
-const saveLyrics = async () => {
-  if (!track.value) return
-  
-  let validLines = lyrics.value.filter(l => !l.deleted)
-  
-  let lrcContent
+// 复用：把当前歌词数组拼成 LRC 文本（保留 / 删除翻译的时间戳逻辑与保存时一致）
+const buildLrcContent = () => {
+  const validLines = lyrics.value.filter(l => !l.deleted)
+
   if (chineseAsTranslation.value) {
-    lrcContent = validLines
+    return validLines
       .filter(l => l.text || l.translation)
       .map(l => {
         if (l.text && l.translation) {
@@ -740,13 +742,47 @@ const saveLyrics = async () => {
         }
         return `[${l.translationTimeStr || l.timeStr}]${l.text || l.translation}`
       }).join('\n')
-  } else {
-    lrcContent = validLines
-      .filter(l => l.text)
-      .map(l => `[${l.timeStr}]${l.text}`)
-      .join('\n')
   }
-  
+
+  return validLines
+    .filter(l => l.text)
+    .map(l => `[${l.timeStr}]${l.text}`)
+    .join('\n')
+}
+
+// 导出 LRC 文件。后端写不进去时可用此文件手动覆盖或丢进其它播放器
+const exportLyrics = () => {
+  if (!track.value) return
+
+  const lrcContent = buildLrcContent()
+  if (!lrcContent) {
+    showToast('暂无可导出的歌词', 'error')
+    return
+  }
+
+  const sanitize = (s) => (s || '').toString().replace(/[\\/:*?"<>|\r\n\t]/g, '_').trim()
+  const artistName = (track.value.all_artists || []).join('/') || track.value.artist_name || '未知歌手'
+  const fileName = `${sanitize(track.value.title)} - ${sanitize(artistName)}.lrc`
+
+  // 加 BOM 头，避免 Windows 记事本打开乱码
+  const blob = new Blob(['\uFEFF' + lrcContent], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+
+  showToast('LRC 文件已导出', 'success')
+}
+
+const saveLyrics = async () => {
+  if (!track.value) return
+
+  const lrcContent = buildLrcContent()
+
   saving.value = true
   try {
     const formData = new FormData()
@@ -755,13 +791,13 @@ const saveLyrics = async () => {
     const res = await request.patch(`/tracks/${track.value.id}/`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
-    
+
     if (res.data.success === false) {
       const errorMsg = res.data.errors?.join('\n') || res.data.message || '保存失败'
       showToast(errorMsg, 'error')
       return
     }
-    
+
     showToast('歌词已同步至音频文件！', 'success')
     rawText.value = lrcContent
     deletedLines.value = []
