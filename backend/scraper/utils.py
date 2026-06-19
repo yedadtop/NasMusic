@@ -164,20 +164,19 @@ def fetch_and_embed_lyrics(track):
         track.save(update_fields=['lyrics'])
 
         if audio is not None:
-            ext = track.format.lower()
+            tags = getattr(audio, 'tags', None)
+            if tags is not None:
+                # 按 mutagen 实际加载出来的对象类型写标签
+                if hasattr(tags, 'setall'):  # ID3 (MP3)
+                    from mutagen.id3 import USLT
+                    tags.setall("USLT", [USLT(encoding=3, lang='eng', desc='', text=simplified_lyrics)])
+                elif isinstance(audio, mutagen.mp4.MP4):  # MP4 / M4A
+                    audio['\xa9lyr'] = simplified_lyrics
+                else:  # FLAC / OGG 等
+                    audio["lyrics"] = simplified_lyrics
 
-            if ext == 'mp3':
-                from mutagen.id3 import USLT
-                if getattr(audio, 'tags', None) is None:
-                    audio.add_tags()
-                audio.tags.setall("USLT", [USLT(encoding=3, lang='eng', desc='', text=simplified_lyrics)])
-            elif ext in ['flac', 'ogg']:
-                audio["lyrics"] = simplified_lyrics
-            elif ext == 'm4a':
-                audio['\xa9lyr'] = simplified_lyrics
-
-            audio.save()
-            print(f"[歌词刮削] 成功将歌词嵌入到物理文件: {track.file_path}")
+                audio.save()
+                print(f"[歌词刮削] 成功将歌词嵌入到物理文件: {track.file_path}")
 
         return {"success": True, "message": "成功刮削并嵌入歌词！", "source": "lrclib"}
 

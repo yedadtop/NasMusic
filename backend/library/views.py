@@ -88,16 +88,15 @@ class TrackViewSet(viewsets.ModelViewSet):
         try:
             if track_instance.lyrics:
                 audio_raw = mutagen.File(track_instance.file_path)
-                if audio_raw is not None:
-                    ext = track_instance.format.lower()
-                    if ext == 'mp3':
-                        if getattr(audio_raw, 'tags', None) is None:
-                            audio_raw.add_tags()
-                        audio_raw.tags.setall("USLT", [USLT(encoding=3, lang='eng', desc='', text=track_instance.lyrics)])
-                    elif ext in ['flac', 'ogg']:
-                        audio_raw["lyrics"] = track_instance.lyrics
-                    elif ext == 'm4a':
+                if audio_raw is not None and getattr(audio_raw, 'tags', None) is not None:
+                    tags = audio_raw.tags
+                    # 按 mutagen 实际加载出来的对象类型写标签，避开「后缀是 mp3 但内容是 m4a」的情况
+                    if hasattr(tags, 'setall'):  # ID3 (MP3)
+                        tags.setall("USLT", [USLT(encoding=3, lang='eng', desc='', text=track_instance.lyrics)])
+                    elif isinstance(audio_raw, mutagen.mp4.MP4):  # MP4 / M4A
                         audio_raw['\xa9lyr'] = track_instance.lyrics
+                    else:  # FLAC / OGG 等
+                        audio_raw["lyrics"] = track_instance.lyrics
                     audio_raw.save()
         except PermissionError:
             write_errors.append(f"无歌词写入权限: {track_instance.file_path}")
@@ -123,7 +122,7 @@ class TrackViewSet(viewsets.ModelViewSet):
                 'message': '部分操作失败',
                 'errors': errors,
                 'track_id': instance.id
-            }, status=status.HTTP_207_multi_status)
+            }, status=status.HTTP_207_MULTI_STATUS)
         
         return Response({
             'success': True,
