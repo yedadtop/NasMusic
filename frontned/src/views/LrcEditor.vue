@@ -54,9 +54,8 @@
           <span class="text-xs text-gray-400">ms</span>
         </div>
 
-        <el-button :size="isMobile ? 'small' : 'default'" :icon="Download" round class="font-bold shadow-sm px-3 md:px-5" @click="exportLyrics">
-          <span class="hidden sm:inline">{{ isMobile ? '导出' : '导出 LRC' }}</span>
-          <span class="sm:hidden">导出</span>
+        <el-button :size="isMobile ? 'small' : 'default'" :icon="Download" round type="success" :loading="exporting" @click="exportLyrics" class="font-bold shadow-md px-4 md:px-6">
+          {{ isMobile ? '导出' : '导出 LRC' }}
         </el-button>
         <el-button type="primary" :size="isMobile ? 'small' : 'default'" :icon="Check" :loading="saving" @click="saveLyrics" round class="font-bold shadow-md px-4 md:px-6">
           {{ isMobile ? '保存' : '保存并同步' }}
@@ -366,6 +365,7 @@ const isPlaying = ref(false)
 const currentTime = ref(0)
 const duration = ref(0)
 const saving = ref(false)
+const exporting = ref(false)
 
 const isMobile = ref(window.innerWidth < 768)
 const sidebarDrawer = ref(false)
@@ -751,31 +751,36 @@ const buildLrcContent = () => {
 }
 
 // 导出 LRC 文件。后端写不进去时可用此文件手动覆盖或丢进其它播放器
-const exportLyrics = () => {
+const exportLyrics = async () => {
   if (!track.value) return
 
-  const lrcContent = buildLrcContent()
-  if (!lrcContent) {
-    showToast('暂无可导出的歌词', 'error')
-    return
+  exporting.value = true
+  try {
+    const lrcContent = buildLrcContent()
+    if (!lrcContent) {
+      showToast('暂无可导出的歌词', 'error')
+      return
+    }
+
+    const sanitize = (s) => (s || '').toString().replace(/[\\/:*?"<>|\r\n\t]/g, '_').trim()
+    const artistName = (track.value.all_artists || []).join('/') || track.value.artist_name || '未知歌手'
+    const fileName = `${sanitize(track.value.title)} - ${sanitize(artistName)}.lrc`
+
+    // 加 BOM 头，避免 Windows 记事本打开乱码
+    const blob = new Blob(['\uFEFF' + lrcContent], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = fileName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    showToast('LRC 文件已导出', 'success')
+  } finally {
+    exporting.value = false
   }
-
-  const sanitize = (s) => (s || '').toString().replace(/[\\/:*?"<>|\r\n\t]/g, '_').trim()
-  const artistName = (track.value.all_artists || []).join('/') || track.value.artist_name || '未知歌手'
-  const fileName = `${sanitize(track.value.title)} - ${sanitize(artistName)}.lrc`
-
-  // 加 BOM 头，避免 Windows 记事本打开乱码
-  const blob = new Blob(['\uFEFF' + lrcContent], { type: 'text/plain;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = fileName
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
-
-  showToast('LRC 文件已导出', 'success')
 }
 
 const saveLyrics = async () => {
