@@ -11,6 +11,7 @@ from django.db.models.signals import pre_delete, post_delete
 from library.models import Artist, Album, Track
 from library.models import store_ids_before_delete, cleanup_after_track_delete
 from scanner.models import SystemConfig
+from scanner.remux_utils import mp4_needs_remux, remux_audio_file
 from datetime import datetime
 
 SUPPORTED_FORMATS = {'.mp3', '.flac', '.ogg', '.m4a'}
@@ -271,6 +272,17 @@ def scan_local_directory(directory_path, task_id=None, force_reextract_cover=Fal
         # 增量扫描模式下，跳过已存在的歌曲
         if not is_path_changed and os.path.normpath(file_path) in existing_paths:
             continue
+
+        # 【B 站兼容】检测 MP4 容器 + moov 在尾部的文件，自动 ffmpeg remux
+        # 必须在 mutagen 读取标签之前做，否则写入标签会因为 moov 在尾部而失败
+        try:
+            probe_audio = mutagen.File(file_path)
+            if probe_audio is not None and isinstance(probe_audio, mutagen.mp4.MP4):
+                if mp4_needs_remux(file_path):
+                    print(f"  🔧 检测到 moov 在尾部，触发自动 remux: {os.path.basename(file_path)}")
+                    remux_audio_file(file_path)
+        except Exception as e:
+            print(f"  ⚠️ remux 探测异常 {file_path}: {e}")
 
         try:
             audio_easy = mutagen.File(file_path, easy=True)
