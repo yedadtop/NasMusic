@@ -309,16 +309,16 @@
               <el-icon size="24"><component :is="isPlaying ? VideoPause : VideoPlay" /></el-icon>
             </button>
             <button 
-              @click="seekRelative(-5)" 
+              @click="seekRelative(-1)" 
               class="w-12 h-12 shrink-0 bg-gray-100 text-gray-700 rounded-full flex items-center justify-center active:scale-95 transition-transform font-bold text-sm"
             >
-              -5s
+              -1s
             </button>
             <button 
-              @click="seekRelative(5)" 
+              @click="seekRelative(1)" 
               class="w-12 h-12 shrink-0 bg-gray-100 text-gray-700 rounded-full flex items-center justify-center active:scale-95 transition-transform font-bold text-sm"
             >
-              +5s
+              +1s
             </button>
             <button 
               @click.stop="stampTime"
