@@ -1,5 +1,5 @@
 <template>
-  <div class="flex-1 overflow-y-auto px-4 sm:px-6 md:px-8 pb-4 custom-scrollbar">
+  <div class="flex-1 overflow-y-auto px-4 sm:px-6 md:px-8 pt-4 pb-4 custom-scrollbar">
     <div 
       v-for="(track, index) in tracks" 
       :key="track.id" 
