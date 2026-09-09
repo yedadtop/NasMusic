@@ -244,7 +244,7 @@ export const usePlayerStore = defineStore('player', () => {
       // 随机模式：由后端从全曲库随机返回下一首（不限于前端已懒加载的分页列表）
       try {
         const excludeIds = [
-          currentTrack.value?.id,
+          (currentTrack.value as any)?.id,
           ...shuffleHistory.value.slice(-19).map(t => t?.id)
         ].filter(id => id != null)
         const res = await request.get('/tracks/random/', {
