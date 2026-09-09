@@ -5,10 +5,10 @@ const request = axios.create({
   timeout: 10000
 })
 
-export const STREAM_BASE_URL = 'http://127.0.0.1:8000'
-
-// 部署环境下的流媒体服务地址
-// export const STREAM_BASE_URL = 'http://10.0.0.8'
+// 音频流地址：跟随页面来源（同源），任何设备用任何 IP 访问都能正确定位后端。
+// 开发环境由 Vite 代理 /stream 与 /api 到后端；生产环境由 Nginx 反向代理。
+// 仅当前端与后端不同源部署时才需要手动指定，例如 'http://10.0.0.8'
+export const STREAM_BASE_URL = window.location.origin
 
 // ===== 访问令牌（写操作鉴权）=====
 
