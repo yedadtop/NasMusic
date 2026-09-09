@@ -5,6 +5,7 @@ import requests
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
 from opencc import OpenCC
 
 
@@ -199,8 +200,12 @@ class BilibiliTitleParserView(APIView):
 class BilibiliLyricsView(APIView):
     """
     为B站歌曲获取歌词：先解析标题，再查询歌词
+    播放时自动调用，属于只读查询（不写库不改文件），豁免令牌校验
     """
-    
+
+    # 播放B站歌曲无需令牌：无令牌用户也能正常播放并看到歌词
+    permission_classes = [AllowAny]
+
     def post(self, request):
         title = request.data.get('title', '')
         

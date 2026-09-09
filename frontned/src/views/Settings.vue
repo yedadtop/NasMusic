@@ -3,6 +3,7 @@
     <div class="mb-8">
       <div class="flex items-center border-b border-gray-200/60">
         <button
+          v-if="hasToken"
           @click="activeTab = 'settings'"
           class="pb-3 px-1 text-[17px] font-semibold border-b-2 transition-colors mr-6"
           :class="activeTab === 'settings' ? 'border-[#0071e3] text-[#0071e3]' : 'border-transparent text-[#86868b] hover:text-[#1d1d1f]'"
@@ -10,6 +11,7 @@
           设置
         </button>
         <button
+          v-if="hasToken"
           @click="activeTab = 'scraper'"
           class="pb-3 px-1 text-[17px] font-semibold border-b-2 transition-colors mr-6"
           :class="activeTab === 'scraper' ? 'border-[#0071e3] text-[#0071e3]' : 'border-transparent text-[#86868b] hover:text-[#1d1d1f]'"
@@ -17,6 +19,14 @@
           刮削
         </button>
         <button
+          @click="activeTab = 'auth'"
+          class="pb-3 px-1 text-[17px] font-semibold border-b-2 transition-colors mr-6"
+          :class="activeTab === 'auth' ? 'border-[#0071e3] text-[#0071e3]' : 'border-transparent text-[#86868b] hover:text-[#1d1d1f]'"
+        >
+          鉴权
+        </button>
+        <button
+          v-if="hasToken"
           @click="activeTab = 'trash'"
           class="pb-3 px-1 text-[17px] font-semibold border-b-2 transition-colors"
           :class="activeTab === 'trash' ? 'border-[#0071e3] text-[#0071e3]' : 'border-transparent text-[#86868b] hover:text-[#1d1d1f]'"
@@ -37,7 +47,7 @@
       @confirm="handleConfirm"
     />
 
-    <div v-show="activeTab === 'settings'" class="min-h-[600px]">
+    <div v-if="hasToken" v-show="activeTab === 'settings'" class="min-h-[600px]">
 
       <section class="mb-8 bg-white rounded-[20px] p-6 sm:p-8 shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100/50 transition-all">
         <div class="flex items-center mb-3">
@@ -160,52 +170,6 @@
         </div>
       </section>
 
-      <section class="mb-8 bg-white rounded-[20px] p-6 sm:p-8 shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100/50 transition-all">
-        <div class="flex items-center mb-3">
-          <div class="w-10 h-10 bg-[#e8f2ff] text-[#0071e3] rounded-[10px] flex items-center justify-center mr-4">
-            <Lock class="w-5 h-5" />
-          </div>
-          <h2 class="text-xl font-semibold tracking-tight">访问令牌</h2>
-        </div>
-
-        <p class="text-[15px] text-[#86868b] mb-6 leading-relaxed">
-          修改、删除、上传等写操作接口需要令牌鉴权。输入服务器配置的访问令牌并保存，仅保存在本机浏览器中。
-        </p>
-
-        <div class="flex flex-col gap-4">
-          <el-input
-            v-model="tokenInput"
-            type="password"
-            placeholder="输入访问令牌"
-            show-password
-            class="flex-1 custom-apple-input"
-          />
-          <div class="flex flex-col sm:flex-row gap-4">
-            <div class="w-full sm:w-auto">
-              <el-button
-                type="primary"
-                :loading="verifyingToken"
-                @click="saveToken"
-                class="w-full custom-apple-button"
-              >
-                验证并保存
-              </el-button>
-            </div>
-            <div class="w-full sm:w-auto">
-              <el-button
-                @click="clearToken"
-                :disabled="!hasToken"
-                class="w-full custom-apple-button"
-              >
-                清除已保存令牌
-              </el-button>
-            </div>
-          </div>
-          <p v-if="hasToken" class="text-[13px] text-[#34c759]">本机已保存访问令牌</p>
-          <p v-else class="text-[13px] text-[#86868b]">尚未保存令牌，写操作将被拒绝</p>
-        </div>
-      </section>
-
       <section class="mb-10 bg-white rounded-[20px] p-6 sm:p-8 shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100/50">
         <div class="flex items-center justify-between mb-6">
           <div class="flex items-center">
@@ -313,22 +277,70 @@
       </section>
     </div>
 
-    <div v-show="activeTab === 'trash'" class="min-h-[600px]">
+    <div v-show="activeTab === 'auth'" class="min-h-[600px]">
+      <section class="mb-8 bg-white rounded-[20px] p-6 sm:p-8 shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100/50 transition-all">
+        <div class="flex items-center mb-3">
+          <div class="w-10 h-10 bg-[#e8f2ff] text-[#0071e3] rounded-[10px] flex items-center justify-center mr-4">
+            <Lock class="w-5 h-5" />
+          </div>
+          <h2 class="text-xl font-semibold tracking-tight">访问令牌</h2>
+        </div>
+
+        <p class="text-[15px] text-[#86868b] mb-6 leading-relaxed">
+          修改、删除、上传等写操作接口需要令牌鉴权。输入服务器配置的访问令牌并保存，仅保存在本机浏览器中。
+        </p>
+
+        <div class="flex flex-col gap-4">
+          <el-input
+            v-model="tokenInput"
+            type="password"
+            placeholder="输入访问令牌"
+            show-password
+            class="flex-1 custom-apple-input"
+          />
+          <div class="flex flex-col sm:flex-row gap-4">
+            <div class="w-full sm:w-auto">
+              <el-button
+                type="primary"
+                :loading="verifyingToken"
+                @click="saveToken"
+                class="w-full custom-apple-button"
+              >
+                验证并保存
+              </el-button>
+            </div>
+            <div class="w-full sm:w-auto">
+              <el-button
+                @click="clearToken"
+                :disabled="!hasToken"
+                class="w-full custom-apple-button"
+              >
+                清除已保存令牌
+              </el-button>
+            </div>
+          </div>
+          <p v-if="hasToken" class="text-[13px] text-[#34c759]">本机已保存访问令牌</p>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="hasToken" v-show="activeTab === 'trash'" class="min-h-[600px]">
       <TrashContent @track-restored="handleTrackRestored" />
     </div>
 
-    <div v-show="activeTab === 'scraper'" class="min-h-[600px]">
+    <div v-if="hasToken" v-show="activeTab === 'scraper'" class="min-h-[600px]">
       <ScraperContent @task-started="handleTaskStarted" />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed, defineAsyncComponent } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch, defineAsyncComponent } from 'vue'
 import { FolderOpened, Loading, CircleCheck, Upload, Close, Lock } from '@element-plus/icons-vue'
 import AppleToast from '../components/AppleToast.vue'
 import AppleConfirmModal from '../components/AppleConfirmModal.vue'
-import request, { getToken, setToken } from '../api'
+import request, { setToken } from '../api'
+import { useTokenExists } from '../composables/useTokenExists'
 import { usePlayerStore } from '../stores/player'
 
 const playerStore = usePlayerStore()
@@ -340,15 +352,20 @@ const handleTrackRestored = () => {
   playerStore.triggerLibraryRefresh()
 }
 
-const activeTab = ref('settings')
-
-const musicPath = ref('')
-const scanning = ref(false)
-
 // ===== 访问令牌 =====
 const tokenInput = ref('')
 const verifyingToken = ref(false)
-const hasToken = computed(() => !!getToken())
+const hasToken = useTokenExists()
+
+const activeTab = ref(hasToken.value ? 'settings' : 'auth')
+
+// 无令牌时仅剩「鉴权」选项卡可用；令牌被清除时强制切回鉴权，令牌验证成功后切回设置
+watch(hasToken, (exists) => {
+  activeTab.value = exists ? 'settings' : 'auth'
+})
+
+const musicPath = ref('')
+const scanning = ref(false)
 
 const saveToken = async () => {
   const token = tokenInput.value.trim()
