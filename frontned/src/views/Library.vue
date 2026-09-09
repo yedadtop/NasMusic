@@ -29,13 +29,19 @@
           <span class="text-xl">•••</span>
         </button>
         <div v-if="showingMoreMenu === track.id" class="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-100 z-10">
-          <button 
+          <button
+            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition"
+            @click.stop="downloadTrack(track)"
+          >
+            下载
+          </button>
+          <button
             class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition"
             @click.stop="handleEdit(track)"
           >
             编辑
           </button>
-          <button 
+          <button
             class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 transition"
             @click.stop="openDeleteConfirm(track)"
           >
@@ -80,7 +86,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue' // 新增 onUnmounted
-import request from '../api'
+import request, { STREAM_BASE_URL } from '../api'
 import EditTrackModal from '../components/EditTrackModal.vue'
 import AppleConfirmModal from '../components/AppleConfirmModal.vue'
 import AppleToast from '../components/AppleToast.vue'
@@ -257,6 +263,17 @@ const handleEdit = (track) => {
   showingMoreMenu.value = null
   currentTrack.value = track
   showEditModal.value = true
+}
+
+// 下载歌曲文件到本地设备（后端返回 Content-Disposition: attachment，浏览器自动下载）
+const downloadTrack = (track) => {
+  showingMoreMenu.value = null
+  const a = document.createElement('a')
+  a.href = `${STREAM_BASE_URL}/stream/${track.id}/download/`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  showToast(`正在下载「${track.title}」`, 'success')
 }
 
 const trackToDelete = ref(null)

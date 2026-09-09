@@ -12,6 +12,25 @@
 
 ---
 
+## 1.1 下载歌曲文件到本地设备
+
+- **接口地址**：`GET /stream/{id}/download/`
+- **功能描述**：将歌曲文件下载到访问者的本地设备（音乐库列表 ••• 菜单中的「下载」选项）。响应携带 `Content-Disposition: attachment`，浏览器自动弹出下载。
+- **特性**：
+  - 下载文件名格式为 `歌名 - 歌手.扩展名`，采用 RFC 5987 编码，完整支持中文文件名
+  - 与播放接口一致的双模式架构：Nginx 转发时下发 `X-Accel-Redirect`（Content-Disposition 会被透传），开发模式由 Django 流式发送
+- **返回**：音频文件二进制流（attachment）。
+- **返回头示例**：
+  ```
+  Content-Type: audio/flac
+  Content-Length: 23547121
+  Content-Disposition: attachment; filename*=UTF-8''%E6%B2%A6%E9%99%B7%20-%20JuggShots.flac
+  ```
+- **错误返回**（HTTP 404 Not Found）：歌曲不存在或文件已从磁盘移除。
+- **前端入口**：音乐库页 → 歌曲行 ••• 菜单 → 下载
+
+---
+
 ## 2. 获取歌曲列表（支持分页与搜索）
 
 - **接口地址**：`GET /api/tracks/`

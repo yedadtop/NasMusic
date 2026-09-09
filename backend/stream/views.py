@@ -114,3 +114,60 @@ def stream_audio(request, track_id):
     response['Accept-Ranges'] = 'bytes'
     response['Access-Control-Allow-Origin'] = '*'
     return response
+
+
+def download_audio(request, track_id):
+    """下载歌曲文件到本地设备（Content-Disposition: attachment 触发浏览器下载）"""
+    track = get_object_or_404(Track, id=track_id)
+    file_path = track.file_path
+
+    if not os.path.exists(file_path):
+        raise Http404("Audio file not found on disk")
+
+    # 下载文件名：「歌名 - 歌手.扩展名」
+    ext = os.path.splitext(file_path)[1] or '.mp3'
+    artist_name = track.artist.name if track.artist else '未知歌手'
+    filename = f"{track.title} - {artist_name}{ext}"
+    # RFC 5987 编码，兼容中文文件名
+    quoted_filename = quote(filename)
+    content_disposition = f"attachment; filename*=UTF-8''{quoted_filename}"
+
+    x_real_ip = request.META.get('HTTP_X_REAL_IP')
+    is_nginx_proxy = x_real_ip is not None
+
+    print("\n" + "=" * 50)
+    print(f"[NasMusic 下载] ⬇️ 歌曲 ID: {track_id} | 文件名: {filename}")
+    print(f"[NasMusic 下载] 🌐 访客 X-Real-IP: {x_real_ip if x_real_ip else '无 (非 Nginx 转发)'}")
+    print("=" * 50 + "\n")
+
+    if is_nginx_proxy or not settings.DEBUG:
+        # 生产模式：交给 nginx 直接发送文件（下载走 X-Accel-Redirect，Content-Disposition 会被透传）
+        response = HttpResponse()
+        config = SystemConfig.objects.filter(key='music_path').first()
+        music_root = config.value if config and config.value else ''
+
+        if music_root and file_path.startswith(music_root):
+            rel_path = os.path.relpath(file_path, music_root).replace('\\', '/')
+            internal_path = f"/protected_music/{rel_path}"
+        else:
+            raise Http404("Audio file is outside of the managed music library")
+
+        response['X-Accel-Redirect'] = quote(internal_path, safe='/')
+        response['Content-Type'] = 'application/octet-stream'
+        response['Content-Disposition'] = content_disposition
+        response['Access-Control-Allow-Origin'] = '*'
+        return response
+
+    # 开发模式：Django 直接流式返回
+    file_size = os.path.getsize(file_path)
+    content_type, _ = mimetypes.guess_type(file_path)
+    content_type = content_type or 'application/octet-stream'
+
+    response = StreamingHttpResponse(
+        file_iterator(file_path, length=file_size),
+        content_type=content_type
+    )
+    response['Content-Length'] = str(file_size)
+    response['Content-Disposition'] = content_disposition
+    response['Access-Control-Allow-Origin'] = '*'
+    return response
