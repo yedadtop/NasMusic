@@ -319,6 +319,13 @@ function connect() {
   source.onerror = () => {
     // EventSource 自动重连中；重连成功后会再次触发 onopen
     status.value = 'connecting'
+    // 致命错误（如后端重启瞬间的 502/无效响应）会让 EventSource 永久关闭
+    // （readyState=CLOSED）且不再自动重连：手动清理后延迟重建
+    if (source && source.readyState === EventSource.CLOSED) {
+      source.close()
+      source = null
+      setTimeout(() => { if (enabled.value && !source) connect() }, 5000)
+    }
   }
   startDriftTimer()
 }

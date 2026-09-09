@@ -71,7 +71,7 @@ def playback_stream(request):
 
     def event_stream():
         try:
-            hub.subscribe(client_id)
+            conn = hub.subscribe(client_id)
         except ConnectionLimitError:
             yield 'event: error\ndata: {"message": "在线设备数已达上限"}\n\n'.encode('utf-8')
             return
@@ -97,7 +97,8 @@ def playback_stream(request):
                     yield _format_event('roster', snap)
                 last_seq, last_roster = snap['seq'], snap['roster_version']
         finally:
-            hub.unsubscribe(client_id)
+            # 按连接句柄注销：同一 client_id 刷新重连后，旧连接的清理不会误删新连接的注册
+            hub.unsubscribe(conn)
 
     response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
     response['Cache-Control'] = 'no-cache'

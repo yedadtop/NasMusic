@@ -36,22 +36,42 @@ class PlaybackHub:
         self._seq = 0
         self._roster_version = 0
         self._last_kind = 'state'
-        self._clients = {}  # client_id -> connected_at（最老者为 leader）
+        # client_id -> {'conn': 连接句柄, 'at': 连接时间}（最老者为 leader）。
+        # 注册表按 client_id 计数/选主，但注销必须按连接句柄：同一浏览器刷新页面时，
+        # 新连接先顶替注册条目，旧连接（死 socket，最迟在下一次心跳写入时才察觉）
+        # 的 finally 若按 client_id 注销会误删新连接的注册，导致事件照常广播
+        # 但 online 恒为 0（"能同步播放却显示 0 台设备"）
+        self._clients = {}
+        self._conns = {}  # 连接句柄 -> client_id（注销时反查，句柄单调递增）
+        self._conn_seq = 0
 
     # ---------- 连接管理 ----------
 
     def subscribe(self, client_id):
-        """注册一条 SSE 连接；同一 client_id 重连保留原连接时间（防抖动导致 leader 易主）"""
+        """注册一条 SSE 连接，返回该连接的句柄；同一 client_id 重连保留原连接时间（防抖动导致 leader 易主）"""
         with self._cond:
             if client_id not in self._clients and len(self._clients) >= MAX_CLIENTS:
                 raise ConnectionLimitError()
-            self._clients[client_id] = self._clients.get(client_id, time.time())
+            prev = self._clients.get(client_id)
+            self._conn_seq += 1
+            conn = self._conn_seq
+            self._clients[client_id] = {'conn': conn, 'at': prev['at'] if prev else time.time()}
+            self._conns[conn] = client_id
             self._roster_version += 1
             self._cond.notify_all()
+            return conn
 
-    def unsubscribe(self, client_id):
+    def unsubscribe(self, conn):
+        """按连接句柄注销；仅当该句柄仍是此 client_id 的当前注册连接时才移除注册"""
         with self._cond:
-            if self._clients.pop(client_id, None) is not None:
+            client_id = self._conns.pop(conn, None)
+            removed = False
+            if client_id is not None:
+                cur = self._clients.get(client_id)
+                if cur is not None and cur['conn'] == conn:
+                    del self._clients[client_id]
+                    removed = True
+            if removed:
                 self._roster_version += 1
             self._cond.notify_all()
 
@@ -97,7 +117,7 @@ class PlaybackHub:
     def _snapshot_locked(self):
         leader = None
         if self._clients:
-            leader = min(self._clients, key=self._clients.get)
+            leader = min(self._clients, key=lambda cid: self._clients[cid]['at'])
         snap = dict(self._state)
         snap['seq'] = self._seq
         snap['roster_version'] = self._roster_version
