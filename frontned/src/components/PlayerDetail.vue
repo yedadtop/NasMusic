@@ -34,7 +34,7 @@
               v-for="(line, index) in parsedLyrics" 
               :key="index"
               style="word-break: keep-all; overflow-wrap: break-word;"
-              class="transition-all duration-[800ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] cursor-pointer block py-3 md:py-4 transform-gpu origin-center md:origin-left font-bold text-[clamp(19px,4vw,24px)] landscape:text-[clamp(24px,3vw,34px)] md:text-[clamp(24px,3vw,34px)] leading-[1.4]"
+              class="transition-all duration-[1200ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] cursor-pointer block py-3 md:py-4 transform-gpu origin-center md:origin-left font-bold text-[clamp(19px,4vw,24px)] landscape:text-[clamp(24px,3vw,34px)] md:text-[clamp(24px,3vw,34px)] leading-[1.4]"
               :class="getCurrentLyricClass(index)"
               :ref="el => setLyricRef(el, index)"
               @click="seekToLine(line.time)"
@@ -405,10 +405,35 @@ const scrollToCenter = (index, behavior = 'smooth') => {
     const elementHeight = el.clientHeight
     
     const scrollTarget = elementTop - (containerHeight / 2) + (elementHeight / 2)
-    container.scrollTo({
-      top: scrollTarget,
-      behavior 
-    })
+    
+    // 如果是无动画跳转（比如刚打开歌词），直接赋值
+    if (behavior === 'auto') {
+      container.scrollTop = scrollTarget
+      return
+    }
+
+    // 自定义平滑滚动动画
+    const startPosition = container.scrollTop
+    const distance = scrollTarget - startPosition
+    const duration = 800 // 滚动耗时（毫秒）。觉得快可以加大到 1200，觉得慢可以减小到 800
+    let startTime = null
+
+    const animation = (currentTime) => {
+      if (startTime === null) startTime = currentTime
+      const timeElapsed = currentTime - startTime
+      const progress = Math.min(timeElapsed / duration, 1)
+      
+      // 缓动函数 (Ease Out Quart): 使得滚动在快结束时极其丝滑地慢下来
+      const ease = 1 - Math.pow(1 - progress, 4)
+      
+      container.scrollTop = startPosition + distance * ease
+      
+      if (timeElapsed < duration) {
+        requestAnimationFrame(animation)
+      }
+    }
+    
+    requestAnimationFrame(animation)
   }
 }
 
