@@ -477,7 +477,7 @@ const uploadFile = async (item) => {
 
   } catch (err) {
     item.status = 'error'
-    item.error = err.response?.data?.error || err.message || '上传失败'
+    item.error = err.response?.data?.detail || err.response?.data?.error || err.message || '上传失败'
     item.file = null
     showToast(`${item.filename} 上传失败: ${item.error}`, 'error')
   }
@@ -556,7 +556,7 @@ const saveConfig = async () => {
     })
     showToast('路径保存成功', 'success')
   } catch (error) {
-    showToast('保存失败，请检查后端服务', 'error')
+    showToast(error.response?.data?.detail || '保存失败，请检查后端服务', 'error')
   } finally {
     saving.value = false
   }
@@ -570,7 +570,7 @@ const startScan = async () => {
     showToast('扫描任务已在后台启动', 'success')
     startPolling()
   } catch (error) {
-    const msg = error.response?.data?.message || '启动失败，请检查后端服务'
+    const msg = error.response?.data?.detail || error.response?.data?.message || '启动失败，请检查后端服务'
     showToast(msg, 'error')
     scanning.value = false
   }

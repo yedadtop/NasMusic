@@ -85,6 +85,7 @@
                   class="absolute right-0 bottom-full mb-2 md:top-full md:mt-2 md:bottom-auto bg-gray-800/90 backdrop-blur-sm rounded-lg shadow-xl py-2 min-w-[120px] z-50"
                 >
                   <button
+                    v-if="hasToken"
                     class="flex items-center w-full px-4 py-2 text-sm text-white/80 hover:text-white hover:bg-white/10 transition"
                     @click="showEditModal = true; showOptionsMenu = false"
                   >
@@ -161,9 +162,11 @@ import EditTrackModal from './EditTrackModal.vue'
 import AppleToast from './AppleToast.vue'
 import { STREAM_BASE_URL, getBiliImageUrl } from '../api'
 import request from '../api'
+import { useTokenExists } from '../composables/useTokenExists'
 
 const emit = defineEmits(['close', 'trackUpdated'])
 const player = usePlayerStore()
+const hasToken = useTokenExists()
 const lyricsContainer = ref(null)
 const showEditModal = ref(false)
 const showOptionsMenu = ref(false)

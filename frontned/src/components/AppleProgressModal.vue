@@ -200,7 +200,7 @@ const handleStart = async () => {
     progressText.value = '任务运行中...'
     startPolling()
   } catch (error) {
-    const msg = error.response?.data?.message || '启动失败，请检查后端服务'
+    const msg = error.response?.data?.detail || error.response?.data?.message || '启动失败，请检查后端服务'
     status.value = 'error'
     resultSummary.value = {
       success_count: 0,
