@@ -458,6 +458,186 @@
 
 ---
 
+## 18. Bilibili 视频搜索
+
+- **接口地址**：`GET /api/scraper/bili/search/`
+- **功能描述**：通过关键字搜索 Bilibili 视频（用于搜索页在线搜歌）。后端使用 bilibili-api-python 库调用 B 站官方搜索接口，返回前 20 条视频结果。
+- **Query 参数**：
+  - `keyword` (string): **必填**。搜索关键词。
+- **返回格式**（HTTP 200 OK）：
+  ```json
+  {
+    "success": true,
+    "keyword": "晴天",
+    "count": 20,
+    "results": [
+      {
+        "bvid": "BV1xx411c7mD",
+        "title": "【周杰伦】晴天",
+        "author": "某UP主",
+        "track_cover": "http://i2.hdslb.com/bfs/archive/xxx.jpg",
+        "duration": "4:29"
+      }
+    ]
+  }
+  ```
+  - `bvid` (string): 视频 BV 号（唯一标识，用于播放和保存）
+  - `title` (string): 视频标题（已自动去除 HTML 高亮标签）
+  - `author` (string): UP 主名称
+  - `track_cover` (string): 封面图 URL（hdslb.com 域名）
+  - `duration` (string): 时长字符串（如 `4:29`）
+- **错误返回**（HTTP 400 Bad Request）：
+  ```json
+  {
+    "message": "keyword 参数不能为空"
+  }
+  ```
+- **错误返回**（HTTP 502 Bad Gateway）：
+  ```json
+  {
+    "message": "B站搜索失败: xxx"
+  }
+  ```
+
+---
+
+## 19. 获取 Bilibili 音频播放链接
+
+- **接口地址**：`GET /api/scraper/bili/playurl/`
+- **功能描述**：获取指定 Bilibili 视频的最优音频流直链。后端自动计算 Wbi 签名，并按音质优先级挑选最佳音频流：`Hi-Res 无损` > `杜比全景声` > `192K 高码率` > `132K 标准` > `64K 流畅`。
+- **Query 参数**：
+  - `bvid` (string): **必填**。视频 BV 号。
+- **返回格式**（HTTP 200 OK）：
+  ```json
+  {
+    "success": true,
+    "bvid": "BV1xx411c7mD",
+    "cid": 123456789,
+    "audio_url": "https://upos-sz-mirrorhw.bilivideo.com/...",
+    "quality_desc": "192K 高码率",
+    "audio_size": 8563210,
+    "audio_codecid": 30280,
+    "bitrate": 192
+  }
+  ```
+  - `audio_url` (string): 音频流直链（B 站要求携带 Referer 头，浏览器无法直接访问，需配合代理接口使用）
+  - `quality_desc` (string): 音质描述
+  - `audio_codecid` (int): 音频流编码 ID
+  - `bitrate` (int): 码率（Kbps）
+- **错误返回**（HTTP 400 Bad Request）：
+  ```json
+  {
+    "message": "bvid 参数不能为空"
+  }
+  ```
+- **错误返回**（HTTP 404 Not Found）：
+  ```json
+  {
+    "message": "未找到可用的音频流"
+  }
+  ```
+- **错误返回**（HTTP 502 Bad Gateway）：
+  ```json
+  {
+    "message": "获取播放链接失败: xxx"
+  }
+  ```
+
+---
+
+## 20. Bilibili 音频流代理
+
+- **接口地址**：`GET /api/scraper/bili/proxy/?url={audio_url}`
+- **功能描述**：代理转发 Bilibili 音频流。B 站音频直链要求携带 Referer 请求头，浏览器 `<audio>` 标签无法直接访问，需经此后端代理中转播放。
+- **特性**：
+  - 自动附加 B 站所需的 `Referer` / `User-Agent` 请求头
+  - 透传 `Range` 请求，支持 HTTP 206 Partial Content（拖拽进度条、快进快退）
+  - 流式转发，不占用服务器内存
+- **Query 参数**：
+  - `url` (string): **必填**。音频流直链（必须以 `https://` 开头）。
+- **返回**：音频二进制流（`audio/mp4`），支持 Range 分段请求。
+- **错误返回**（HTTP 400 Bad Request）：
+  ```json
+  {
+    "message": "无效的媒体URL"
+  }
+  ```
+- **错误返回**（HTTP 502 Bad Gateway）：
+  ```json
+  {
+    "message": "请求上游媒体流失败: xxx"
+  }
+  ```
+
+---
+
+## 21. 保存 Bilibili 歌曲到音乐库
+
+- **接口地址**：`POST /api/scraper/bili/download/`
+- **功能描述**：将 Bilibili 搜索结果中的歌曲下载保存到本地音乐库（搜索页每行右侧的下载按钮）。只保存封面和音频文件，不含歌词。
+- **处理流程**：
+  1. 按 `bvid` 去重（曲库中已有文件名包含该 bvid 的歌曲时直接返回已存在）
+  2. 获取视频信息，补全标题 / UP主 / 封面 / 时长
+  3. 按音质优先级（`Hi-Res 无损` > `杜比全景声` > `192K 高码率` > `132K 标准` > `64K 流畅`）挑选最优音频流并流式下载
+  4. 保存到音乐库 `Bilibili` 子目录，文件名 `标题_bvid.m4a`（先写 `.part` 临时文件再重命名，防止半截文件；自动经 ffmpeg remux 将 moov 前置，防止播放后半段卡顿）
+  5. 读取真实音频时长，创建歌手（UP主）、专辑（统一归入 `Bilibili`）、歌曲记录
+  6. 下载封面并转为 JPEG 存入单曲封面（失败不影响保存结果）
+- **前置条件**：音乐库路径必须已通过系统配置接口设置（`/api/scanner/config/`）
+- **Body 参数**（JSON）：
+  ```json
+  {
+    "bvid": "BV1xx411c7mD",
+    "title": "【周杰伦】晴天",
+    "author": "某UP主",
+    "cover": "http://i2.hdslb.com/bfs/archive/xxx.jpg"
+  }
+  ```
+  - `bvid` (string): **必填**。视频 BV 号。
+  - `title` (string): 可选。歌名（缺省时取视频标题）。
+  - `author` (string): 可选。歌手/UP主名（缺省时取视频 UP 主）。
+  - `cover` (string): 可选。封面 URL（缺省时取视频封面）。
+- **返回格式**（HTTP 200 OK，保存成功）：
+  ```json
+  {
+    "success": true,
+    "message": "已保存到音乐库",
+    "track_id": 100,
+    "quality_desc": "192K 高码率"
+  }
+  ```
+- **返回格式**（HTTP 200 OK，已在音乐库中）：
+  ```json
+  {
+    "success": true,
+    "already": true,
+    "message": "该歌曲已在音乐库中"
+  }
+  ```
+- **错误返回**（HTTP 400 Bad Request）：
+  ```json
+  {
+    "message": "音乐库路径未配置或不存在，无法保存"
+  }
+  ```
+- **错误返回**（HTTP 404 Not Found）：
+  ```json
+  {
+    "message": "未找到可用的音频流"
+  }
+  ```
+- **错误返回**（HTTP 502 Bad Gateway）：
+  ```json
+  {
+    "message": "下载音频流失败: xxx"
+  }
+  ```
+- **说明**：
+  - 下载耗时与音质/时长相关，前端调用时建议单独设置较长超时（如 180 秒）
+  - 保存后的歌曲与本地歌曲一视同仁，后续增量扫描不会重复入库
+- **前端入口**：搜索页 → Bilibili 在线结果 → 每行右侧下载按钮
+
+---
+
 ## 23. 手动刮削歌曲封面（高清）
 
 - **接口地址**：`POST /api/scraper/track/{track_id}/scrape/`

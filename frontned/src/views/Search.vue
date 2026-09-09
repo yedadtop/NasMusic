@@ -113,6 +113,17 @@
                   <span class="text-xs text-gray-500 truncate">{{ track.author }}</span>
                 </div>
               </div>
+              <button
+                @click.stop="saveBiliTrack(track)"
+                :disabled="track.saving || track.saved"
+                class="ml-2 p-2 rounded-full transition shrink-0"
+                :class="track.saved ? 'text-green-500 cursor-default' : 'text-gray-400 hover:text-gray-600 hover:bg-black/5'"
+                :title="track.saved ? '已保存到音乐库' : '保存到音乐库'"
+              >
+                <Icon v-if="track.saving" icon="mdi:loading" class="w-5 h-5 animate-spin" />
+                <Icon v-else-if="track.saved" icon="mdi:check-circle" class="w-5 h-5" />
+                <Icon v-else icon="mdi:download-outline" class="w-5 h-5" />
+              </button>
             </div>
           </div>
 
@@ -125,6 +136,9 @@
 
       </div>
     </div>
+
+    <!-- 保存结果提示 -->
+    <AppleToast v-model="toastVisible" :message="toastMessage" :type="toastType" />
   </div>
 </template>
 
@@ -133,6 +147,7 @@ import { ref, onActivated, onDeactivated, nextTick } from 'vue'
 import { Icon } from '@iconify/vue'
 import request from '../api'
 import { getBiliImageUrl } from '../api'
+import AppleToast from '../components/AppleToast.vue'
 
 const emit = defineEmits(['play'])
 
@@ -276,7 +291,9 @@ const fetchBiliTracks = async (signal) => {
       duration: 0,
       is_bilibili: true,
       bvid: item.bvid,
-      original_duration: item.duration
+      original_duration: item.duration,
+      saving: false,
+      saved: false
     }))
 
     biliTracks.value = biliResults
@@ -335,6 +352,37 @@ const loadMore = () => {
 
 const playTrack = (track, index, source) => {
   emit('play', { track, index, tracks: source === 'bili' ? biliTracks.value : localTracks.value, source })
+}
+
+// --- 保存B站歌曲到音乐库 ---
+const toastVisible = ref(false)
+const toastMessage = ref('')
+const toastType = ref('success')
+
+const showToast = (message, type = 'success') => {
+  toastMessage.value = message
+  toastType.value = type
+  toastVisible.value = true
+}
+
+const saveBiliTrack = async (track) => {
+  if (track.saving || track.saved) return
+  track.saving = true
+  try {
+    // 后端需要完整下载音频文件，耗时较长，单独放宽超时时间
+    const res = await request.post('/scraper/bili/download/', {
+      bvid: track.bvid,
+      title: track.title,
+      author: track.author,
+      cover: track.track_cover
+    }, { timeout: 180000 })
+    track.saved = true
+    showToast(res.data?.message || '已保存到音乐库', 'success')
+  } catch (err) {
+    showToast(err?.response?.data?.message || '保存失败，请稍后重试', 'error')
+  } finally {
+    track.saving = false
+  }
 }
 
 const formatDuration = (seconds) => {

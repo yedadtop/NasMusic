@@ -1,6 +1,10 @@
 import os
 import re
 import logging
+import mutagen
+from io import BytesIO
+from PIL import Image
+from django.core.files.base import ContentFile
 from django.http import StreamingHttpResponse
 from rest_framework import status
 from rest_framework.views import APIView
@@ -14,6 +18,9 @@ os.environ['all_proxy'] = ''
 
 # --- 引入 bilibili-api-python 核心组件 ---
 from bilibili_api import search, video, Credential, sync
+from library.models import Track, Artist, Album, get_music_path
+from scanner.remux_utils import remux_audio_file
+from scanner.utils import parse_artists
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +38,44 @@ AUDIO_QUALITY_PRIORITY = {
 
 MANUAL_QUALITY_SELECTION = None
 
+BILI_DOWNLOAD_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Referer': 'https://www.bilibili.com/',
+}
+
 
 def get_bili_credential():
     """获取 Bilibili 凭证对象"""
     return Credential()
+
+
+def _sanitize_filename(name):
+    """清理文件名中 Windows 不允许的字符，并限制长度"""
+    cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', name).strip().strip(' .')
+    return cleaned[:100] or 'bilibili_audio'
+
+
+def _select_best_audio(audio_streams):
+    """按音质优先级挑选最优音频流（与播放接口同一套规则）"""
+    best_audio = None
+    best_priority = 0
+    quality_priority = AUDIO_QUALITY_PRIORITY.copy()
+
+    if isinstance(MANUAL_QUALITY_SELECTION, int) and MANUAL_QUALITY_SELECTION in quality_priority:
+        for codecid in quality_priority:
+            quality_priority[codecid] = 1 if codecid != MANUAL_QUALITY_SELECTION else 10
+
+    for audio in audio_streams:
+        audio_url = audio.get('baseUrl') or audio.get('src')
+        audio_codec = audio.get('codecid') or audio.get('id') or 0
+        priority = quality_priority.get(audio_codec, 0)
+        if audio_url and priority > best_priority:
+            best_audio = audio
+            best_priority = priority
+
+    if not best_audio and audio_streams:
+        best_audio = audio_streams[0]
+    return best_audio
 
 
 class BiliSearchView(APIView):
@@ -156,6 +197,9 @@ class BiliPlayUrlView(APIView):
             logger.warning(
                 f"[BiliAPI-Play] 🏆 最终选定最优音频流 -> 《{song_title}》 | 音质: {quality_desc} (Codec:{audio_codec}) | 码率: {bitrate_kbps}Kbps | 大小: {audio_size / 1024 / 1024:.2f}MB"
             )
+            logger.warning(
+                f"[BiliAPI-Play] 🔗 音频下载链接: {audio_url}"
+            )
 
             return Response({
                 'success': True,
@@ -171,6 +215,141 @@ class BiliPlayUrlView(APIView):
         except Exception as e:
             logger.error(f"[BiliAPI-Play] 获取播放链接异常: {str(e)}")
             return Response({'message': f'获取播放链接失败: {str(e)}'}, status=status.HTTP_502_BAD_GATEWAY)
+
+
+class BiliDownloadView(APIView):
+    """保存 Bilibili 搜索歌曲：下载音频文件和封面到本地音乐库并入库（不含歌词）"""
+
+    def post(self, request):
+        bvid = request.data.get('bvid', '').strip()
+        title = request.data.get('title', '').strip()
+        author = request.data.get('author', '').strip()
+        cover_url = request.data.get('cover', '').strip()
+
+        logger.info(f"\n========== 开始保存B站歌曲到音乐库: {bvid} ==========")
+
+        if not bvid:
+            return Response({'message': 'bvid 参数不能为空'}, status=status.HTTP_400_BAD_REQUEST)
+
+        music_path = get_music_path()
+        if not music_path or not os.path.isdir(music_path):
+            return Response({'message': '音乐库路径未配置或不存在，无法保存'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 去重：文件名中包含 bvid 即视为已保存过
+        if Track.objects.filter(file_path__icontains=bvid).exists():
+            return Response({'success': True, 'already': True, 'message': '该歌曲已在音乐库中'})
+
+        tmp_path = None
+        try:
+            v = video.Video(bvid=bvid, credential=get_bili_credential())
+
+            # 获取视频信息，补全标题/歌手/封面/时长
+            video_info = sync(v.get_info())
+            if not title:
+                title = re.sub(r'<[^>]+>', '', video_info.get('title', '')) or bvid
+            if not author:
+                author = video_info.get('owner', {}).get('name', '') or 'Unknown Artist'
+            if not cover_url:
+                cover_url = video_info.get('pic', '')
+            video_duration = float(video_info.get('duration', 0) or 0)
+
+            # 挑选最优音频流
+            playurl_data = sync(v.get_download_url(page_index=0))
+            audio_streams = playurl_data.get('dash', {}).get('audio', [])
+            best_audio = _select_best_audio(audio_streams)
+            if not best_audio:
+                return Response({'message': '未找到可用的音频流'}, status=status.HTTP_404_NOT_FOUND)
+
+            audio_url = best_audio.get('baseUrl') or best_audio.get('src')
+            audio_codec = best_audio.get('codecid') or best_audio.get('id') or 0
+            quality_desc = BILI_QUALITY_MAP.get(audio_codec, '未知')
+
+            # 下载音频文件到音乐库的 Bilibili 子目录
+            save_dir = os.path.join(music_path, 'Bilibili')
+            os.makedirs(save_dir, exist_ok=True)
+            safe_title = _sanitize_filename(title)
+            file_path = os.path.normpath(os.path.join(save_dir, f"{safe_title}_{bvid}.m4a"))
+            tmp_path = file_path + '.part'
+
+            with requests.get(audio_url, headers=BILI_DOWNLOAD_HEADERS, stream=True, timeout=60) as upstream:
+                upstream.raise_for_status()
+                with open(tmp_path, 'wb') as f:
+                    for chunk in upstream.iter_content(chunk_size=64 * 1024):
+                        if chunk:
+                            f.write(chunk)
+            os.replace(tmp_path, file_path)
+            tmp_path = None
+
+            # 尝试 remux（moov 前置， fragmented MP4 转普通 MP4），失败不影响入库
+            try:
+                remux_audio_file(file_path)
+            except Exception as e:
+                logger.warning(f"[BiliAPI-Download] remux 失败（已忽略）: {e}")
+
+            # 读取真实时长，失败则使用视频时长
+            duration = video_duration
+            try:
+                audio_meta = mutagen.File(file_path)
+                if audio_meta is not None and getattr(audio_meta.info, 'length', 0) > 0:
+                    duration = audio_meta.info.length
+            except Exception:
+                pass
+
+            # 入库：歌手 / 专辑 / 歌曲（专辑统一归到 Bilibili，与扫描器的按标题去重逻辑一致）
+            primary_artist, _ = Artist.objects.get_or_create(name=author)
+            album_obj = Album.objects.filter(title='Bilibili').first()
+            if not album_obj:
+                album_obj = Album.objects.create(title='Bilibili', artist=primary_artist)
+
+            track = Track.objects.create(
+                title=title,
+                artist=primary_artist,
+                album=album_obj,
+                file_path=file_path,
+                duration=duration,
+                format='m4a',
+            )
+            all_artist_objs = [Artist.objects.get_or_create(name=n)[0] for n in parse_artists(author)]
+            track.artists.set(all_artist_objs)
+
+            # 下载并保存封面（失败不影响保存结果）
+            if cover_url:
+                try:
+                    if cover_url.startswith('//'):
+                        cover_url = 'https:' + cover_url
+                    img_res = requests.get(cover_url, headers=BILI_DOWNLOAD_HEADERS, timeout=20)
+                    img_res.raise_for_status()
+                    image = Image.open(BytesIO(img_res.content))
+                    if image.mode != 'RGB':
+                        image = image.convert('RGB')
+                    img_io = BytesIO()
+                    image.save(img_io, format='JPEG', quality=95, subsampling=0)
+                    track.cover_thumbnail.save(f'bili_{bvid}.jpg', ContentFile(img_io.getvalue()), save=True)
+                except Exception as e:
+                    logger.warning(f"[BiliAPI-Download] 封面下载失败（已忽略）: {e}")
+
+            logger.warning(
+                f"[BiliAPI-Download] ✅ 保存成功 -> 《{title}》 | 音质: {quality_desc} | 时长: {duration:.0f}s | 文件: {file_path}"
+            )
+            return Response({
+                'success': True,
+                'message': '已保存到音乐库',
+                'track_id': track.id,
+                'quality_desc': quality_desc,
+            })
+
+        except requests.RequestException as e:
+            logger.error(f"[BiliAPI-Download] 下载音频流失败: {str(e)}")
+            return Response({'message': f'下载音频流失败: {str(e)}'}, status=status.HTTP_502_BAD_GATEWAY)
+        except Exception as e:
+            logger.error(f"[BiliAPI-Download] 保存失败: {str(e)}")
+            return Response({'message': f'保存失败: {str(e)}'}, status=status.HTTP_502_BAD_GATEWAY)
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
 
 
 class BiliProxyStreamView(APIView):
