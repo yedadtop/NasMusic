@@ -160,6 +160,52 @@
         </div>
       </section>
 
+      <section class="mb-8 bg-white rounded-[20px] p-6 sm:p-8 shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100/50 transition-all">
+        <div class="flex items-center mb-3">
+          <div class="w-10 h-10 bg-[#e8f2ff] text-[#0071e3] rounded-[10px] flex items-center justify-center mr-4">
+            <Lock class="w-5 h-5" />
+          </div>
+          <h2 class="text-xl font-semibold tracking-tight">访问令牌</h2>
+        </div>
+
+        <p class="text-[15px] text-[#86868b] mb-6 leading-relaxed">
+          修改、删除、上传等写操作接口需要令牌鉴权。输入服务器配置的访问令牌并保存，仅保存在本机浏览器中。
+        </p>
+
+        <div class="flex flex-col gap-4">
+          <el-input
+            v-model="tokenInput"
+            type="password"
+            placeholder="输入访问令牌"
+            show-password
+            class="flex-1 custom-apple-input"
+          />
+          <div class="flex flex-col sm:flex-row gap-4">
+            <div class="w-full sm:w-auto">
+              <el-button
+                type="primary"
+                :loading="verifyingToken"
+                @click="saveToken"
+                class="w-full custom-apple-button"
+              >
+                验证并保存
+              </el-button>
+            </div>
+            <div class="w-full sm:w-auto">
+              <el-button
+                @click="clearToken"
+                :disabled="!hasToken"
+                class="w-full custom-apple-button"
+              >
+                清除已保存令牌
+              </el-button>
+            </div>
+          </div>
+          <p v-if="hasToken" class="text-[13px] text-[#34c759]">本机已保存访问令牌</p>
+          <p v-else class="text-[13px] text-[#86868b]">尚未保存令牌，写操作将被拒绝</p>
+        </div>
+      </section>
+
       <section class="mb-10 bg-white rounded-[20px] p-6 sm:p-8 shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100/50">
         <div class="flex items-center justify-between mb-6">
           <div class="flex items-center">
@@ -279,10 +325,10 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed, defineAsyncComponent } from 'vue'
-import { FolderOpened, Loading, CircleCheck, Upload, Close } from '@element-plus/icons-vue'
+import { FolderOpened, Loading, CircleCheck, Upload, Close, Lock } from '@element-plus/icons-vue'
 import AppleToast from '../components/AppleToast.vue'
 import AppleConfirmModal from '../components/AppleConfirmModal.vue'
-import request from '../api'
+import request, { getToken, setToken } from '../api'
 import { usePlayerStore } from '../stores/player'
 
 const playerStore = usePlayerStore()
@@ -298,6 +344,44 @@ const activeTab = ref('settings')
 
 const musicPath = ref('')
 const scanning = ref(false)
+
+// ===== 访问令牌 =====
+const tokenInput = ref('')
+const verifyingToken = ref(false)
+const hasToken = computed(() => !!getToken())
+
+const saveToken = async () => {
+  const token = tokenInput.value.trim()
+  if (!token) {
+    showToast('请输入访问令牌', 'info')
+    return
+  }
+  try {
+    verifyingToken.value = true
+    const res = await request.post('/auth/verify/', {}, {
+      headers: { Authorization: `Bearer ${token}` },
+      skipTokenInvalidToast: true
+    })
+    setToken(token)
+    tokenInput.value = ''
+    if (res.data.token_configured === false) {
+      showToast('后端未启用令牌校验，已保存令牌', 'info')
+    } else {
+      showToast('令牌验证成功，已保存', 'success')
+    }
+  } catch (err) {
+    showToast('令牌无效，未保存', 'error')
+  } finally {
+    verifyingToken.value = false
+  }
+}
+
+const clearToken = () => {
+  setToken('')
+  tokenInput.value = ''
+  showToast('已清除本机保存的令牌', 'success')
+}
+
 const saving = ref(false)
 let timer = null
 

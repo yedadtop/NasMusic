@@ -2,6 +2,32 @@
 
 ---
 
+## 0. 访问令牌鉴权（写操作）
+
+- **机制**：所有 **修改/删除类接口**（POST / PUT / PATCH / DELETE）需要携带有效访问令牌；**只读接口**（GET，含播放/下载音频流、封面图）无需令牌，直接放行。
+- **令牌配置**：后端 `NasMusic/settings.py` 中的 `NASMUSIC_API_TOKEN`（支持环境变量覆盖；设为空字符串则停用校验）。
+- **携带方式**（二选一）：
+  - 请求头：`Authorization: Bearer <令牌>`
+  - 查询参数：`?token=<令牌>`
+- **令牌校验接口**：`POST /api/auth/verify/`
+  - 携带有效令牌 → HTTP 200：
+    ```json
+    {
+      "success": true,
+      "token_configured": true,
+      "message": "令牌有效"
+    }
+    ```
+  - `token_configured` 为 `false` 表示后端未启用令牌校验（`NASMUSIC_API_TOKEN` 为空）
+  - 令牌缺失/无效 → HTTP 403：
+    ```json
+    { "detail": "访问令牌缺失或无效，请前往「设置」填写访问令牌" }
+    ```
+- **前端行为**：设置页「访问令牌」区块输入并验证保存，令牌存入浏览器 localStorage（key: `nasmusic_token`）；所有 API 请求经 axios 拦截器自动附带 `Authorization` 头；收到 401/403 时顶部弹出全局提示。
+- **受影响接口**（全部写操作）：修改/删除歌曲（`PUT/PATCH/DELETE /api/tracks/{id}/`）、触发扫描（`POST /api/scanner/run/`）、更新配置（`PUT /api/scanner/config/`）、回收站恢复/删除（`POST/DELETE /api/scanner/trash/`）、全部刮削接口（`POST /api/scraper/...`）、B 站下载（`POST /api/scraper/bili/download/`）、分片上传（`POST/DELETE /api/upload/...`）。
+
+---
+
 ## 1. 获取/播放音频流
 
 - **接口地址**：`GET /stream/{id}/`

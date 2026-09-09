@@ -57,7 +57,7 @@
         <el-button :size="isMobile ? 'small' : 'default'" :icon="Download" round type="success" :loading="exporting" @click="exportLyrics" class="font-bold shadow-md px-4 md:px-6">
           {{ isMobile ? '导出' : '导出 LRC' }}
         </el-button>
-        <el-button type="primary" :size="isMobile ? 'small' : 'default'" :icon="Check" :loading="saving" @click="saveLyrics" round class="font-bold shadow-md px-4 md:px-6">
+        <el-button v-if="hasToken" type="primary" :size="isMobile ? 'small' : 'default'" :icon="Check" :loading="saving" @click="saveLyrics" round class="font-bold shadow-md px-4 md:px-6">
           {{ isMobile ? '保存' : '保存并同步' }}
         </el-button>
       </div>
@@ -351,7 +351,10 @@ import { useRoute, useRouter } from 'vue-router'
 import AppleToast from '../components/AppleToast.vue'
 import { Check, VideoPlay, VideoPause, RefreshLeft, Document, Plus, Minus, Delete, Operation, Close, Location, QuestionFilled, Download } from '@element-plus/icons-vue'
 import request, { STREAM_BASE_URL } from '../api'
+import { useTokenExists } from '../composables/useTokenExists'
 import { usePlayerStore } from '../stores/player'
+
+const hasToken = useTokenExists()
 
 const route = useRoute()
 const router = useRouter()

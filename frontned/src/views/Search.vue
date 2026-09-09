@@ -114,6 +114,7 @@
                 </div>
               </div>
               <button
+                v-if="hasToken"
                 @click.stop="saveBiliTrack(track)"
                 :disabled="track.saving || track.saved"
                 class="ml-2 p-2 rounded-full transition shrink-0"
@@ -148,8 +149,10 @@ import { Icon } from '@iconify/vue'
 import request from '../api'
 import { getBiliImageUrl } from '../api'
 import AppleToast from '../components/AppleToast.vue'
+import { useTokenExists } from '../composables/useTokenExists'
 
 const emit = defineEmits(['play'])
+const hasToken = useTokenExists()
 
 const localTracks = ref([])
 const biliTracks = ref([])

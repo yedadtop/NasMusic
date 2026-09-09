@@ -4,6 +4,7 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from library.views import TrackViewSet, ArtistViewSet, AlbumViewSet, ChunkedUploadViewSet
+from NasMusic.auth_views import TokenVerifyView
 
 admin.site.site_header = 'NasMusic 管理后台'
 admin.site.site_title = 'NasMusic 管理'
@@ -21,6 +22,8 @@ urlpatterns = [
     path('api/', include(router.urls)),
     # 挂载流媒体服务的路由
     path('stream/', include('stream.urls')),
+    # 访问令牌校验接口
+    path('api/auth/verify/', TokenVerifyView.as_view(), name='token-verify'),
     # --- 新增：挂载扫描器接口 ---
     path('api/scanner/', include('scanner.urls')),
     # --- 新增：挂载刮削器接口 ---

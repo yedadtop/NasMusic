@@ -34,11 +34,19 @@ INSTALLED_APPS = [
 
 ]
 
+# ===== API 访问令牌 =====
+# 修改/删除等写操作接口（POST/PUT/PATCH/DELETE）需要携带此令牌：
+#   - 请求头：Authorization: Bearer <令牌>
+#   - 或查询参数：?token=<令牌>
+# 可通过环境变量 NASMUSIC_API_TOKEN 覆盖；设为空字符串则停用校验
+NASMUSIC_API_TOKEN = os.environ.get('NASMUSIC_API_TOKEN', 'yfj020113')
+
 # Django REST Framework 配置 - 内网环境，禁用CSRF验证
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
+        # 只读接口放行；写操作需携带有效访问令牌（见 NasMusic/token_auth.py）
+        'NasMusic.token_auth.TokenRequiredForUnsafe',
     ],
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',

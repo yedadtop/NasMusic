@@ -173,6 +173,17 @@
 
     <VolumeTooltip :visible="showVolumeTooltip" />
 
+    <!-- 令牌失效全局提示 -->
+    <Transition name="fade">
+      <div
+        v-if="tokenToastVisible"
+        class="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] bg-gray-900/90 text-white text-sm px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 backdrop-blur"
+      >
+        <Icon icon="mdi:shield-alert" class="w-4 h-4" />
+        <span>访问令牌无效或缺失，请前往「设置」填写</span>
+      </div>
+    </Transition>
+
     <audio 
       ref="audioRef" 
       @timeupdate="handleTimeUpdate"
@@ -209,6 +220,18 @@ const isMobile = computed(() => windowWidth.value < 768)
 const isFullScreen = computed(() => route.meta?.fullScreen === true)
 const searchContainer = ref(null)
 let volumeTimer = null
+
+// ===== 令牌失效全局提示 =====
+const tokenToastVisible = ref(false)
+let tokenToastTimer = null
+
+const handleTokenInvalid = () => {
+  tokenToastVisible.value = true
+  if (tokenToastTimer) clearTimeout(tokenToastTimer)
+  tokenToastTimer = setTimeout(() => {
+    tokenToastVisible.value = false
+  }, 3000)
+}
 
 const handleResize = () => {
   windowWidth.value = window.innerWidth
@@ -285,6 +308,7 @@ onMounted(() => {
   window.addEventListener('resize', handleResize)
   window.addEventListener('keydown', handleKeydown)
   window.addEventListener('click', handleClickOutside)
+  window.addEventListener('nasmusic:token-invalid', handleTokenInvalid)
   player.setAudioElement(audioRef.value)
 })
 
@@ -292,6 +316,8 @@ onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   window.removeEventListener('keydown', handleKeydown)
   window.removeEventListener('click', handleClickOutside)
+  window.removeEventListener('nasmusic:token-invalid', handleTokenInvalid)
+  if (tokenToastTimer) clearTimeout(tokenToastTimer)
   if (searchTimer) clearTimeout(searchTimer)
   if (volumeTimer) clearTimeout(volumeTimer)
 })
