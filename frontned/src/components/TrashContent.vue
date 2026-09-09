@@ -12,13 +12,6 @@
     />
 
     <section class="mb-10 bg-white rounded-[20px] p-6 sm:p-8 shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100/50">
-      <div class="flex items-center mb-3">
-        <div class="w-10 h-10 bg-[#fff3e0] text-[#ff9500] rounded-[10px] flex items-center justify-center mr-4">
-          <Icon icon="mdi:trash-can" class="w-5 h-5" />
-        </div>
-        <h2 class="text-xl font-semibold tracking-tight">垃圾箱</h2>
-      </div>
-
       <div class="flex flex-col sm:flex-row gap-4 mb-6">
         <div class="w-full sm:w-auto">
           <el-button
