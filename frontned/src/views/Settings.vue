@@ -170,6 +170,30 @@
         </div>
       </section>
 
+      <section class="mb-8 bg-white rounded-[20px] p-6 sm:p-8 shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100/50 transition-all">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center">
+            <div class="w-10 h-10 bg-[#e8f8f0] text-[#34c759] rounded-[10px] flex items-center justify-center mr-4">
+              <Icon icon="mdi:music-box-multiple" class="w-5 h-5" />
+            </div>
+            <h2 class="text-xl font-semibold tracking-tight">多设备同步播放</h2>
+          </div>
+          <el-switch
+            :model-value="syncEnabled"
+            @update:model-value="onSyncToggle"
+          />
+        </div>
+
+        <p class="text-[15px] text-[#86868b] mb-4 leading-relaxed">
+          开启后，家庭内网中所有开启此功能的设备将同步播放同一首歌、同一进度；任意设备均可控制播放、暂停、切歌与进度。控制操作需要令牌。
+        </p>
+
+        <div v-if="syncEnabled" class="flex items-center gap-3 text-[13px] text-[#86868b] bg-[#f5f5f7] rounded-[12px] px-4 py-3">
+          <span class="w-2 h-2 rounded-full flex-shrink-0" :class="statusDotClass"></span>
+          <span>{{ statusTextSync }}</span>
+        </div>
+      </section>
+
       <section class="mb-10 bg-white rounded-[20px] p-6 sm:p-8 shadow-[0_2px_20px_rgba(0,0,0,0.04)] border border-gray-100/50">
         <div class="flex items-center justify-between mb-6">
           <div class="flex items-center">
@@ -337,10 +361,12 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch, defineAsyncComponent } from 'vue'
 import { FolderOpened, Loading, CircleCheck, Upload, Close, Lock } from '@element-plus/icons-vue'
+import { Icon } from '@iconify/vue'
 import AppleToast from '../components/AppleToast.vue'
 import AppleConfirmModal from '../components/AppleConfirmModal.vue'
 import request, { setToken } from '../api'
 import { useTokenExists } from '../composables/useTokenExists'
+import { useSyncPlayback } from '../composables/useSyncPlayback'
 import { usePlayerStore } from '../stores/player'
 
 const playerStore = usePlayerStore()
@@ -366,6 +392,33 @@ watch(hasToken, (exists) => {
 
 const musicPath = ref('')
 const scanning = ref(false)
+
+// ===== 多设备同步播放 =====
+const sync = useSyncPlayback()
+const syncEnabled = computed(() => sync.enabled.value)
+
+const onSyncToggle = (value) => {
+  sync.setEnabled(value)
+}
+
+const statusDotClass = computed(() => {
+  switch (sync.status.value) {
+    case 'connected': return 'bg-[#34c759]'
+    case 'connecting': return 'bg-[#ff9500]'
+    default: return 'bg-[#86868b]'
+  }
+})
+
+const statusTextSync = computed(() => {
+  switch (sync.status.value) {
+    case 'connected': {
+      const role = sync.isLeader.value ? '主机' : '从机'
+      return `已连接 · 在线 ${sync.online.value} 台设备 · 本机为${role}`
+    }
+    case 'connecting': return '连接中…'
+    default: return '未连接'
+  }
+})
 
 const saveToken = async () => {
   const token = tokenInput.value.trim()

@@ -28,6 +28,8 @@ urlpatterns = [
     path('api/scanner/', include('scanner.urls')),
     # --- 新增：挂载刮削器接口 ---
     path('api/scraper/', include('scraper.urls')),
+    # --- 新增：挂载多设备同步播放接口（SSE + REST） ---
+    path('api/playback/', include('playback.urls')),
 ]
 
 # 新增这段逻辑：只有在开发模式下，才让 Django 代劳提供媒体文件

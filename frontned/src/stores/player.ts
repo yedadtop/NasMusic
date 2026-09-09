@@ -6,6 +6,16 @@ import { getBiliImageUrl } from '../api'
 const MAX_SHUFFLE_HISTORY = 100
 const biliCoverCache = new Map<string, string>()
 
+// ===== 多设备同步回执（由 useSyncPlayback 注入，避免 store 反向依赖 composable）=====
+// 本地播放操作发生时回调 composable，由其提交到后端广播给其他设备
+export interface SyncAdapter {
+  onLocalChange(kind: 'state' | 'transport'): void
+}
+
+let syncAdapter: SyncAdapter | null = null
+// 远端状态应用期间的守卫：防止把收到的广播再回环提交
+let applyingRemote = false
+
 async function preloadBiliCover(coverUrl: string, bvid: string): Promise<string> {
   if (biliCoverCache.has(bvid)) {
     return biliCoverCache.get(bvid)!
@@ -103,6 +113,7 @@ export const usePlayerStore = defineStore('player', () => {
       playMode.value = 'sequential'
       shuffleHistory.value = []
     }
+    notifySync('state')
   }
 
   function resetPlayer() {
@@ -209,6 +220,8 @@ export const usePlayerStore = defineStore('player', () => {
     } else {
       fetchBilibiliLyrics(track.title)
     }
+    // nextTrack/prevTrack 的成功路径均以 playTrack 收尾，此处统一回执同步
+    notifySync('state')
   }
 
   function syncPlaylist(tracks: any[]) {
@@ -288,6 +301,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   function togglePlay() {
     isPlaying.value = !isPlaying.value
+    notifySync('transport')
   }
 
   function stop() {
@@ -297,6 +311,30 @@ export const usePlayerStore = defineStore('player', () => {
       audioElement.value.pause()
       audioElement.value.currentTime = 0
     }
+    notifySync('transport')
+  }
+
+  // ===== 同步基础设施：由 useSyncPlayback 调用 =====
+
+  function setSyncAdapter(adapter: SyncAdapter | null) {
+    syncAdapter = adapter
+  }
+
+  function setApplyingRemote(v: boolean) {
+    applyingRemote = v
+  }
+
+  function notifySync(kind: 'state' | 'transport') {
+    if (!applyingRemote && syncAdapter) syncAdapter.onLocalChange(kind)
+  }
+
+  // 用户主动 seek（进度条/歌词点击）：写 audio + store 并回执同步
+  function seek(time: number) {
+    currentTime.value = time
+    if (audioElement.value) {
+      audioElement.value.currentTime = time
+    }
+    notifySync('transport')
   }
 
   function setCurrentTime(time: number) {
@@ -326,6 +364,7 @@ export const usePlayerStore = defineStore('player', () => {
     volume,
     audioElement,
     playMode,
+    shuffleHistory,
     progress,
     hasPrev,
     hasNext,
@@ -342,6 +381,9 @@ export const usePlayerStore = defineStore('player', () => {
     togglePlay,
     togglePlayMode,
     stop,
+    seek,
+    setSyncAdapter,
+    setApplyingRemote,
     setCurrentTime,
     setDuration,
     setVolume,

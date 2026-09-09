@@ -160,8 +160,8 @@ import { Icon } from '@iconify/vue'
 import { usePlayerStore } from '../stores/player'
 import EditTrackModal from './EditTrackModal.vue'
 import AppleToast from './AppleToast.vue'
-import { STREAM_BASE_URL, getBiliImageUrl } from '../api'
-import request from '../api'
+import { getBiliImageUrl } from '../api'
+import { getStreamUrl } from '../utils/streamUrl'
 import { useTokenExists } from '../composables/useTokenExists'
 
 const emit = defineEmits(['close', 'trackUpdated'])
@@ -257,17 +257,6 @@ const showToast = (message, type = 'error') => {
   toastMessage.value = message
   toastType.value = type
   toastVisible.value = true
-}
-
-const getStreamUrl = async (track) => {
-  if (track.is_bilibili) {
-    const res = await request.get('/scraper/bili/playurl/', { params: { bvid: track.bvid } })
-    if (res.data.audio_url) {
-      return `${STREAM_BASE_URL}/api/scraper/bili/proxy/?url=${encodeURIComponent(res.data.audio_url)}`
-    }
-    throw new Error('获取B站播放链接失败')
-  }
-  return `${STREAM_BASE_URL}/stream/${track.id}/`
 }
 
 onBeforeUpdate(() => {
@@ -469,7 +458,8 @@ const handleSeek = (e) => {
   if (!player.audioElement || !player.duration) return
   const rect = e.currentTarget.getBoundingClientRect()
   const percent = (e.clientX - rect.left) / rect.width
-  player.audioElement.currentTime = percent * player.duration
+  // 统一走 player.seek()：同步写 audio/store 并回执多设备同步
+  player.seek(percent * player.duration)
 }
 
 // 修复点：切上一曲时，判断 player.isPlaying 状态，而不是强制 play()
@@ -509,9 +499,9 @@ const nextTrack = async () => {
 
 const seekToLine = (time) => {
   if (player.audioElement) {
-    player.audioElement.currentTime = time
-    player.setCurrentTime(time)
-    
+    // 统一走 player.seek()：同步写 audio/store 并回执多设备同步
+    player.seek(time)
+
     isUserScrolling = false
     if (scrollTimeout) {
       clearTimeout(scrollTimeout)

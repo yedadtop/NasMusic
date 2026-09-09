@@ -1199,6 +1199,66 @@
 
 ---
 
+## 32. 多设备同步播放（SSE + REST）
+
+家庭内网多设备派对模式：所有开启同步的设备播放同一首歌、同一进度，任意设备均可控制（播放/暂停/切歌/进度）。
+服务器只做"状态镜像 + 广播中转"（seq 序号 + last-write-wins），选歌逻辑由发起设备本地计算。
+前端通过「设置 → 多设备同步播放」开关启用（localStorage `nasmusic_sync_enabled`，默认关闭）。
+
+### 32.1 SSE 实时广播
+
+- **接口地址**：`GET /api/playback/stream/?client_id=<设备ID>`
+- **功能描述**：SSE 长连接。连接后先发全量 state 事件，此后实时推送指令变化与设备名单（roster）变化，静置 15 秒发注释心跳 `: ping`
+- **鉴权**：无需令牌（只读）
+- **事件信封**（统一字段）：`{kind, seq, server_time, leader_id, online, ...}`，`kind` 取值：
+  - `state`：全量载荷（track/playlist/index/play_mode/shuffle_history/is_playing/position/position_at）
+  - `transport`：轻量载荷（track_fp/is_playing/position/position_at）
+  - `roster`：仅信封（leader/online 变化）
+- **示例**：
+  ```
+  retry: 5000
+
+  data: {"kind": "state", "seq": 0, "server_time": 1788947246.6, "leader_id": "curl-1", "online": 1, "track": null, ...}
+
+  data: {"kind": "transport", "seq": 1, "server_time": 1788947317.2, "leader_id": "curl-1", "online": 1, "track_fp": "t12", "is_playing": true, "position": 42.0, "position_at": 1788947317.2}
+  ```
+- **说明**：
+  - `position_at` 为 position 对应的服务器时间戳，客户端用 `position + (服务器当前时间 - position_at)` 外推实际进度做对齐
+  - leader 为最早上线的设备，负责切歌推进（audio 'ended' 仅 leader 处理），掉线后服务器即时重选并广播 roster
+  - 连接上限 16 台（WSGI 每连接占一个线程）
+
+### 32.2 提交播放指令
+
+- **接口地址**：`POST /api/playback/command/`
+- **功能描述**：提交一次播放状态变化，服务器合并进会话快照并广播给所有连接
+- **鉴权**：**需要令牌**（无令牌设备只能收听/跟随，不能控制）
+- **Body 参数**：
+  - `kind` (string): **必填**。`state`（全量）或 `transport`（仅传输态）
+  - `is_playing` (boolean): 是否播放中
+  - `position` (number): 提交时的播放进度（秒）
+  - `track` / `playlist` / `index` / `play_mode` / `shuffle_history`: 仅 `kind=state` 时携带（发起设备本地计算的选歌结果）
+- **返回格式**（HTTP 200 OK）：合并后的会话快照（同 32.3）
+- **错误返回**（HTTP 400 Bad Request）：`kind` 非法时返回错误信息
+
+### 32.3 查询会话快照
+
+- **接口地址**：`GET /api/playback/state/`
+- **功能描述**：返回当前播放会话快照（SSE 断线重连后的兜底/调试）
+- **鉴权**：无需令牌（只读）
+- **返回格式**（HTTP 200 OK）：
+  ```json
+  {
+    "track": {...}, "playlist": [...], "index": 3, "play_mode": "shuffle",
+    "shuffle_history": [...], "is_playing": true, "position": 42.0,
+    "position_at": 1788947317.2, "seq": 5, "roster_version": 3,
+    "last_kind": "state", "server_time": 1788947400.1,
+    "leader_id": "c-xxxx", "online": 2
+  }
+  ```
+- **说明**：纯内存实现，服务器重启后会话重置（重启本就会中断音频流）
+
+---
+
 ## 多歌手支持说明
 
 ### 数据模型

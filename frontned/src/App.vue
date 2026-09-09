@@ -184,6 +184,18 @@
       </div>
     </Transition>
 
+    <!-- 多设备同步：自动播放被浏览器拦截时，需一次用户手势加入同步播放 -->
+    <Transition name="fade">
+      <button
+        v-if="sync.needJoin.value"
+        @click="sync.joinPlayback()"
+        class="fixed top-4 left-1/2 -translate-x-1/2 z-[9998] bg-[#0071e3] text-white text-sm px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 hover:bg-[#0062cc] transition-colors cursor-pointer"
+      >
+        <Icon icon="mdi:music-note" class="w-4 h-4" />
+        <span>点击加入同步播放</span>
+      </button>
+    </Transition>
+
     <audio 
       ref="audioRef" 
       @timeupdate="handleTimeUpdate"
@@ -201,8 +213,10 @@ import PlayerDetail from './components/PlayerDetail.vue'
 import VolumeTooltip from './components/VolumeTooltip.vue'
 import { usePlayerStore } from './stores/player'
 import { Headset, Position, Setting, Search, Star, DArrowLeft, CaretRight, DArrowRight, Document, Operation, Refresh, Switch, Collection, VideoPause } from '@element-plus/icons-vue'
-import { STREAM_BASE_URL, getBiliImageUrl } from './api'
+import { getBiliImageUrl } from './api'
 import request from './api'
+import { getStreamUrl } from './utils/streamUrl'
+import { useSyncPlayback } from './composables/useSyncPlayback'
 
 const showPlayerDetail = ref(false)
 const searchKeyword = ref('')
@@ -214,6 +228,7 @@ const progressBar = ref(null)
 const isDragging = ref(false)
 const route = useRoute()
 const player = usePlayerStore()
+const sync = useSyncPlayback()
 const audioRef = ref(null)
 const windowWidth = ref(window.innerWidth)
 const isMobile = computed(() => windowWidth.value < 768)
@@ -385,17 +400,6 @@ const handleKeydown = (e) => {
 
 let searchTimer = null
 
-const getStreamUrl = async (track) => {
-  if (track.is_bilibili) {
-    const res = await request.get('/scraper/bili/playurl/', { params: { bvid: track.bvid } })
-    if (res.data.audio_url) {
-      return `${STREAM_BASE_URL}/api/scraper/bili/proxy/?url=${encodeURIComponent(res.data.audio_url)}`
-    }
-    throw new Error('获取B站播放链接失败')
-  }
-  return `${STREAM_BASE_URL}/stream/${track.id}/`
-}
-
 const handleSearch = () => {
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
@@ -465,13 +469,19 @@ const handleLoadedMetadata = () => {
 }
 
 const handleEnded = async () => {
+  // 多设备同步：切歌推进只由 leader 执行（避免各设备对"下一首"计算不一致），
+  // 其余设备等待 leader 的广播；shuffle 随机模式下尤其关键
+  if (sync.enabled.value && !sync.isLeader.value) return
   const hasNext = await player.nextTrack()
   if (!hasNext) {
-    player.isPlaying = false
+    // 播放列表播完：stop() 会把"已停止"同步给其他设备
+    player.stop()
   } else if (audioRef.value) {
     try {
       audioRef.value.src = await getStreamUrl(player.currentTrack)
       audioRef.value.play()
+      // 单曲循环：重播同一首，需把"从头播放"同步给其他设备
+      if (player.playMode === 'single') sync.collectAndSubmit('transport')
     } catch (error) {
       console.error('获取播放链接出错:', error)
       player.isPlaying = false
@@ -483,7 +493,7 @@ const handleSeek = (e) => {
   if (!audioRef.value || !player.duration) return
   const rect = e.currentTarget.getBoundingClientRect()
   const percent = (e.clientX - rect.left) / rect.width
-  audioRef.value.currentTime = percent * player.duration
+  player.seek(percent * player.duration)
 }
 
 const startDrag = (e) => {
@@ -493,10 +503,10 @@ const startDrag = (e) => {
 }
 
 const onDrag = (e) => {
-  if (!isDragging.value || !audioRef.value || !player.duration) return
+  if (!isDragging.value || !player.duration) return
   const rect = progressBar.value.getBoundingClientRect()
   const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-  audioRef.value.currentTime = percent * player.duration
+  player.seek(percent * player.duration)
 }
 
 const endDrag = () => {
