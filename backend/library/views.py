@@ -113,9 +113,9 @@ class TrackViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
-        
+
         result, errors = self.perform_update(serializer)
-        
+
         if errors:
             return Response({
                 'success': False,
@@ -123,12 +123,35 @@ class TrackViewSet(viewsets.ModelViewSet):
                 'errors': errors,
                 'track_id': instance.id
             }, status=status.HTTP_207_MULTI_STATUS)
-        
+
         return Response({
             'success': True,
             'message': '歌曲信息更新成功',
             'track_id': instance.id
         })
+
+    @action(detail=False, methods=['get'])
+    def random(self, request):
+        """随机播放：从全曲库随机返回一首歌曲（不限于前端已懒加载的分页列表）"""
+        # exclude: 逗号分隔的 track id，用于排除当前歌曲与最近播放历史，避免短时间内重复
+        exclude_ids = []
+        for part in request.query_params.get('exclude', '').split(','):
+            part = part.strip()
+            if part.isdigit():
+                exclude_ids.append(int(part))
+
+        base_qs = Track.objects.prefetch_related('artists').select_related('artist', 'album')
+        qs = base_qs.exclude(id__in=exclude_ids) if exclude_ids else base_qs
+        track = qs.order_by('?').first()
+
+        # 排除后无歌可选（曲库太小或全部被排除）时忽略排除条件，避免随机播放「卡死」
+        if track is None:
+            track = base_qs.order_by('?').first()
+
+        if track is None:
+            return Response({'success': False, 'message': '曲库为空'}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({'success': True, 'track': TrackListSerializer(track, context={'request': request}).data})
 
 
 class ArtistViewSet(viewsets.ModelViewSet):

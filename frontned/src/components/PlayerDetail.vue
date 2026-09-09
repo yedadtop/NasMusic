@@ -487,8 +487,9 @@ const prevTrack = async () => {
 }
 
 // 修复点：切下一曲时，判断 player.isPlaying 状态，而不是强制 play()
+// 注意：随机模式下 nextTrack 内部会请求后端随机接口，必须 await 等新歌曲就位后再取播放链接
 const nextTrack = async () => {
-  if (player.nextTrack() && player.audioElement) {
+  if (await player.nextTrack() && player.audioElement) {
     try {
       player.audioElement.src = await getStreamUrl(player.currentTrack)
       if (player.isPlaying) {

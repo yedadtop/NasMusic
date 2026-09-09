@@ -40,8 +40,7 @@ export const usePlayerStore = defineStore('player', () => {
   const volume = ref(1)
   const audioElement = ref<HTMLAudioElement | null>(null)
   const playMode = ref('sequential')
-  const shuffleOrder = ref<number[]>([])
-  const shuffleHistory = ref<number[]>([])
+  const shuffleHistory = ref<any[]>([])
   const loadMoreCallback = ref<(() => Promise<void>) | null>(null)
   const isLoadingMore = ref(false)
   const refreshLibraryTrigger = ref(0)
@@ -64,7 +63,8 @@ export const usePlayerStore = defineStore('player', () => {
 
   const hasNext = computed(() => {
     if (playMode.value === 'shuffle') {
-      return shuffleOrder.value.length > 0
+      // 随机模式由后端全曲库随机，始终有下一首（曲库为空时请求会失败并停止）
+      return true
     }
     if (playMode.value === 'single') {
       return true
@@ -93,27 +93,14 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
-  function generateShuffleOrder(excludeIndex = -1) {
-    const indices = playlist.value.map((_, i) => i).filter(i => i !== excludeIndex)
-    for (let i = indices.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      const temp = indices[i]!
-      indices[i] = indices[j]!
-      indices[j] = temp
-    }
-    return indices.slice(0, 100)
-  }
-
   function togglePlayMode() {
     if (playMode.value === 'sequential') {
       playMode.value = 'shuffle'
-      shuffleOrder.value = generateShuffleOrder(currentIndex.value)
       shuffleHistory.value = []
     } else if (playMode.value === 'shuffle') {
       playMode.value = 'single'
     } else {
       playMode.value = 'sequential'
-      shuffleOrder.value = []
       shuffleHistory.value = []
     }
   }
@@ -127,7 +114,6 @@ export const usePlayerStore = defineStore('player', () => {
     currentTime.value = 0
     duration.value = 0
     playMode.value = 'sequential'
-    shuffleOrder.value = []
     shuffleHistory.value = []
     loadMoreCallback.value = null
     isLoadingMore.value = false
@@ -197,19 +183,15 @@ export const usePlayerStore = defineStore('player', () => {
     if (tracks.length > 0) {
       playlist.value = tracks
       currentIndex.value = index
-      shuffleOrder.value = playMode.value === 'shuffle' ? generateShuffleOrder(index) : []
       shuffleHistory.value = []
     } else if (index >= 0) {
       if (playMode.value === 'shuffle' && currentIndex.value !== -1) {
         if (shuffleHistory.value.length >= MAX_SHUFFLE_HISTORY) {
           shuffleHistory.value.shift()
         }
-        shuffleHistory.value.push(currentIndex.value)
+        shuffleHistory.value.push(currentTrack.value)
       }
       currentIndex.value = index
-      if (playMode.value === 'shuffle') {
-        shuffleOrder.value = generateShuffleOrder(index)
-      }
     }
     currentTrack.value = track
     if (track.is_bilibili && track.track_cover) {
@@ -238,12 +220,11 @@ export const usePlayerStore = defineStore('player', () => {
   function prevTrack() {
     const wasPlaying = isPlaying.value
     if (playMode.value === 'shuffle') {
+      // 随机模式：上一首 = 回退到历史中上一首实际播放过的歌曲（对象）
       if (shuffleHistory.value.length > 0) {
-        const prevIndex = shuffleHistory.value.pop()
-        if (prevIndex === undefined) return false
-        const track = playlist.value[prevIndex]
-        currentIndex.value = prevIndex
-        playTrack(track, -1, [], !wasPlaying)
+        const prevTrackObj = shuffleHistory.value.pop()
+        if (!prevTrackObj) return false
+        playTrack(prevTrackObj, -1, [], !wasPlaying)
         return true
       }
       return false
@@ -260,19 +241,29 @@ export const usePlayerStore = defineStore('player', () => {
   async function nextTrack() {
     const wasPlaying = isPlaying.value
     if (playMode.value === 'shuffle') {
-      if (shuffleOrder.value.length > 0) {
-        if (shuffleHistory.value.length >= MAX_SHUFFLE_HISTORY) {
-          shuffleHistory.value.shift()
+      // 随机模式：由后端从全曲库随机返回下一首（不限于前端已懒加载的分页列表）
+      try {
+        const excludeIds = [
+          currentTrack.value?.id,
+          ...shuffleHistory.value.slice(-19).map(t => t?.id)
+        ].filter(id => id != null)
+        const res = await request.get('/tracks/random/', {
+          params: excludeIds.length ? { exclude: excludeIds.join(',') } : {}
+        })
+        const track = res.data?.track
+        if (!track) return false
+        if (currentTrack.value) {
+          if (shuffleHistory.value.length >= MAX_SHUFFLE_HISTORY) {
+            shuffleHistory.value.shift()
+          }
+          shuffleHistory.value.push(currentTrack.value)
         }
-        shuffleHistory.value.push(currentIndex.value)
-        const nextIndex = shuffleOrder.value.shift()
-        if (nextIndex === undefined) return false
-        const track = playlist.value[nextIndex]
-        currentIndex.value = nextIndex
         playTrack(track, -1, [], !wasPlaying)
         return true
+      } catch (error) {
+        console.error('获取随机歌曲失败:', error)
+        return false
       }
-      return false
     }
     if (playMode.value === 'single') {
       return true
