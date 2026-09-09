@@ -347,8 +347,8 @@ class BiliDownloadView(APIView):
             audio_codec = best_audio.get('codecid') or best_audio.get('id') or 0
             quality_desc = BILI_QUALITY_MAP.get(audio_codec, '未知')
 
-            # 下载音频文件到音乐库的 Bilibili 子目录
-            save_dir = os.path.join(music_path, 'Bilibili')
+            # 下载音频文件到音乐库根目录（与其他本地歌曲同级）
+            save_dir = music_path
             os.makedirs(save_dir, exist_ok=True)
             safe_title = _sanitize_filename(title)
             file_path = os.path.normpath(os.path.join(save_dir, f"{safe_title}_{bvid}.m4a"))
