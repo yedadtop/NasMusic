@@ -1,7 +1,17 @@
 import os
 import re
+import base64
 import logging
 import mutagen
+import mutagen.flac
+import mutagen.id3
+import mutagen.mp3
+import mutagen.mp4
+import mutagen.oggopus
+import mutagen.oggvorbis
+from mutagen.flac import Picture
+from mutagen.id3 import APIC
+from mutagen.mp4 import MP4Cover
 from io import BytesIO
 from PIL import Image
 from django.core.files.base import ContentFile
@@ -76,6 +86,79 @@ def _select_best_audio(audio_streams):
     if not best_audio and audio_streams:
         best_audio = audio_streams[0]
     return best_audio
+
+
+def _embed_metadata(file_path, title, artist, album, cover_jpeg_data=None):
+    """
+    将标题/歌手/专辑（及封面）写入音频文件标签。
+    兼容 M4A/MP4、MP3(ID3)、FLAC、OGG(Vorbis/Opus) 等主流格式。
+    返回 (text_ok, cover_ok)。
+
+    注意：文本标签必须通过 mutagen 的 easy 接口写入（mutagen.File(path, easy=True)）。
+    非 easy 的 MP4 接口只认 '©nam' 等四字节原始键名，直接写 'title' 会被截断成
+    'titl' 这样的废键，导致播放器和扫描器都读不到。
+    """
+    text_ok = False
+    cover_ok = False
+
+    # 1. 文本标签：easy 接口对各格式统一暴露 title/artist/album
+    try:
+        audio = mutagen.File(file_path, easy=True)
+        if audio is not None:
+            audio['title'] = [str(title)]
+            audio['artist'] = [str(artist)]
+            audio['album'] = [str(album)]
+            audio.save()
+            text_ok = True
+    except Exception as e:
+        logger.warning(f"[BiliAPI-Download] 写入文本标签失败 ({file_path}): {e}")
+
+    if not cover_jpeg_data:
+        return text_ok, cover_ok
+
+    # 2. 封面（及专辑作者）：不同容器格式需要各自的写入方式
+    try:
+        audio = mutagen.File(file_path)
+        if isinstance(audio, mutagen.mp4.MP4):
+            audio['covr'] = [MP4Cover(cover_jpeg_data, imageformat=MP4Cover.FORMAT_JPEG)]
+            audio['aART'] = [str(artist)]
+            audio.save()
+            cover_ok = True
+        elif isinstance(audio, mutagen.flac.FLAC):
+            pic = Picture()
+            pic.type = 3  # 封面 (front cover)
+            pic.mime = 'image/jpeg'
+            pic.data = cover_jpeg_data
+            audio.clear_pictures()
+            audio.add_picture(pic)
+            audio['albumartist'] = [str(artist)]
+            audio.save()
+            cover_ok = True
+        elif isinstance(audio, mutagen.mp3.MP3) or isinstance(audio.tags, mutagen.id3.ID3):
+            # MP3 及其他使用 ID3 标签的格式 (WAV 等)
+            if audio.tags is None:
+                audio.add_tags()
+            audio.tags.delall('APIC')
+            audio.tags.add(APIC(encoding=3, mime='image/jpeg', type=3, desc='Cover', data=cover_jpeg_data))
+            audio.tags.delall('TPE2')
+            audio.tags.add(mutagen.id3.TPE2(encoding=3, text=str(artist)))
+            audio.save()
+            cover_ok = True
+        elif isinstance(audio, (mutagen.oggvorbis.OggVorbis, mutagen.oggopus.OggOpus)):
+            pic = Picture()
+            pic.type = 3
+            pic.mime = 'image/jpeg'
+            pic.data = cover_jpeg_data
+            audio['metadata_block_picture'] = [base64.b64encode(pic.write()).decode('ascii')]
+            audio['albumartist'] = [str(artist)]
+            audio.save()
+            cover_ok = True
+        else:
+            logger.warning(f"[BiliAPI-Download] 暂不支持该格式的封面嵌入: {type(audio).__name__}")
+    except Exception as e:
+        logger.warning(f"[BiliAPI-Download] 嵌入封面失败 ({file_path}): {e}")
+
+    return text_ok, cover_ok
 
 
 class BiliSearchView(APIView):
@@ -280,13 +363,46 @@ class BiliDownloadView(APIView):
             os.replace(tmp_path, file_path)
             tmp_path = None
 
-            # 尝试 remux（moov 前置， fragmented MP4 转普通 MP4），失败不影响入库
+            # remux：fragmented MP4 转普通 MP4 并将 moov 前置，保证浏览器可正常播放且 mutagen 可解析标签
+            remux_ok = False
             try:
-                remux_audio_file(file_path)
+                remux_ok = remux_audio_file(file_path)
             except Exception as e:
-                logger.warning(f"[BiliAPI-Download] remux 失败（已忽略）: {e}")
+                logger.warning(f"[BiliAPI-Download] remux 异常（已忽略）: {e}")
+            if not remux_ok:
+                logger.warning(
+                    f"[BiliAPI-Download] ⚠️ remux 未成功（可能未安装 ffmpeg），"
+                    f"文件可能仍为 fragmented MP4：浏览器一般可播放，但无法嵌入标签、读取时长"
+                )
 
-            # 读取真实时长，失败则使用视频时长
+            # 下载封面（失败不影响保存结果），居中裁剪为正方形
+            cover_jpeg_data = None
+            if cover_url:
+                try:
+                    if cover_url.startswith('//'):
+                        cover_url = 'https:' + cover_url
+                    img_res = requests.get(cover_url, headers=BILI_DOWNLOAD_HEADERS, timeout=20)
+                    img_res.raise_for_status()
+                    image = Image.open(BytesIO(img_res.content))
+                    if image.mode != 'RGB':
+                        image = image.convert('RGB')
+                    # 居中裁剪为正方形（B站视频封面多为 16:9，直接嵌入两侧会有黑边）
+                    width, height = image.size
+                    side = min(width, height)
+                    left = (width - side) // 2
+                    top = (height - side) // 2
+                    image = image.crop((left, top, left + side, top + side))
+                    img_io = BytesIO()
+                    image.save(img_io, format='JPEG', quality=95, subsampling=0)
+                    cover_jpeg_data = img_io.getvalue()
+                except Exception as e:
+                    logger.warning(f"[BiliAPI-Download] 封面下载失败（已忽略）: {e}")
+
+            # 【核心】将元数据和封面嵌入音频文件本身。B站原始流无任何标签，
+            # 嵌入后即使经过「删除到回收站 → 恢复 → 自动重扫描」，歌曲信息/封面/时长也不会丢失
+            tags_embedded, cover_embedded = _embed_metadata(file_path, title, author, 'Bilibili', cover_jpeg_data)
+
+            # 读取真实时长（remux 成功后 mutagen 可正常解析），失败则使用视频时长
             duration = video_duration
             try:
                 audio_meta = mutagen.File(file_path)
@@ -312,30 +428,25 @@ class BiliDownloadView(APIView):
             all_artist_objs = [Artist.objects.get_or_create(name=n)[0] for n in parse_artists(author)]
             track.artists.set(all_artist_objs)
 
-            # 下载并保存封面（失败不影响保存结果）
-            if cover_url:
+            # 封面另存到封面库（covers/tracks/），数据库记录封面地址
+            if cover_jpeg_data:
                 try:
-                    if cover_url.startswith('//'):
-                        cover_url = 'https:' + cover_url
-                    img_res = requests.get(cover_url, headers=BILI_DOWNLOAD_HEADERS, timeout=20)
-                    img_res.raise_for_status()
-                    image = Image.open(BytesIO(img_res.content))
-                    if image.mode != 'RGB':
-                        image = image.convert('RGB')
-                    img_io = BytesIO()
-                    image.save(img_io, format='JPEG', quality=95, subsampling=0)
-                    track.cover_thumbnail.save(f'bili_{bvid}.jpg', ContentFile(img_io.getvalue()), save=True)
+                    track.cover_thumbnail.save(f'bili_{bvid}.jpg', ContentFile(cover_jpeg_data), save=True)
                 except Exception as e:
-                    logger.warning(f"[BiliAPI-Download] 封面下载失败（已忽略）: {e}")
+                    logger.warning(f"[BiliAPI-Download] 封面保存到封面库失败（已忽略）: {e}")
 
             logger.warning(
-                f"[BiliAPI-Download] ✅ 保存成功 -> 《{title}》 | 音质: {quality_desc} | 时长: {duration:.0f}s | 文件: {file_path}"
+                f"[BiliAPI-Download] ✅ 保存成功 -> 《{title}》 | 音质: {quality_desc} | 时长: {duration:.0f}s | "
+                f"remux: {'成功' if remux_ok else '失败'} | 标签嵌入: {'成功' if tags_embedded else '失败'} | 文件: {file_path}"
             )
+            all_ok = tags_embedded and remux_ok
             return Response({
                 'success': True,
-                'message': '已保存到音乐库',
+                'message': '已保存到音乐库' if all_ok else '已保存到音乐库（部分信息未能写入文件，回收站恢复后封面/时长可能丢失）',
                 'track_id': track.id,
                 'quality_desc': quality_desc,
+                'tags_embedded': tags_embedded,
+                'remuxed': remux_ok,
             })
 
         except requests.RequestException as e:

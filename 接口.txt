@@ -579,9 +579,13 @@
   1. 按 `bvid` 去重（曲库中已有文件名包含该 bvid 的歌曲时直接返回已存在）
   2. 获取视频信息，补全标题 / UP主 / 封面 / 时长
   3. 按音质优先级（`Hi-Res 无损` > `杜比全景声` > `192K 高码率` > `132K 标准` > `64K 流畅`）挑选最优音频流并流式下载
-  4. 保存到音乐库 `Bilibili` 子目录，文件名 `标题_bvid.m4a`（先写 `.part` 临时文件再重命名，防止半截文件；自动经 ffmpeg remux 将 moov 前置，防止播放后半段卡顿）
-  5. 读取真实音频时长，创建歌手（UP主）、专辑（统一归入 `Bilibili`）、歌曲记录
-  6. 下载封面并转为 JPEG 存入单曲封面（失败不影响保存结果）
+  4. 保存到音乐库 `Bilibili` 子目录，文件名 `标题_bvid.m4a`（先写 `.part` 临时文件再重命名，防止半截文件）
+  5. 经 ffmpeg remux：fragmented MP4 转普通 MP4 并将 moov 前置（保证浏览器正常播放、支持拖动进度条，且 mutagen 可解析标签）
+  6. 下载封面（居中裁剪为正方形），将标题/UP主/专辑（`Bilibili`）/封面 **嵌入音频文件标签**——B站原始流无任何标签，嵌入后即使经过「删除到回收站 → 恢复 → 自动重扫描」，歌曲信息/封面/时长也不会丢失
+  7. 读取真实音频时长，创建歌手（UP主）、专辑（统一归入 `Bilibili`）、歌曲记录
+  8. 封面另存到封面库（`media/covers/tracks/bili_{bvid}.jpg`），数据库 `cover_thumbnail` 字段记录封面地址
+- **ffmpeg 说明**：remux 优先使用系统 PATH 中的 `ffmpeg`；找不到时自动回退到 venv 内 `imageio-ffmpeg` 包自带的 ffmpeg 二进制（已随项目安装），无需手动安装 ffmpeg。两者都不可用时：下载仍可完成、文本标签仍会嵌入，但无法 remux——回收站恢复后时长会丢失（响应的 `message` 中会给出警告）
+- **标签嵌入格式兼容**：`_embed_metadata` 兼容 M4A/MP4、MP3(ID3)、FLAC、OGG(Vorbis/Opus) 等主流格式（文本标签走 mutagen easy 接口，封面按容器分别写入 covr/APIC/Picture/metadata_block_picture）
 - **前置条件**：音乐库路径必须已通过系统配置接口设置（`/api/scanner/config/`）
 - **Body 参数**（JSON）：
   ```json
@@ -602,9 +606,14 @@
     "success": true,
     "message": "已保存到音乐库",
     "track_id": 100,
-    "quality_desc": "192K 高码率"
+    "quality_desc": "192K 高码率",
+    "tags_embedded": true,
+    "remuxed": true
   }
   ```
+  - `tags_embedded` (boolean): 元数据与封面是否已成功嵌入音频文件
+  - `remuxed` (boolean): 是否已成功 remux（fMP4 转普通 MP4、moov 前置）
+  - 任一为 `false` 时 `message` 会附带警告（回收站恢复后对应信息可能丢失）
 - **返回格式**（HTTP 200 OK，已在音乐库中）：
   ```json
   {

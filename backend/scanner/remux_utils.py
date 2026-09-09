@@ -5,16 +5,33 @@ B 站等下载器给的文件经常是「后缀 mp3 但容器是 M4A + moov 在�
 不重打包的话 HTML5 audio 播放到后半部分会卡住。
 """
 import os
+import shutil
 import struct
 import subprocess
 import tempfile
 
 
+def _resolve_ffmpeg_bin():
+    """优先使用 PATH 中的 ffmpeg；找不到时回退到 imageio-ffmpeg 包内置的二进制（若已安装）"""
+    if shutil.which('ffmpeg'):
+        return 'ffmpeg'
+    try:
+        import imageio_ffmpeg
+        exe = imageio_ffmpeg.get_ffmpeg_exe()
+        if exe and os.path.isfile(exe):
+            return exe
+    except Exception:
+        pass
+    return 'ffmpeg'
+
+
 def mp4_needs_remux(file_path, scan_bytes=4 * 1024 * 1024):
     """
-    解析 MP4 顶层 atom 顺序，判断 moov 是否在 mdat 之后（即需要 remux）。
+    解析 MP4 顶层 atom 顺序，判断是否需要 remux。返回 True 表示需要 remux：
+    - moov 在 mdat 之后（moov 在尾部，播放后半段会卡）
+    - 存在 moof/styp 分片标记（fragmented MP4，B站 DASH 音频流即此格式，
+      不重打包则 mutagen 读不出时长、无法写入标签）
     限流读前 4MB，对绝大多数歌曲文件足够判断。
-    返回 True 表示需要 remux。
     """
     try:
         with open(file_path, 'rb') as f:
@@ -37,8 +54,12 @@ def mp4_needs_remux(file_path, scan_bytes=4 * 1024 * 1024):
                     size = struct.unpack('>Q', ext)[0]
 
                 if atom_type == b'moov':
-                    return False  # moov 在前面，不需要 remux
-                if atom_type == b'mdat':
+                    # 不能立即返回 False：还要继续向后扫描，确认是否存在 moof 分片
+                    saw_moov = True
+                elif atom_type in (b'moof', b'styp'):
+                    # 分片标记：fragmented MP4
+                    return True
+                elif atom_type == b'mdat' and not saw_moov:
                     # 碰到 mdat 时 moov 还没出现 → moov 在尾部
                     return True
 
@@ -57,18 +78,22 @@ def mp4_needs_remux(file_path, scan_bytes=4 * 1024 * 1024):
         return False
 
 
-def remux_audio_file(file_path, ffmpeg_bin='ffmpeg', timeout=120):
+def remux_audio_file(file_path, ffmpeg_bin=None, timeout=120):
     """
-    使用 ffmpeg 原地重打包 MP4/M4A，把 moov 移到头部。
-    -c copy：不重新编码，几乎不损音质，速度快
-    -movflags +faststart：把 moov 写到文件开头
+    使用 ffmpeg 原地重打包 MP4/M4A：
+    - fragmented MP4 转普通 MP4；-movflags +faststart 把 moov 写到文件开头
+    - -c copy：不重新编码，几乎不损音质，速度快
     原子替换原文件。返回 True/False。
     """
     if not os.path.isfile(file_path):
         return False
+    if not ffmpeg_bin:
+        ffmpeg_bin = _resolve_ffmpeg_bin()
 
     tmp_dir = os.path.dirname(file_path)
-    fd, tmp_path = tempfile.mkstemp(prefix='.remux_', suffix='.tmp', dir=tmp_dir)
+    # 必须保留原扩展名：ffmpeg 依赖输出扩展名推断封装格式，'.tmp' 会导致
+    # "Unable to find a suitable output format" 而必然失败
+    fd, tmp_path = tempfile.mkstemp(prefix='.remux_', suffix=os.path.splitext(file_path)[1] or '.tmp', dir=tmp_dir)
     os.close(fd)
 
     try:
