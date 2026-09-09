@@ -57,7 +57,7 @@
       </div>
 
       <!-- 播放控制区 -->
-      <div class="w-full landscape:w-1/2 md:w-1/2 h-auto landscape:h-full md:h-full flex flex-col items-center justify-end landscape:justify-center md:justify-center px-6 landscape:px-8 md:px-12 pb-10 landscape:pb-4 md:pb-10 pt-8 landscape:pt-4 md:py-10 shrink-0 order-2 landscape:order-1 md:order-1 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent landscape:bg-none md:bg-none">
+      <div class="w-full landscape:w-1/2 md:w-1/2 h-auto landscape:h-full md:h-full flex flex-col items-center justify-end landscape:justify-center md:justify-center px-6 landscape:px-8 md:px-12 pb-10 landscape:pb-4 md:pb-10 md:landscape:pb-4 pt-8 landscape:pt-4 md:py-10 md:landscape:pt-4 shrink-0 order-2 landscape:order-1 md:order-1 z-20 bg-gradient-to-t from-black/80 via-black/40 to-transparent landscape:bg-none md:bg-none">
         <div class="player-detail-stack flex flex-col">
           
           <div :class="coverStyleClass" :style="coverSpinStyle" class="player-detail-cover hidden landscape:block md:block w-full mx-auto overflow-hidden bg-black/20 shrink-0 relative shadow-2xl" style="aspect-ratio: 1 / 1;" @click="togglePlay">
@@ -67,7 +67,7 @@
 
 
 
-          <div class="mt-0 landscape:mt-3 md:mt-8 flex justify-center items-center w-full relative">
+          <div class="mt-0 landscape:mt-3 md:mt-8 md:landscape:mt-3 flex justify-center items-center w-full relative">
             <div class="flex flex-col truncate pr-8 text-left w-full">
               <h2 class="text-xl landscape:text-xl md:text-2xl font-bold truncate tracking-wide text-white drop-shadow-sm w-full">
                 {{ player.currentTrack?.title || '未知歌曲' }}
@@ -107,7 +107,7 @@
 
           
 
-          <div class="mt-5 landscape:mt-3 md:mt-7 flex items-center justify-between w-full text-xs landscape:text-xs md:text-sm font-medium text-white/60 space-x-3 landscape:space-x-3 md:space-x-4">
+          <div class="mt-5 landscape:mt-3 md:mt-7 md:landscape:mt-3 flex items-center justify-between w-full text-xs landscape:text-xs md:text-sm font-medium text-white/60 space-x-3 landscape:space-x-3 md:space-x-4">
             <span class="w-8 text-left">{{ formatTime(player.currentTime) }}</span>
             <div 
               class="flex-1 h-1 md:h-1.5 bg-white/20 rounded-full cursor-pointer relative group flex items-center"
@@ -122,7 +122,7 @@
             <span class="w-8 text-right">{{ formatTime(player.duration) }}</span>
           </div>
 
-          <div class="mt-5 landscape:mt-3 md:mt-6 flex items-center justify-between w-full px-1">
+          <div class="mt-5 landscape:mt-3 md:mt-6 md:landscape:mt-2 flex items-center justify-between w-full px-1">
             <button @click="$emit('close')" class="text-white/60 hover:text-white transition p-2 hover:scale-110 focus-visible:outline-none">
               <Icon icon="mdi:chevron-down" class="w-5 h-5 md:w-6 md:h-6" />
             </button>
@@ -561,6 +561,20 @@ const coverSpinStyle = computed(() => {
 @media (min-width: 768px) {
   .player-detail-stack {
     --player-detail-width: min(360px, calc(50vw - 6rem));
+  }
+}
+
+@media (orientation: landscape) and (max-height: 600px) {
+  .player-detail-stack {
+    /* 1. 让控件区变宽，占满右侧容器分配的空间，消除左右多余的黄框（Margin） */
+    --player-detail-width: 80%;
+    max-width: 420px; /* 给控件区一个合理的物理上限，避免在某些机型上拉得过长 */
+  }
+  
+  .player-detail-cover {
+    /* 2. 将封面与控件区解绑，单独限制其大小，防止高度超出屏幕 */
+    width: min(260px, 55vh) !important;
+    max-width: min(260px, 55vh) !important;
   }
 }
 
