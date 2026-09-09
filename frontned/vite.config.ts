@@ -12,6 +12,8 @@ export default defineConfig({
     Components({
       resolvers: [ElementPlusResolver()],
       dts: 'src/components.d.ts',
+      // 只处理 Vue 组件文件，避免干扰 Tailwind PostCSS 处理
+      include: [/\.vue$/, /\.vue\?vue/],
     }),
   ],
   resolve: {

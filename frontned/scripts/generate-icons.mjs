@@ -48,7 +48,9 @@ function resolve(name) {
 }
 for (const name of used) resolve(name)
 
-const subset = { prefix: full.prefix, icons }
+// 必须保留全量集合的全局尺寸元数据，否则 addCollection 无法初始化 viewBox，
+// 图标会被 Tailwind 类（如 w-6 h-6）拉伸偏移
+const subset = { prefix: full.prefix, width: full.width, height: full.height, icons }
 if (Object.keys(aliases).length) subset.aliases = aliases
 
 // 3. 输出为 TS 模块（避免依赖 resolveJsonModule）
