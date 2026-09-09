@@ -6,6 +6,7 @@
 # - GET  /api/playback/state/   会话快照（只读，无需令牌；重连兜底/调试）
 import json
 import re
+import time
 
 from django.http import StreamingHttpResponse, HttpResponseNotAllowed
 from rest_framework.views import APIView
@@ -53,6 +54,10 @@ def _format_event(kind, snap, light=False):
             position=snap['position'],
             position_at=snap['position_at'],
         )
+    elif kind == 'roster':
+        # roster 不携带 seq：纯成员变化（设备上下线/leader 易主）时 seq 未变，
+        # 若带序号会被前端"按序号去重"逻辑误丢弃，导致 leader 感知失效
+        envelope.pop('seq')
     return f"data: {json.dumps(envelope, ensure_ascii=False)}\n\n".encode('utf-8')
 
 
@@ -79,8 +84,10 @@ def playback_stream(request):
             while True:
                 snap = hub.wait(last_seq, last_roster)
                 if snap is None:
-                    # 心跳：保持连接活性，同时供前端做时钟偏移采样
-                    yield b': ping\n\n'
+                    # 心跳：保持连接活性，并携带服务器时钟供前端持续校准时钟偏移
+                    # （每 3s 一个样本，保证进度外推的时间基准持续新鲜）
+                    payload = json.dumps({'kind': 'ping', 'server_time': time.time()})
+                    yield f': ping\ndata: {payload}\n\n'.encode('utf-8')
                     continue
                 if snap['seq'] != last_seq:
                     # 指令变化：按最近一次指令类型发送全量或轻量载荷

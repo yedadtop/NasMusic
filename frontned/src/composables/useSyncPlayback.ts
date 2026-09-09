@@ -12,12 +12,21 @@ import { getStreamUrl, trackFingerprint } from '../utils/streamUrl'
 
 const SYNC_ENABLED_KEY = 'nasmusic_sync_enabled'
 const CLIENT_ID_KEY = 'nasmusic_sync_client_id'
-// 进度偏差超过该值（秒）才 seek 纠正；更小的偏差人耳不可辨
-const DRIFT_THRESHOLD = 0.4
 // 传输事件携带的是权威进度，对齐容忍更小
 const TRANSPORT_ALIGN_THRESHOLD = 0.15
-// 漂移检查周期（毫秒）
-const DRIFT_CHECK_INTERVAL = 5000
+// ---------- 变速平滑同步参数 ----------
+// 不用 seek 硬拉进度（有跳变/咔哒声），而是微调 playbackRate 平滑追赶：
+// - 偏差在死区内 → 原速播放
+// - 偏差超出死区 → rate = 1 + drift/2（目标约 2 秒追平），限幅 ±rate_max
+// - 偏差 > SEEK_THRESHOLD → 仍用 seek 兜底拉回，残余交给变速收尾
+// 曲目刚加载的收敛窗口内用更激进的参数（快速捏平各端起播缓冲差异）
+const SEEK_THRESHOLD = 1.0        // 偏差超过该值（秒）直接 seek 兜底
+const RATE_MAX_STEADY = 0.04      // 稳态变速上限 ±4%（听感不可辨）
+const DEADZONE_STEADY = 0.08      // 稳态死区：偏差 <80ms 不纠正
+const RATE_MAX_CONVERGE = 0.08    // 收敛期变速上限 ±8%
+const DEADZONE_CONVERGE = 0.03    // 收敛期死区 30ms
+const CONVERGE_WINDOW = 3000      // 收敛窗口时长（毫秒）
+const CORRECT_INTERVAL = 250      // 纠正循环周期（毫秒）：统一高频，稳态靠死区放宽
 
 // ===== 模块级单例状态（多组件共享同一实例）=====
 const enabled = ref(false)
@@ -38,6 +47,8 @@ let generation = 0
 let driftTimer: number | null = null
 // 最近一次已知传输态（漂移外推的基准）
 let lastTransport: { isPlaying: boolean; position: number; positionAt: number; trackFp: string } | null = null
+// 收敛窗口截止时刻（毫秒）：曲目加载/起播后的前几秒用更激进的变速参数快速捏平偏差
+let convergeUntil = 0
 
 function serverNow(): number {
   return Date.now() / 1000 + clockOffset
@@ -120,11 +131,15 @@ async function applyRemoteState(envelope: any) {
       const url = await getStreamUrl(envelope.track)
       if (gen !== generation) return // 加载期间又有新事件到达，放弃过期应用
       audio.src = url
-      if (target > 0.5) audio.currentTime = target
+      // 重算对齐进度：获取流地址期间时间已流逝，函数开头的 target 已过期
+      const fresh = expectedPosition(envelope.is_playing, envelope.position, envelope.position_at)
+      if (fresh > 0.5) audio.currentTime = fresh
       if (envelope.is_playing) {
         try {
           await audio.play()
           needJoin.value = false
+          // 起播收敛窗口：各端加载/解码耗时不同，起播后短暂用更激进的变速快速捏平
+          convergeUntil = Date.now() + CONVERGE_WINDOW
         } catch {
           needJoin.value = true // 自动播放被拦截，等待用户手势
         }
@@ -164,6 +179,8 @@ function applyRemoteTransport(envelope: any) {
         audio.pause()
       }
     }
+    // transport 对齐（>0.15s 才动 audio）可能留有残余偏差，短收敛窗口快速捏平
+    convergeUntil = Date.now() + CONVERGE_WINDOW
   } finally {
     player.setApplyingRemote(false)
   }
@@ -215,6 +232,9 @@ function handleEvent(ev: MessageEvent) {
     case 'transport':
       applyRemoteTransport(envelope)
       break
+    case 'ping':
+      // 仅时钟采样（上方 updateClock 已统一处理 server_time）
+      break
     // roster：上面已更新 leader/online
   }
 }
@@ -228,22 +248,51 @@ function onBecomeLeader() {
   }
 }
 
-// ---------- 漂移纠正 ----------
+// ---------- 漂移纠正（变速平滑同步） ----------
+
+function resetRate(audio: any) {
+  if (audio && audio.playbackRate !== 1) audio.playbackRate = 1
+}
+
+function correctDrift() {
+  const player = usePlayerStore()
+  const audio = player.audioElement
+  const lt = lastTransport
+  const active = player.isPlaying && !needJoin.value
+    && lt !== null && lt.isPlaying
+    && lt.trackFp === trackFingerprint(player.currentTrack)
+  if (!active || !lt) {
+    resetRate(audio)
+    return
+  }
+  const target = expectedPosition(lt.isPlaying, lt.position, lt.positionAt)
+  const now = audio ? audio.currentTime : player.currentTime
+  if (typeof now !== 'number' || !isFinite(now)) return
+  const drift = target - now // 正 = 本地落后需加速，负 = 本地超前需减速
+  const converging = Date.now() < convergeUntil
+  const deadzone = converging ? DEADZONE_CONVERGE : DEADZONE_STEADY
+  const rateMax = converging ? RATE_MAX_CONVERGE : RATE_MAX_STEADY
+  if (Math.abs(drift) > SEEK_THRESHOLD) {
+    // 大偏差兜底：seek 拉回后由变速收尾（正常稳态不应走到这里）
+    if (audio) audio.currentTime = target
+    resetRate(audio)
+    return
+  }
+  if (Math.abs(drift) <= deadzone) {
+    resetRate(audio)
+    return
+  }
+  let rate = 1 + drift / 2 // 目标约 2 秒内追平
+  if (rate > 1 + rateMax) rate = 1 + rateMax
+  if (rate < 1 - rateMax) rate = 1 - rateMax
+  if (audio && Math.abs(audio.playbackRate - rate) > 0.001) {
+    audio.playbackRate = rate
+  }
+}
 
 function startDriftTimer() {
   if (driftTimer !== null) return
-  driftTimer = window.setInterval(() => {
-    const player = usePlayerStore()
-    const audio = player.audioElement
-    if (!player.isPlaying || !player.currentTrack || needJoin.value) return
-    // 仅当本地播放的曲目就是会话曲目时才做外推纠正
-    if (!lastTransport || lastTransport.trackFp !== trackFingerprint(player.currentTrack)) return
-    const target = expectedPosition(lastTransport.isPlaying, lastTransport.position, lastTransport.positionAt)
-    if (!lastTransport.isPlaying) return
-    if (audio && Math.abs(audio.currentTime - target) > DRIFT_THRESHOLD) {
-      audio.currentTime = target
-    }
-  }, DRIFT_CHECK_INTERVAL)
+  driftTimer = window.setInterval(correctDrift, CORRECT_INTERVAL)
 }
 
 function stopDriftTimer() {
@@ -284,6 +333,9 @@ function disconnect() {
   isLeader.value = false
   needJoin.value = false
   lastTransport = null
+  convergeUntil = 0
+  // 恢复原速，避免关闭同步后一直保持变速播放
+  resetRate(usePlayerStore().audioElement)
   stopDriftTimer()
 }
 
@@ -341,6 +393,7 @@ function joinPlayback() {
   if (!audio) return
   audio.play().then(() => {
     needJoin.value = false
+    convergeUntil = Date.now() + CONVERGE_WINDOW
   }).catch(() => {})
 }
 

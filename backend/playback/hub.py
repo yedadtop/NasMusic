@@ -83,7 +83,7 @@ class PlaybackHub:
         with self._cond:
             return self._snapshot_locked()
 
-    def wait(self, last_seq, last_roster, timeout=15.0):
+    def wait(self, last_seq, last_roster, timeout=3.0):
         """阻塞等待 seq/roster 变化；有变化返回快照，超时返回 None（调用方发心跳）"""
         with self._cond:
             if self._seq == last_seq and self._roster_version == last_roster:
