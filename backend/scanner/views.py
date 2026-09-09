@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import ScanTask, SystemConfig
 from .tasks import run_scan_async
-from .utils import get_trash_files, restore_trash_files, auto_cleanup_expired_trash_files
+from .utils import get_trash_files, restore_trash_files
 
 
 def get_music_path():
@@ -120,12 +120,10 @@ class SystemConfigView(APIView):
 class TrashManagerView(APIView):
 
     def get(self, request):
-        auto_cleanup_result = auto_cleanup_expired_trash_files()
         trash_files = get_trash_files()
         return Response({
             "count": len(trash_files),
-            "files": trash_files,
-            "auto_cleaned": auto_cleanup_result['deleted']
+            "files": trash_files
         }, status=status.HTTP_200_OK)
 
     def post(self, request):

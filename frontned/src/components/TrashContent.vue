@@ -19,10 +19,6 @@
         <h2 class="text-xl font-semibold tracking-tight">垃圾箱</h2>
       </div>
 
-      <p class="text-[15px] text-[#86868b] mb-6 leading-relaxed">
-        回收站中的文件将在 14 天后自动删除。文件被删除前可以随时恢复。
-      </p>
-
       <div class="flex flex-col sm:flex-row gap-4 mb-6">
         <div class="w-full sm:w-auto">
           <el-button
@@ -62,9 +58,6 @@
           <div class="flex-1 min-w-0 mr-4">
             <div class="text-[14px] font-medium truncate">{{ file.filename }}</div>
             <div class="text-[12px] text-[#86868b] truncate">{{ file.original_dir }}</div>
-            <div :class="file.days_remaining > 0 ? 'text-[#ff9500]' : 'text-[#ff3b30]'" class="text-[12px] mt-1">
-              {{ file.days_remaining }} 天
-            </div>
           </div>
           <div class="flex gap-2 shrink-0">
             <el-button
@@ -145,9 +138,6 @@ const fetchTrashFiles = async () => {
     const res = await request.get('/scanner/trash/')
     trashFiles.value = res.data.files || []
     showTrashList.value = true
-    if (res.data.auto_cleaned > 0) {
-      showToast(`已自动清理 ${res.data.auto_cleaned} 个过期文件`, 'info')
-    }
   } catch (error) {
     console.error('获取回收站失败:', error)
     showToast('获取回收站失败', 'error')
