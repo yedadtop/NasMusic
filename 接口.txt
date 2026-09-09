@@ -25,6 +25,9 @@
     ```
 - **前端行为**：设置页「访问令牌」区块输入并验证保存，令牌存入浏览器 localStorage（key: `nasmusic_token`）；所有 API 请求经 axios 拦截器自动附带 `Authorization` 头；收到 401/403 时顶部弹出全局提示。
 - **受影响接口**（全部写操作）：修改/删除歌曲（`PUT/PATCH/DELETE /api/tracks/{id}/`）、触发扫描（`POST /api/scanner/run/`）、更新配置（`PUT /api/scanner/config/`）、回收站恢复/删除（`POST/DELETE /api/scanner/trash/`）、全部刮削接口（`POST /api/scraper/...`）、B 站下载（`POST /api/scraper/bili/download/`）、分片上传（`POST/DELETE /api/upload/...`）。
+- **令牌豁免接口**（虽为 POST 但属只读查询，视图级 `permission_classes = [AllowAny]` 豁免）：
+  - `POST /api/scraper/lyrics/bilibili/`（B 站歌曲歌词获取）：播放 B 站歌曲时前端自动调用，为保证无令牌用户正常播放不弹鉴权提示，已豁免令牌校验。
+- **前端行为补充**：无令牌时需令牌的按钮自动隐藏（音乐库编辑/删除、B 站保存、歌词编辑保存、播放详情修改）；设置页仅显示「鉴权」选项卡，验证保存令牌后其余选项卡（设置/刮削/回收站）才显示。
 
 ---
 
@@ -728,6 +731,50 @@
   - 下载耗时与音质/时长相关，前端调用时建议单独设置较长超时（如 180 秒）
   - 保存后的歌曲与本地歌曲一视同仁，后续增量扫描不会重复入库
 - **前端入口**：搜索页 → Bilibili 在线结果 → 每行右侧下载按钮
+
+---
+
+## 22. B 站歌曲歌词获取（播放时自动调用）
+
+- **接口地址**：`POST /api/scraper/lyrics/bilibili/`
+- **功能描述**：为 B 站在线歌曲获取歌词。前端播放 B 站歌曲时自动调用（`fetchBilibiliLyrics`）。后端先解析视频标题（提取歌名/歌手名），再从 LRCLIB 歌词库查询匹配歌词。
+- **鉴权**：**无需令牌**（视图级 `permission_classes = [AllowAny]` 豁免）。虽为 POST 方法，但纯属只读查询（不写库、不改文件），为保证无令牌用户正常播放不触发鉴权弹窗而豁免。
+- **请求 Body**（JSON）：
+  ```json
+  { "title": "【MV】起风了 - 买辣椒也用券" }
+  ```
+  - `title` (string, 必填)：B 站视频标题
+- **标题解析逻辑**：砍去尾部 UP 主信息 → 去除【】[] 标签 → 提取《》书名号内歌名及紧随的歌手名 → OpenCC 繁转简
+- **返回格式**（HTTP 200 OK，找到歌词）：
+  ```json
+  {
+    "success": true,
+    "message": "成功获取歌词",
+    "original_title": "【MV】起风了 - 买辣椒也用券",
+    "parsed_song_name": "起风了",
+    "parsed_artist_name": "买辣椒也用券",
+    "lyrics": "[00:11.91] 这一路上走走停停...",
+    "matched_track": "起风了",
+    "matched_artist": "买辣椒也用券",
+    "album": "起风了"
+  }
+  ```
+  - `lyrics` (string): LRC 格式带时间轴歌词
+- **返回格式**（HTTP 200 OK，未找到/无法解析）：
+  ```json
+  {
+    "success": false,
+    "message": "未找到匹配的歌词",
+    "original_title": "xxx",
+    "song_name": "xxx",
+    "lyrics": ""
+  }
+  ```
+- **错误返回**（HTTP 400 Bad Request，缺少参数）：
+  ```json
+  { "message": "缺少必需参数: title" }
+  ```
+- **相关接口**：`POST /api/scraper/lyrics/bilibili/parse/`（仅解析标题不查歌词）、`GET /api/scraper/lyrics/search/`（按歌名+歌手名直接查询，供调试）
 
 ---
 
