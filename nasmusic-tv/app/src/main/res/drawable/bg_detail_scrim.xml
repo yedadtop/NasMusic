@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 详情页压暗：顶部深、往下渐隐，保证大封面背后不抢文字 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient
+        android:angle="270"
+        android:startColor="#8C000000"
+        android:centerColor="#F2000000"
+        android:endColor="#FF000000" />
+</shape>

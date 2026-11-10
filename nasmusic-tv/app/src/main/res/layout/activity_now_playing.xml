@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  播放页：对齐 NasMusic Vue 前端 PlayerDetail.vue 的横屏布局。
+  左半：封面 + 标题 + 进度 + 控制按钮（垂直堆叠居中）；
+  右半：滚动歌词（左对齐）。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:background="@color/bg_deep">
+
+    <!-- 动态模糊封面铺底 + 黑色渐暗遮罩 -->
+    <ImageView
+        android:id="@+id/bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:alpha="0.80"
+        android:contentDescription="背景" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/bg_scrim" />
+
+    <!-- 主体：左右各半 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:clipChildren="false"
+        android:clipToPadding="false">
+
+        <!-- 左半：封面 + 信息 + 进度 + 按钮，整体垂直居中 -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:paddingStart="56dp"
+            android:paddingEnd="24dp"
+            android:clipChildren="false">
+
+            <LinearLayout
+                android:layout_width="380dp"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:clipChildren="false">
+
+                <!-- 封面：正方形、圆角，控制在 260dp，避免顶到屏幕上沿 -->
+                <ImageView
+                    android:id="@+id/cover"
+                    android:layout_width="260dp"
+                    android:layout_height="260dp"
+                    android:background="@drawable/bg_cover_placeholder"
+                    android:scaleType="centerCrop"
+                    android:elevation="20dp"
+                    android:contentDescription="封面" />
+
+                <!-- 标题 + 歌手：左对齐，与 Vue text-left 一致 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:orientation="vertical"
+                    android:gravity="start">
+
+                    <TextView
+                        android:id="@+id/title"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/text_primary"
+                        android:textSize="24sp"
+                        android:fontFamily="sans-serif-medium"
+                        android:maxLines="1"
+                        android:ellipsize="end" />
+
+                    <TextView
+                        android:id="@+id/artist"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="3dp"
+                        android:textColor="#B3FFFFFF"
+                        android:textSize="14sp"
+                        android:singleLine="true"
+                        android:ellipsize="end" />
+                </LinearLayout>
+
+                <!-- 进度条行：左时间 + SeekBar + 右时间 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/time_now"
+                        android:layout_width="46dp"
+                        android:layout_height="wrap_content"
+                        android:textColor="#99FFFFFF"
+                        android:textSize="13sp"
+                        android:fontFamily="monospace"
+                        android:text="0:00" />
+
+                    <SeekBar
+                        android:id="@+id/seek"
+                        android:layout_width="0dp"
+                        android:layout_height="26dp"
+                        android:layout_weight="1"
+                        android:progressDrawable="@drawable/bg_seek"
+                        android:thumb="@drawable/bg_seek_thumb"
+                        android:max="1000"
+                        android:paddingStart="8dp"
+                        android:paddingEnd="8dp"
+                        android:splitTrack="false" />
+
+                    <TextView
+                        android:id="@+id/time_total"
+                        android:layout_width="46dp"
+                        android:layout_height="wrap_content"
+                        android:gravity="end"
+                        android:textColor="#99FFFFFF"
+                        android:textSize="13sp"
+                        android:fontFamily="monospace"
+                        android:text="0:00" />
+                </LinearLayout>
+
+                <!-- 控制按钮行：四颗等大等距（style 统一尺寸），整行居中 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:clipChildren="false">
+
+                    <ImageButton
+                        android:id="@+id/btn_prev"
+                        style="@style/PlayerControlButton"
+                        android:src="@drawable/ic_prev"
+                        android:contentDescription="上一首" />
+
+                    <ImageButton
+                        android:id="@+id/btn_play"
+                        style="@style/PlayerControlButton"
+                        android:src="@drawable/ic_play"
+                        android:contentDescription="播放/暂停" />
+
+                    <ImageButton
+                        android:id="@+id/btn_next"
+                        style="@style/PlayerControlButton"
+                        android:src="@drawable/ic_next"
+                        android:contentDescription="下一首" />
+
+                    <ImageButton
+                        android:id="@+id/btn_mode"
+                        style="@style/PlayerControlButton"
+                        android:src="@drawable/ic_repeat"
+                        android:contentDescription="播放模式" />
+                </LinearLayout>
+
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 右半：滚动歌词面板 -->
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:clipChildren="false">
+
+            <com.nasmusic.tv.LyricsView
+                android:id="@+id/lyrics"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+        </FrameLayout>
+    </LinearLayout>
+</FrameLayout>

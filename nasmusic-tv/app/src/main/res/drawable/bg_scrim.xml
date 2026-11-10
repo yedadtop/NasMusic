@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 播放页压暗：保留封面色相，只把下半部压到足够黑 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient
+        android:angle="270"
+        android:startColor="#33000000"
+        android:centerColor="#99000000"
+        android:endColor="#EE000000" />
+</shape>

@@ -1,0 +1,331 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_app">
+
+    <LinearLayout
+        android:id="@+id/root_column"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:paddingBottom="16dp">
+
+        <!-- 顶栏：tvOS 式分段导航，聚焦项变白色胶囊 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="62dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="36dp"
+            android:paddingEnd="36dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="NasMusic"
+                android:textColor="@color/text_primary"
+                android:textSize="20sp"
+                android:fontFamily="sans-serif-medium"
+                android:letterSpacing="-0.02" />
+
+            <View
+                android:layout_width="26dp"
+                android:layout_height="1dp" />
+
+            <LinearLayout
+                android:id="@+id/nav_library"
+                style="@style/NavItem">
+
+                <ImageView
+                    android:id="@+id/nav_library_icon"
+                    style="@style/NavIcon"
+                    android:src="@drawable/ic_music"
+                    android:contentDescription="音乐库" />
+
+                <TextView
+                    android:id="@+id/nav_library_label"
+                    style="@style/NavLabel"
+                    android:text="音乐库" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/nav_artists"
+                style="@style/NavItem">
+
+                <ImageView
+                    android:id="@+id/nav_artists_icon"
+                    style="@style/NavIcon"
+                    android:src="@drawable/ic_artist"
+                    android:contentDescription="歌手" />
+
+                <TextView
+                    android:id="@+id/nav_artists_label"
+                    style="@style/NavLabel"
+                    android:text="歌手" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/nav_albums"
+                style="@style/NavItem">
+
+                <ImageView
+                    android:id="@+id/nav_albums_icon"
+                    style="@style/NavIcon"
+                    android:src="@drawable/ic_album"
+                    android:contentDescription="专辑" />
+
+                <TextView
+                    android:id="@+id/nav_albums_label"
+                    style="@style/NavLabel"
+                    android:text="专辑" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/nav_search"
+                style="@style/NavItem">
+
+                <ImageView
+                    android:id="@+id/nav_search_icon"
+                    style="@style/NavIcon"
+                    android:src="@drawable/ic_search"
+                    android:contentDescription="搜索" />
+
+                <TextView
+                    android:id="@+id/nav_search_label"
+                    style="@style/NavLabel"
+                    android:text="搜索" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/nav_settings"
+                style="@style/NavItem">
+
+                <ImageView
+                    android:id="@+id/nav_settings_icon"
+                    style="@style/NavIcon"
+                    android:src="@drawable/ic_settings"
+                    android:contentDescription="设置" />
+
+                <TextView
+                    android:id="@+id/nav_settings_label"
+                    style="@style/NavLabel"
+                    android:text="设置" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 内容区 -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:paddingStart="36dp"
+            android:paddingEnd="36dp"
+            android:clipChildren="false">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/title"
+                    style="@style/PageTitle"
+                    android:layout_marginTop="4dp"
+                    android:text="音乐库" />
+
+                <TextView
+                    android:id="@+id/subtitle"
+                    style="@style/PageSubtitle"
+                    android:layout_marginTop="1dp"
+                    android:text="" />
+
+                <EditText
+                    android:id="@+id/search_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_search_input"
+                    android:paddingStart="18dp"
+                    android:paddingEnd="18dp"
+                    android:hint="输入歌名、歌手或专辑…"
+                    android:textColorHint="@color/text_tertiary"
+                    android:textColor="@color/text_primary"
+                    android:textSize="16sp"
+                    android:singleLine="true"
+                    android:imeOptions="actionSearch"
+                    android:inputType="text"
+                    android:focusable="true"
+                    android:focusableInTouchMode="true"
+                    android:visibility="gone" />
+
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:layout_marginTop="10dp"
+                    android:clipChildren="false">
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/list"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:clipToPadding="false"
+                        android:clipChildren="false"
+                        android:paddingBottom="14dp"
+                        android:scrollbars="none"
+                        android:overScrollMode="never"
+                        android:focusable="false" />
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/grid"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:clipToPadding="false"
+                        android:clipChildren="false"
+                        android:paddingStart="8dp"
+                        android:paddingTop="8dp"
+                        android:paddingEnd="8dp"
+                        android:paddingBottom="14dp"
+                        android:scrollbars="none"
+                        android:overScrollMode="never"
+                        android:visibility="gone"
+                        android:focusable="false" />
+
+                    <LinearLayout
+                        android:id="@+id/state_box"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:orientation="vertical"
+                        android:gravity="center"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:id="@+id/state_text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="16sp"
+                            android:text="加载中…" />
+
+                        <TextView
+                            android:id="@+id/state_hint"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+                </FrameLayout>
+            </LinearLayout>
+        </FrameLayout>
+    </LinearLayout>
+
+    <!-- 底部迷你播放条：悬浮胶囊 -->
+    <LinearLayout
+        android:id="@+id/mini"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        android:layout_marginBottom="16dp"
+        android:orientation="vertical"
+        android:background="@drawable/bg_mini"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="68dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="8dp"
+            android:paddingEnd="12dp">
+
+            <LinearLayout
+                android:id="@+id/mini_info"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/bg_row"
+                android:focusable="true"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp">
+
+                <ImageView
+                    android:id="@+id/mini_cover"
+                    android:layout_width="46dp"
+                    android:layout_height="46dp"
+                    android:background="@drawable/bg_cover_placeholder"
+                    android:scaleType="centerCrop"
+                    android:contentDescription="封面" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="14dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/mini_title"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/text_primary"
+                        android:textSize="16sp"
+                        android:fontFamily="sans-serif-medium"
+                        android:singleLine="true"
+                        android:ellipsize="marquee"
+                        android:marqueeRepeatLimit="marquee_forever"
+                        android:text="未选择歌曲" />
+
+                    <TextView
+                        android:id="@+id/mini_artist"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        android:singleLine="true"
+                        android:ellipsize="end"
+                        android:text="按确定键打开播放页" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <ImageButton
+                android:id="@+id/mini_play"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/bg_circle_button"
+                android:src="@drawable/ic_play"
+                android:scaleType="centerInside"
+                android:contentDescription="播放/暂停" />
+
+            <ImageButton
+                android:id="@+id/mini_next"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/bg_ghost_button"
+                android:src="@drawable/ic_next"
+                android:scaleType="centerInside"
+                android:contentDescription="下一首" />
+        </LinearLayout>
+
+        <ProgressBar
+            android:id="@+id/mini_progress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="2dp"
+            android:layout_marginStart="14dp"
+            android:layout_marginEnd="14dp"
+            android:layout_marginBottom="6dp"
+            android:max="1000"
+            android:progress="0"
+            android:progressDrawable="@drawable/bg_mini_progress" />
+    </LinearLayout>
+</FrameLayout>
