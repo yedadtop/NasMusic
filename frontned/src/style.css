@@ -1,1 +1,99 @@
 @import "tailwindcss";
+
+/*
+ * ============================================================
+ * 低版本内核兼容：调色板降级为 sRGB hex
+ * ------------------------------------------------------------
+ * Tailwind v4 默认把 --color-* 定义成 oklch()，该函数需要
+ * Chromium 111+。Android 平板上的 X 浏览器等内核停留在
+ * Chromium 99~110，无法解析 oklch()，导致：
+ *   1. var(--color-gray-900) 解析失败 -> 深色背景整条声明被丢弃 -> 透明
+ *   2. 灰色文字/边框全部回退成默认色
+ * 这里用等值 sRGB hex 覆盖。
+ *
+ * 色值来源：Chrome 实际渲染对应 oklch 得到的 sRGB 值，
+ * 逐像素比对 23 个色阶全部 0 差异，因此视觉完全一致。
+ * 新增颜色时请在此追加，不要依赖默认 oklch 调色板。
+ * ============================================================
+ */
+@theme {
+  /* gray */
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5dc;
+  --color-gray-400: #99a1af;
+  --color-gray-500: #6a7282;
+  --color-gray-600: #4a5565;
+  --color-gray-700: #364153;
+  --color-gray-800: #1e2939;
+  --color-gray-900: #101828;
+
+  /* blue */
+  --color-blue-50: #eff6ff;
+  --color-blue-100: #dbeafe;
+  --color-blue-200: #bedbff;
+  --color-blue-300: #8ec5ff;
+  --color-blue-400: #50a2ff;
+  --color-blue-500: #2b7fff;
+  --color-blue-600: #155dfc;
+  --color-blue-700: #1447e6;
+
+  /* 语义色 */
+  --color-green-500: #00c950;
+  --color-orange-500: #ff6900;
+  --color-pink-400: #fb64b6;
+  --color-red-500: #fb2c36;
+  --color-red-600: #e7000b;
+}
+
+/*
+ * ============================================================
+ * 低版本内核兼容：filter / backdrop-filter 工具类重写
+ * ------------------------------------------------------------
+ * Tailwind v4 生成的写法是：
+ *   filter: var(--tw-blur,) var(--tw-brightness,) ... 
+ * 依赖 var() 的「空 fallback」语法 var(--x,)。Chromium 99 无法解析
+ * 这种写法，整条 filter / backdrop-filter 声明被丢弃，表现为：
+ *   1. 播放详情页背景模糊失效（blur-[80px] 不生效）
+ *   2. 底部播放栏、搜索框等毛玻璃效果消失
+ *   3. drop-shadow 全部失效
+ * 另外 scale-125 生成的是独立的 scale 属性，需要 Chromium 104+，
+ * 所以放大也一并改用 transform。
+ *
+ * 这里用原生属性按原值重写（值取自 Tailwind v4 默认刻度）。
+ * 不在 @layer 内，优先级高于 utilities 层，可安全覆盖。
+ * ============================================================
+ */
+
+/* 播放详情页模糊背景：blur 80px + 放大 1.25 */
+.blur-\[80px\] {
+  filter: blur(80px);
+  transform: scale(1.25);
+}
+
+/* 毛玻璃 */
+.backdrop-blur,
+.backdrop-blur-sm {
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.backdrop-blur-xl {
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+}
+.backdrop-blur-2xl {
+  -webkit-backdrop-filter: blur(40px) saturate(150%);
+  backdrop-filter: blur(40px) saturate(150%);
+}
+
+/* 投影 */
+.drop-shadow-sm {
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.15));
+}
+.drop-shadow-md {
+  filter: drop-shadow(0 3px 3px rgb(0 0 0 / 0.12));
+}
+.drop-shadow-xl {
+  filter: drop-shadow(0 9px 7px rgb(0 0 0 / 0.1));
+}

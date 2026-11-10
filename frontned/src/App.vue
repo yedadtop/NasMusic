@@ -579,7 +579,7 @@ watch(() => player.currentTrack, (track) => {
 </script>
 
 <style>
-@reference "tailwindcss";
+@reference "./style.css";
 
 .overscroll-contain {
   overscroll-behavior: contain;

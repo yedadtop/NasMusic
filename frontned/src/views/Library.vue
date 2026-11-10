@@ -26,7 +26,7 @@
           class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-black transition"
           @click.stop="showMoreMenu(track, $event)"
         >
-          <span class="text-xl">•••</span>
+          <span class="more-dots"><i></i><i></i><i></i></span>
         </button>
         <div v-if="showingMoreMenu === track.id" class="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-100 z-10">
           <button
@@ -355,6 +355,22 @@ defineExpose({ fetchTracks, searchKeyword, scrollToCurrentTrack, tracks, allLoad
 </script>
 
 <style scoped>
+/* 更多操作按钮的三个点：用 CSS 绘制，避免依赖字体字形宽度
+   （原先用 "•••" 字符，在 Android 平板上字体字宽偏大，间距被拉开） */
+.more-dots {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  line-height: 0;
+}
+.more-dots i {
+  display: block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }

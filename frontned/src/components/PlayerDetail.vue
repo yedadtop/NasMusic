@@ -4,7 +4,7 @@
     <!-- 动态高斯模糊背景 -->
     <div class="absolute inset-0 z-0 pointer-events-none transform-gpu translate-z-0">
       <div 
-        class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 scale-125 blur-[80px] opacity-80 will-change-transform"
+        class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 blur-[80px] opacity-80 will-change-transform"
         :style="{ backgroundImage: `url(${biliCoverBlobUrl || player.currentTrack?._coverUrlLarge || (player.currentTrack?.is_bilibili ? getBiliImageUrl(player.currentTrack?.track_cover, 'large') : player.currentTrack?.track_cover) || 'https://picsum.photos/600'})` }"
       ></div>
       <div class="absolute inset-0 bg-black/50 md:bg-black/40"></div>

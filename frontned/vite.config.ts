@@ -21,6 +21,12 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     },
   },
+  build: {
+    // 目标：Chromium 99（Android 平板 X 浏览器等国产内核）。
+    // 默认 target 会输出较新的语法，老内核可能直接语法报错白屏。
+    // 注意：这里只管语法降级，内置 API（如 Array.toSorted）需源码层面避免。
+    target: 'chrome99',
+  },
   server: {
     // 监听 0.0.0.0，允许局域网内其他设备通过本机 IP 访问开发服务器
     host: true,

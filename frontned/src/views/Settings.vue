@@ -710,7 +710,7 @@ onUnmounted(() => {
 
 <style scoped>
 /* 必须加上这行来让 Tailwind v4 在 scoped 样式中识别 @apply 使用的工具类 */
-@reference "tailwindcss";
+@reference "../style.css";
 
 /* 强制应用 Apple 系统原生字体，渲染更加细腻 */
 .apple-font {
