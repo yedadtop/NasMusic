@@ -93,7 +93,8 @@ async function applyRemoteState(envelope: any) {
         player.currentIndex = envelope.index
       }
       player.playMode = envelope.play_mode
-      player.shuffleHistory = envelope.shuffle_history || []
+      player.shuffleOrder = Array.isArray(envelope.shuffle_order) ? envelope.shuffle_order : []
+      player.shufflePos = Number(envelope.shuffle_pos) || 0
       player.isPlaying = envelope.is_playing
       player.currentTime = target
       const audio = player.audioElement
@@ -123,7 +124,8 @@ async function applyRemoteState(envelope: any) {
       player.currentIndex = envelope.index
     }
     player.playMode = envelope.play_mode
-    player.shuffleHistory = envelope.shuffle_history || []
+    player.shuffleOrder = Array.isArray(envelope.shuffle_order) ? envelope.shuffle_order : []
+    player.shufflePos = Number(envelope.shuffle_pos) || 0
     player.isPlaying = envelope.is_playing
     player.currentTime = target
     const audio = player.audioElement
@@ -363,7 +365,8 @@ function collectAndSubmit(kind: 'state' | 'transport') {
     payload.playlist = player.playlist
     payload.index = player.currentIndex
     payload.play_mode = player.playMode
-    payload.shuffle_history = player.shuffleHistory
+    payload.shuffle_order = player.shuffleOrder
+    payload.shuffle_pos = player.shufflePos
   }
   // 失败静默（403 等异常由 axios 拦截器统一提示）
   request.post('/playback/command/', payload).catch(error => {

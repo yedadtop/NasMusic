@@ -10,12 +10,11 @@
 // - 带版本号：结构变更后丢弃旧快照，而不是让旧结构引发运行时崩溃
 
 const SNAPSHOT_KEY = 'nasmusic_playback_snapshot'
-const SNAPSHOT_VERSION = 1
+// v2：随机播放改为「本地洗牌队列」（shuffleOrder/shufflePos），移除 shuffleHistory
+const SNAPSHOT_VERSION = 2
 
 // 播放列表上限。超出时保留当前曲目前后各一半，保证「上一首/下一首」仍然可用
 const MAX_PLAYLIST = 2000
-// 随机播放历史只需要支撑「上一首」，存太多没意义
-const MAX_SHUFFLE_HISTORY = 30
 
 // 不参与持久化的字段：歌词可能上万字，其余是运行时派生/非 JSON 值
 const SKIP_FIELDS = new Set(['lyrics', 'currentTrackDetail'])
@@ -29,7 +28,10 @@ export interface PlaybackSnapshot {
   playlist: any[]
   currentIndex: number
   playMode: PlayMode
-  shuffleHistory: any[]
+  /** 随机模式的播放顺序（playlist 的索引序列），空数组表示尚未洗牌 */
+  shuffleOrder: number[]
+  /** 当前播到 shuffleOrder 的第几位 */
+  shufflePos: number
   currentTime: number
   volume: number
   coverStyleMode: number
@@ -91,7 +93,8 @@ function writeToStorage(snapshot: PlaybackSnapshot): void {
         ...snapshot,
         playlist: [],
         currentIndex: -1,
-        shuffleHistory: []
+        shuffleOrder: [],
+        shufflePos: 0
       }))
     } catch {
       console.warn('[播放快照] 写入失败，已放弃持久化:', error)
@@ -104,11 +107,25 @@ export interface SnapshotInput {
   playlist: any[]
   currentIndex: number
   playMode: PlayMode
-  shuffleHistory: any[]
+  shuffleOrder: number[]
+  shufflePos: number
   currentTime: number
   volume: number
   coverStyleMode: number
   wasPlaying: boolean
+}
+
+/** 过滤乱序队列：只保留合法的 playlist 索引，去重 */
+function sanitizeIndexList(list: any[], length: number): number[] {
+  if (!Array.isArray(list)) return []
+  const seen = new Set<number>()
+  const out: number[] = []
+  for (const value of list) {
+    if (!Number.isInteger(value) || value < 0 || value >= length || seen.has(value)) continue
+    seen.add(value)
+    out.push(value)
+  }
+  return out
 }
 
 /** 保存快照（调用方负责节流）。播放器为空时等同于清除。 */
@@ -121,6 +138,14 @@ export function saveSnapshot(input: SnapshotInput): void {
   const index = Number.isInteger(input.currentIndex) ? input.currentIndex : -1
   const playlist = sanitizeList(input.playlist, Infinity)
   const trimmed = trimPlaylist(playlist, index)
+  // 列表被裁剪时索引整体偏移，乱序队列无法直接复用，丢弃后由 store 重建
+  const trimmedByLength = trimmed.playlist.length !== playlist.length
+  const shuffleOrder = trimmedByLength
+    ? []
+    : sanitizeIndexList(input.shuffleOrder, trimmed.playlist.length)
+  const shufflePos = trimmedByLength
+    ? 0
+    : Math.min(Math.max(Number(input.shufflePos) || 0, 0), Math.max(0, shuffleOrder.length - 1))
 
   writeToStorage({
     version: SNAPSHOT_VERSION,
@@ -129,7 +154,8 @@ export function saveSnapshot(input: SnapshotInput): void {
     playlist: trimmed.playlist,
     currentIndex: trimmed.index,
     playMode: input.playMode,
-    shuffleHistory: sanitizeList(input.shuffleHistory, MAX_SHUFFLE_HISTORY),
+    shuffleOrder,
+    shufflePos,
     currentTime: Number.isFinite(input.currentTime) ? Math.max(0, input.currentTime) : 0,
     volume: Number.isFinite(input.volume) ? Math.min(1, Math.max(0, input.volume)) : 1,
     coverStyleMode: Number.isInteger(input.coverStyleMode) ? input.coverStyleMode : 0,
@@ -172,6 +198,12 @@ export function loadSnapshot(): PlaybackSnapshot | null {
     safeIndex = playlist.findIndex((t: any) => trackKey(t) === trackKey(parsed.track))
   }
 
+  const shuffleOrder = sanitizeIndexList(parsed.shuffleOrder, playlist.length)
+  const shufflePos = Math.min(
+    Math.max(Number(parsed.shufflePos) || 0, 0),
+    Math.max(0, shuffleOrder.length - 1)
+  )
+
   return {
     version: SNAPSHOT_VERSION,
     savedAt: Number(parsed.savedAt) || 0,
@@ -181,7 +213,8 @@ export function loadSnapshot(): PlaybackSnapshot | null {
     playMode: (parsed.playMode === 'shuffle' || parsed.playMode === 'single')
       ? parsed.playMode
       : 'sequential',
-    shuffleHistory: Array.isArray(parsed.shuffleHistory) ? parsed.shuffleHistory : [],
+    shuffleOrder,
+    shufflePos,
     currentTime: Number.isFinite(parsed.currentTime) ? Math.max(0, parsed.currentTime) : 0,
     volume: Number.isFinite(parsed.volume) ? Math.min(1, Math.max(0, parsed.volume)) : 1,
     coverStyleMode: Number.isInteger(parsed.coverStyleMode) ? parsed.coverStyleMode : 0,

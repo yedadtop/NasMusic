@@ -20,7 +20,7 @@ class PlaybackHub:
 
     def __init__(self):
         self._cond = threading.Condition()
-        # 会话状态：track/playlist/index/play_mode/shuffle_history 为发起设备
+        # 会话状态：track/playlist/index/play_mode/shuffle_order/shuffle_pos 为发起设备
         # 的本地计算结果；position_at 记录 position 对应的服务器时间戳，
         # 各端用 position + (服务器当前时间 - position_at) 外推实际进度
         self._state = {
@@ -28,7 +28,9 @@ class PlaybackHub:
             'playlist': [],
             'index': -1,
             'play_mode': 'sequential',
-            'shuffle_history': [],
+            # 随机播放的乱序队列（playlist 索引序列）与当前位置，仅用于多端对齐
+            'shuffle_order': [],
+            'shuffle_pos': 0,
             'is_playing': False,
             'position': 0.0,
             'position_at': time.time(),
@@ -81,7 +83,7 @@ class PlaybackHub:
         """合并一次指令并唤醒广播：state=全量，transport=仅传输态；返回最新快照"""
         with self._cond:
             if kind == 'state':
-                for key in ('track', 'playlist', 'index', 'play_mode', 'shuffle_history'):
+                for key in ('track', 'playlist', 'index', 'play_mode', 'shuffle_order', 'shuffle_pos'):
                     if key in payload:
                         self._state[key] = payload[key]
             elif kind != 'transport':
