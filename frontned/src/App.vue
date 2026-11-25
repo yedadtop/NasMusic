@@ -228,6 +228,10 @@ const progressBar = ref(null)
 const isDragging = ref(false)
 const route = useRoute()
 const player = usePlayerStore()
+// 先恢复本地快照，再建立同步连接：后端会话为空（服务器刚重启/没人播放）时保留
+// 本地状态；后端已有 track 时，随后 SSE 推送的 state 会正常覆盖。
+// 必须在 useSyncPlayback() 之前执行，否则可能被空会话状态冲掉。
+const restoredSnapshot = player.restoreFromSnapshot()
 const sync = useSyncPlayback()
 const audioRef = ref(null)
 const windowWidth = ref(window.innerWidth)
@@ -324,7 +328,12 @@ onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
   window.addEventListener('click', handleClickOutside)
   window.addEventListener('nasmusic:token-invalid', handleTokenInvalid)
+  window.addEventListener('pagehide', handlePageHide)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
   player.setAudioElement(audioRef.value)
+  // 音量随快照恢复后要同步到 <audio>（音量只在本组件内应用，store 不直接操作元素）
+  if (audioRef.value) audioRef.value.volume = player.volume
+  if (restoredSnapshot) restoreAudioFromSnapshot(restoredSnapshot)
 })
 
 onUnmounted(() => {
@@ -332,10 +341,102 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
   window.removeEventListener('click', handleClickOutside)
   window.removeEventListener('nasmusic:token-invalid', handleTokenInvalid)
+  window.removeEventListener('pagehide', handlePageHide)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   if (tokenToastTimer) clearTimeout(tokenToastTimer)
   if (searchTimer) clearTimeout(searchTimer)
   if (volumeTimer) clearTimeout(volumeTimer)
+  if (restoreSeekTimer) clearTimeout(restoreSeekTimer)
 })
+
+// ===== 本地快照：恢复音频与落盘时机 =====
+
+// 从快照恢复 <audio>：设 src 后在 loadedmetadata 里定位进度（元数据就绪前设置
+// currentTime 会被忽略）。这里不调用 play()：无用户手势的播放会被浏览器拦截，
+// 恢复成暂停态，用户点播放按钮即可从上次进度续播。
+let restoreSeekTimer = null
+
+const restoreAudioFromSnapshot = async (snap) => {
+  const track = player.currentTrack
+  const audio = audioRef.value
+  if (!track || !audio) return
+  const target = Number(snap.currentTime) || 0
+
+  // 上次的曲目可能已被删除/移出曲库：加载失败时清掉恢复状态，
+  // 否则每次进页面都卡在一首放不出来的歌上
+  const cleanupRestoreListeners = () => {
+    audio.removeEventListener('error', onRestoreError)
+    audio.removeEventListener('loadedmetadata', onRestoreReady)
+  }
+  const onRestoreError = () => {
+    cleanupRestoreListeners()
+    player.setRestoringPosition(false)
+    console.warn('[播放快照] 上次的曲目已无法播放，已清除恢复状态')
+    player.resetPlayer()
+  }
+  const onRestoreReady = () => cleanupRestoreListeners()
+  audio.addEventListener('error', onRestoreError)
+  audio.addEventListener('loadedmetadata', onRestoreReady)
+
+  try {
+    const url = await getStreamUrl(track)
+    if (!url) {
+      cleanupRestoreListeners()
+      return
+    }
+    // 加载期间用户已手动切歌：放弃这次恢复，避免覆盖新的播放
+    if (player.currentTrack !== track) {
+      cleanupRestoreListeners()
+      return
+    }
+
+    if (target > 0) {
+      player.setRestoringPosition(true)
+      const finishSeek = () => {
+        if (restoreSeekTimer) {
+          clearTimeout(restoreSeekTimer)
+          restoreSeekTimer = null
+        }
+        audio.removeEventListener('loadedmetadata', onLoaded)
+        audio.removeEventListener('seeked', onSeeked)
+        player.setRestoringPosition(false)
+      }
+      const onSeeked = () => finishSeek()
+      const onLoaded = () => {
+        audio.removeEventListener('loadedmetadata', onLoaded)
+        if (restoreSeekTimer) clearTimeout(restoreSeekTimer)
+        try {
+          audio.currentTime = target
+        } catch {
+          finishSeek() // 进度超出时长等异常：放弃定位，从头开始
+          return
+        }
+        // 进度本就在目标位置时浏览器可能不触发 seeked，兜底解除屏蔽
+        restoreSeekTimer = window.setTimeout(finishSeek, 1500)
+      }
+      audio.addEventListener('loadedmetadata', onLoaded)
+      audio.addEventListener('seeked', onSeeked)
+      // 元数据迟迟加载不出来时的总兜底，避免进度条一直冻结
+      restoreSeekTimer = window.setTimeout(finishSeek, 10000)
+    }
+
+    audio.src = url
+    audio.load()
+  } catch (error) {
+    cleanupRestoreListeners()
+    player.setRestoringPosition(false)
+    console.error('恢复上次播放失败:', error)
+  }
+}
+
+// 页面隐藏/卸载前立即落盘：去抖窗口内可能还有未写入的状态
+const handlePageHide = () => {
+  player.persistNow()
+}
+
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'hidden') player.persistNow()
+}
 
 const handleKeydown = (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
@@ -449,6 +550,18 @@ const togglePlay = () => {
   player.togglePlay()
   if (audioRef.value) {
     if (player.isPlaying) {
+      // 从快照恢复后 <audio> 可能还没拿到流地址（异步加载中）：先补加载再播，
+      // 否则直接 play() 会因 src 为空静默失败
+      if (!audioRef.value.src) {
+        getStreamUrl(player.currentTrack).then((url) => {
+          if (!url || !audioRef.value) return
+          audioRef.value.src = url
+          const target = player.currentTime || 0
+          if (target > 0) audioRef.value.currentTime = target
+          audioRef.value.play().catch(() => { player.isPlaying = false })
+        }).catch(() => { player.isPlaying = false })
+        return
+      }
       audioRef.value.play()
     } else {
       audioRef.value.pause()
@@ -457,9 +570,10 @@ const togglePlay = () => {
 }
 
 const handleTimeUpdate = () => {
-  if (audioRef.value) {
-    player.setCurrentTime(audioRef.value.currentTime)
-  }
+  // 恢复定位完成前，<audio> 的 currentTime 还是 0（load 后尚未 seek），
+  // 采信它会把快照进度冲掉、进度条跳回开头
+  if (!audioRef.value || player.restoringPosition) return
+  player.setCurrentTime(audioRef.value.currentTime)
 }
 
 const handleLoadedMetadata = () => {

@@ -1,9 +1,14 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import request from '../api'
 import { getBiliImageUrl } from '../api'
+import { saveSnapshot, loadSnapshot, clearSnapshot, type PlaybackSnapshot } from '../utils/playbackSnapshot'
 
 const MAX_SHUFFLE_HISTORY = 100
+// 本地快照：变更类字段 800ms 去抖合并；进度单独 5s 节流
+// （timeupdate 约 4Hz，每次都写 localStorage 会明显卡顿）
+const PERSIST_DEBOUNCE = 800
+const PERSIST_POSITION_INTERVAL = 5000
 const biliCoverCache = new Map<string, string>()
 
 // ===== 多设备同步回执（由 useSyncPlayback 注入，避免 store 反向依赖 composable）=====
@@ -55,6 +60,13 @@ export const usePlayerStore = defineStore('player', () => {
   const isLoadingMore = ref(false)
   const refreshLibraryTrigger = ref(0)
   const coverStyleMode = ref(0)
+
+  // 本地快照的定时器与上次写进度的时间戳
+  let persistTimer: number | null = null
+  let lastPositionPersistAt = 0
+  // 音频恢复定位期间置 true：此时 <audio> 的 currentTime 还停在 0，
+  // 直接采信会把快照里的进度写没（下次进页面又从 0 开始）
+  const restoringPosition = ref(false)
 
   const progress = computed(() => {
     if (!duration.value) return 0
@@ -129,6 +141,12 @@ export const usePlayerStore = defineStore('player', () => {
     loadMoreCallback.value = null
     isLoadingMore.value = false
     clearBiliCoverCache()
+    // 主动清空播放器时同步清掉快照，否则下次进页面又把旧歌恢复回来
+    if (persistTimer !== null) {
+      window.clearTimeout(persistTimer)
+      persistTimer = null
+    }
+    clearSnapshot()
   }
 
   function triggerLibraryRefresh() {
@@ -353,6 +371,108 @@ export const usePlayerStore = defineStore('player', () => {
     audioElement.value = el
   }
 
+  // ===== 本地快照：持久化与恢复 =====
+
+  /** 真实进度：优先取 <audio>（store 的 currentTime 受 timeupdate 节流影响略滞后） */
+  function livePosition(): number {
+    // 恢复定位中 / src 尚未就绪时，<audio>.currentTime 恒为 0，不能采信
+    if (restoringPosition.value) return currentTime.value
+    const audio = audioElement.value
+    if (audio && audio.src && audio.readyState > 0) {
+      const t = audio.currentTime
+      if (typeof t === 'number' && isFinite(t)) return t
+    }
+    return currentTime.value
+  }
+
+  function writeSnapshot() {
+    if (!currentTrack.value) {
+      clearSnapshot()
+      return
+    }
+    saveSnapshot({
+      track: currentTrack.value,
+      playlist: playlist.value,
+      currentIndex: currentIndex.value,
+      playMode: playMode.value as any,
+      shuffleHistory: shuffleHistory.value,
+      currentTime: livePosition(),
+      volume: volume.value,
+      coverStyleMode: coverStyleMode.value,
+      wasPlaying: isPlaying.value
+    })
+  }
+
+  function schedulePersist() {
+    if (persistTimer !== null) window.clearTimeout(persistTimer)
+    persistTimer = window.setTimeout(() => {
+      persistTimer = null
+      lastPositionPersistAt = Date.now()
+      writeSnapshot()
+    }, PERSIST_DEBOUNCE)
+  }
+
+  /** 立即落盘：页面隐藏/卸载前调用，避免去抖窗口内丢掉最后的状态 */
+  function persistNow() {
+    if (persistTimer !== null) {
+      window.clearTimeout(persistTimer)
+      persistTimer = null
+    }
+    lastPositionPersistAt = Date.now()
+    writeSnapshot()
+  }
+
+  /** 从本地快照恢复曲目/列表/模式/进度，返回快照供调用方决定是否提示续播 */
+  function restoreFromSnapshot(): PlaybackSnapshot | null {
+    const snap = loadSnapshot()
+    if (!snap || !snap.track) return null
+
+    currentTrack.value = snap.track
+    playlist.value = snap.playlist
+    currentIndex.value = snap.currentIndex
+    playMode.value = snap.playMode
+    shuffleHistory.value = snap.shuffleHistory
+    volume.value = snap.volume
+    coverStyleMode.value = snap.coverStyleMode
+    currentTime.value = snap.currentTime
+    duration.value = Number(snap.track.duration) || 0
+    // 恢复后一律从暂停态开始：无用户手势的 play() 会被浏览器拦截
+    isPlaying.value = false
+
+    const track = snap.track
+    if (track.is_bilibili) {
+      if (track.track_cover) {
+        track._coverUrlSmall = getBiliImageUrl(track.track_cover, 'small')
+        track._coverUrlLarge = getBiliImageUrl(track.track_cover, 'large')
+        preloadBiliCover(track._coverUrlLarge, track.bvid)
+      }
+      fetchBilibiliLyrics(track.title)
+    } else if (track.id != null) {
+      fetchTrackDetail(track.id)
+    }
+    return snap
+  }
+
+  /** 恢复定位期间屏蔽进度持久化与 timeupdate 覆盖（由 App.vue 在音频定位前后调用） */
+  function setRestoringPosition(v: boolean) {
+    restoringPosition.value = v
+  }
+
+  // 变更类字段变化即写快照（去抖合并，避免一次切歌触发多次写盘）
+  // isPlaying 必须在内：暂停后 currentTime 不再变化，只能靠它触发落盘
+  watch(
+    [currentTrack, playlist, currentIndex, playMode, shuffleHistory, volume, coverStyleMode, isPlaying],
+    () => { schedulePersist() }
+  )
+  // 进度按固定间隔写：timeupdate 约 4Hz，逐次写 localStorage 会卡顿
+  watch(currentTime, () => {
+    if (!currentTrack.value) return
+    const now = Date.now()
+    if (now - lastPositionPersistAt < PERSIST_POSITION_INTERVAL) return
+    lastPositionPersistAt = now
+    writeSnapshot()
+  })
+
   return {
     currentTrack,
     currentTrackDetail,
@@ -391,6 +511,10 @@ export const usePlayerStore = defineStore('player', () => {
     setLoadMoreCallback,
     checkAndLoadMore,
     resetPlayer,
+    restoreFromSnapshot,
+    persistNow,
+    restoringPosition,
+    setRestoringPosition,
     triggerLibraryRefresh,
     preloadBiliCover,
     biliCoverCache

@@ -1,9 +1,20 @@
 # scraper/utils.py
+import re
+
 import requests
 import mutagen
 from django.core.files.base import ContentFile
 from library.utils import sync_cover_to_audio_file
 from opencc import OpenCC
+from .lyrics_api import fetch_lyrics, clean_bilibili_title
+
+# B站标题特征：带书名号、方括号标签或全角竖线分隔
+_BILI_TITLE_RE = re.compile(r'[《》【】｜]')
+
+
+def _looks_like_bilibili_title(title: str) -> bool:
+    return bool(_BILI_TITLE_RE.search(title or ''))
+
 
 def fetch_and_embed_cover(track):
     """
@@ -78,13 +89,25 @@ def fetch_and_embed_cover(track):
 
 def fetch_and_embed_lyrics(track):
     """
-    通过 LRCLIB 接口抓取歌词（优先取时间轴滚动歌词），自动简繁转换，并嵌入物理文件与数据库。
-    返回: dict with keys: success (bool), message (str), source ('local'|'lrclib'|None)
+    抓取歌词（QQ 音乐优先，LRCLIB 兜底），自动转简体，并嵌入物理文件与数据库。
+    B站来源的标题会先解析出真正的歌名/歌手再搜索，避免拿完整视频标题去匹配。
+    返回: dict with keys: success (bool), message (str), source ('local'|'qq'|'lrclib'|None)
     """
     cc = OpenCC('t2s')
 
     artist_name = track.artist.name if track.artist and hasattr(track.artist, 'name') else ''
-    title = track.title or ''
+    title = (track.title or '').strip()
+
+    # B站来源的标题是完整视频标题（带【】、《》和歌词引用），整串丢给歌词接口
+    # 必然匹配不上。先用标题解析提取真正的歌名/歌手，并优先采用解析出的歌手
+    # （数据库里的 artist 往往是 UP 主名字，如“VV音乐局”，不是演唱者）。
+    if _looks_like_bilibili_title(title):
+        parsed = clean_bilibili_title(title)
+        if parsed['song_name']:
+            print(f"[歌词刮削] B站标题解析: '{title[:40]}' -> 歌名='{parsed['song_name']}' 歌手='{parsed['artist_name']}'")
+            title = parsed['song_name']
+            if parsed['artist_name']:
+                artist_name = parsed['artist_name']
 
     if not title:
         print(f"[歌词刮削] 失败: 歌曲 (ID:{track.id}) 缺少标题")
@@ -133,32 +156,19 @@ def fetch_and_embed_lyrics(track):
         except Exception as e:
             print(f"[歌词刮削] 读取本地文件歌词时发生异常: {e}")
 
-    api_url = "https://lrclib.net/api/search"
-    params = {
-        'track_name': title,
-        'artist_name': artist_name
-    }
-
     print(f"[歌词刮削] 开始搜索: '{title}' - '{artist_name}'")
 
     try:
-        response = requests.get(api_url, params=params, timeout=10)
-        response.raise_for_status()
-        data = response.json()
+        # 统一走 lyrics_api 的多源链路（QQ 音乐优先，LRCLIB 兜底），
+        # 内部已做匹配度打分与简繁转换，这里不再重复实现
+        result = fetch_lyrics(title, artist_name)
 
-        if not data or len(data) == 0:
-            print(f"[歌词刮削] LRCLIB 未找到匹配结果")
-            return {"success": False, "message": "未找到匹配的歌词。", "source": None}
+        if not result.get('success'):
+            print(f"[歌词刮削] 未获取到歌词: {result.get('message')}")
+            return {"success": False, "message": result.get('message') or "未找到匹配的歌词。", "source": None}
 
-        best_match = data[0]
-        raw_lyrics = best_match.get('syncedLyrics') or best_match.get('plainLyrics')
-
-        if not raw_lyrics:
-            print(f"[歌词刮削] 找到了歌曲信息，但暂无歌词内容")
-            return {"success": False, "message": "该歌曲在曲库中暂无歌词内容。", "source": None}
-
-        simplified_lyrics = cc.convert(raw_lyrics)
-        print(f"[歌词刮削] 成功获取歌词，长度: {len(simplified_lyrics)} 字符 (已转简体)")
+        simplified_lyrics = result.get('lyrics', '')
+        print(f"[歌词刮削] 成功获取歌词，长度: {len(simplified_lyrics)} 字符 (来源: {result.get('source')})")
 
         track.lyrics = simplified_lyrics
         track.save(update_fields=['lyrics'])
@@ -178,11 +188,8 @@ def fetch_and_embed_lyrics(track):
                 audio.save()
                 print(f"[歌词刮削] 成功将歌词嵌入到物理文件: {track.file_path}")
 
-        return {"success": True, "message": "成功刮削并嵌入歌词！", "source": "lrclib"}
+        return {"success": True, "message": "成功刮削并嵌入歌词！", "source": result.get('source')}
 
-    except requests.RequestException as e:
-        print(f"⚠️ LRCLIB 接口请求失败: {e}")
-        return {"success": False, "message": f"请求歌词接口失败: {str(e)}", "source": None}
     except Exception as e:
-        print(f"⚠️ 解析或写入歌词时发生异常: {e}")
+        print(f"⚠️ 刮削或写入歌词时发生异常: {e}")
         return {"success": False, "message": f"写入歌词时发生内部错误: {str(e)}", "source": None}

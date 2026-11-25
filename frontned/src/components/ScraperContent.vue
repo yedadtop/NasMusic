@@ -65,7 +65,7 @@
         </div>
         <div>
           <span class="font-semibold text-[#1d1d1f]">补全缺失歌词：</span>
-          自动检测缺少歌词的歌曲，通过LRCLIB歌词库接口获取对应歌词并嵌入歌曲文件中。
+          自动检测缺少歌词的歌曲，通过QQ音乐与LRCLIB歌词库（优先QQ音乐）获取对应歌词并嵌入歌曲文件中。
         </div>
       </div>
     </section>
@@ -102,7 +102,7 @@ const openScrapeCoversModal = () => {
 
 const openScrapeLyricsModal = () => {
   progressModalTitle.value = '补全缺失歌词'
-  progressModalMessage.value = '通过网络爬取缺失歌词的歌曲，系统会自动检测并通过LRCLIB接口获取歌词。'
+  progressModalMessage.value = '通过网络爬取缺失歌词的歌曲，系统会自动检测并通过QQ音乐/LRCLIB接口获取歌词。'
   progressModalAction.value = 'scrapeLyrics'
   showProgressModal.value = true
 }

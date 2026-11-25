@@ -123,7 +123,7 @@
               >
                 <Icon v-if="track.saving" icon="mdi:loading" class="w-5 h-5 animate-spin" />
                 <Icon v-else-if="track.saved" icon="mdi:check-circle" class="w-5 h-5" />
-                <Icon v-else icon="mdi:download-outline" class="w-5 h-5" />
+                <Icon v-else icon="mdi:content-save-outline" class="w-5 h-5" />
               </button>
             </div>
           </div>
